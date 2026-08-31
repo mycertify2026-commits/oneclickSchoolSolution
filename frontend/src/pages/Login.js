@@ -9,7 +9,7 @@ const REDIRECTS = { superAdmin: '/sa-dashboard', schoolAdmin: '/school-dashboard
 export default function Login({ role }) {
   const [currentRole, setCurrentRole] = useState(role || 'superAdmin');
   const fixedRole = !!role;
-  const [saEmail, setSaEmail] = useState('admin@certifypro.in');
+  const [saEmail, setSaEmail] = useState('');
   const [saPassword, setSaPassword] = useState('');
   const [schLoginId, setSchLoginId] = useState('');
   const [schPassword, setSchPassword] = useState('');
@@ -147,9 +147,6 @@ export default function Login({ role }) {
               <button className="btn btn-primary btn-lg" style={{ width: '100%' }} onClick={() => doLogin('superAdmin')} disabled={loading}>
                 <i className="fas fa-sign-in-alt"></i> <span>{loading ? '...' : t('loginBtn')}</span>
               </button>
-              <div style={{ marginTop: 14, padding: 12, background: 'var(--bg)', borderRadius: 'var(--radius)', fontSize: 12, color: 'var(--text-secondary)' }}>
-                <strong>Demo:</strong> admin@certifypro.in / Admin@123
-              </div>
             </div>
           )}
 
@@ -190,9 +187,6 @@ export default function Login({ role }) {
               <button className="btn btn-primary btn-lg" style={{ width: '100%' }} onClick={() => doLogin('schoolAdmin')} disabled={loading}>
                 <i className="fas fa-sign-in-alt"></i> <span>{loading ? '...' : t('loginBtn')}</span>
               </button>
-              <div style={{ marginTop: 14, padding: 12, background: 'var(--bg)', borderRadius: 'var(--radius)', fontSize: 12, color: 'var(--text-secondary)' }}>
-                <strong>Demo:</strong> SCH001 / School@123
-              </div>
             </div>
           )}
 
@@ -220,9 +214,6 @@ export default function Login({ role }) {
               <button className="btn btn-primary btn-lg" style={{ width: '100%' }} onClick={() => doLogin('distributor')} disabled={loading}>
                 <i className="fas fa-sign-in-alt"></i> <span>{loading ? '...' : t('loginBtn')}</span>
               </button>
-              <div style={{ marginTop: 14, padding: 12, background: 'var(--bg)', borderRadius: 'var(--radius)', fontSize: 12, color: 'var(--text-secondary)' }}>
-                <strong>Demo:</strong> dist01 / Dist@123
-              </div>
             </div>
           )}
 
