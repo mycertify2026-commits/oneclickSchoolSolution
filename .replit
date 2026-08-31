@@ -1,0 +1,105 @@
+modules = ["nodejs-20", "python-base-3.13", "postgresql-16"]
+run = "node start.js"
+
+[nix]
+channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+SEED_DEMO_DATA = "true"
+EMAIL_FROM_NAME = "One Click School Solutions"
+JWT_EXPIRES_IN = "15m"
+JWT_REFRESH_EXPIRES_IN = "7d"
+JWT_REFRESH_SECRET = "7f1b190bd7f9e0dcaedb233a8fde8395d2d3cbe49552a2a3bf5da666b0fb63b0"
+JWT_SECRET = "e0546f611b149ddccab44e0200ce4f3d57d75976b15d01e15ac728b9fa6aaaf7"
+NODE_ENV = "development"
+RESET_TOKEN_EXPIRES_MINUTES = "30"
+SEED_ADMIN_EMAIL = "admin@certifypro.in"
+SEED_ADMIN_PASSWORD = "Admin@123"
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORT = "587"
+SMTP_SECURE = "false"
+REACT_APP_API_URL = "/api"
+REACT_APP_UPLOADS_URL = ""
+FRONTEND_URL = "https://zip-repl-2--khondejanhavi.replit.app"
+DISABLE_ESLINT_PLUGIN = "true"
+SKIP_PREFLIGHT_CHECK = "true"
+QR_PUBLIC_BASE_URL = "https://zip-repl-2--khondejanhavi.replit.app"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Backend API"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Backend API"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "chmod +x backend/node_modules/.bin/nodemon 2>/dev/null; cd backend && PORT=3001 npm run dev"
+waitForPort = 3001
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "chmod +x frontend/node_modules/.bin/react-scripts 2>/dev/null; cd frontend && PORT=5000 npm start"
+waitForPort = 5000
+
+[[ports]]
+localPort = 3001
+externalPort = 80
+
+[[ports]]
+localPort = 3002
+externalPort = 3002
+
+[[ports]]
+localPort = 3101
+externalPort = 5173
+
+[[ports]]
+localPort = 4001
+externalPort = 3001
+
+[[ports]]
+localPort = 5000
+externalPort = 5000
+
+[[ports]]
+localPort = 5001
+externalPort = 3003
+
+[[ports]]
+localPort = 23636
+externalPort = 3000
+
+[deployment]
+deploymentTarget = "autoscale"
+run = ["sh", "-c", "NODE_ENV=production node backend/src/server.js"]
+build = ["sh", "-c", "npm install --prefix frontend && npm install --prefix backend && cd frontend && npm run build"]
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 120000

@@ -1,0 +1,154 @@
+erDiagram
+    USERS {
+        char36 id PK
+        enum role
+        varchar name
+        varchar email UK
+        varchar mobile
+        varchar password_hash
+        tinyint is_active
+        tinyint password_set
+        char36 created_by FK
+        timestamp created_at
+    }
+
+    PASSWORD_TOKENS {
+        char36 id PK
+        char36 user_id FK
+        varchar token UK
+        enum type
+        timestamp expires_at
+        tinyint used
+    }
+
+    REFRESH_TOKENS {
+        char36 id PK
+        char36 user_id FK
+        varchar token_hash
+        timestamp expires_at
+        tinyint revoked
+    }
+
+    DISTRIBUTORS {
+        char36 id PK
+        char36 user_id FK_UK
+        decimal commission_rate
+        varchar city
+        varchar district
+        text address
+    }
+
+    SCHOOLS {
+        char36 id PK
+        char36 admin_user_id FK_UK
+        char36 distributor_id FK
+        varchar name
+        varchar login_id UK
+        varchar udise_code
+        varchar village
+        varchar city
+        varchar district
+        enum status
+        varchar logo_url
+        varchar signature_url
+        varchar stamp_url
+    }
+
+    WALLETS {
+        char36 id PK
+        char36 school_id FK_UK
+        decimal balance
+    }
+
+    WALLET_TRANSACTIONS {
+        char36 id PK
+        char36 wallet_id FK
+        enum type
+        decimal amount
+        decimal balance_after
+        varchar reason
+        char36 reference_id
+        timestamp created_at
+    }
+
+    RAZORPAY_ORDERS {
+        char36 id PK
+        char36 school_id FK
+        varchar razorpay_order_id UK
+        varchar razorpay_payment_id
+        decimal amount
+        enum status
+    }
+
+    STUDENTS {
+        char36 id PK
+        char36 school_id FK
+        varchar register_number
+        varchar full_name
+        varchar mother_name
+        varchar father_name
+        date dob
+        varchar admission_standard
+        varchar admission_division
+        varchar parent_mobile
+        varchar photo_url
+    }
+
+    CERTIFICATES {
+        char36 id PK
+        char36 school_id FK
+        char36 student_id FK
+        enum type
+        varchar serial_number UK
+        decimal price
+        decimal gst_amount
+        char36 wallet_transaction_id FK
+        varchar pdf_path
+        varchar purpose
+        timestamp expires_at
+    }
+
+    MASTER_DATA {
+        char36 id PK
+        enum category
+        varchar value
+        int display_order
+        tinyint is_active
+    }
+
+    NOTIFICATIONS {
+        char36 id PK
+        char36 user_id FK
+        varchar text
+        tinyint is_read
+    }
+
+    AUDIT_LOGS {
+        char36 id PK
+        char36 user_id FK
+        varchar action
+        varchar entity_type
+        char36 entity_id
+        json details
+    }
+
+    USERS ||--o| DISTRIBUTORS : "has profile"
+    USERS ||--o| SCHOOLS : "is admin of"
+    USERS ||--o{ PASSWORD_TOKENS : "requests"
+    USERS ||--o{ REFRESH_TOKENS : "holds"
+    USERS ||--o{ NOTIFICATIONS : "receives"
+    USERS ||--o{ AUDIT_LOGS : "performs"
+    USERS ||--o{ USERS : "creates"
+
+    DISTRIBUTORS ||--o{ SCHOOLS : "manages"
+
+    SCHOOLS ||--|| WALLETS : "has one"
+    SCHOOLS ||--o{ STUDENTS : "enrolls"
+    SCHOOLS ||--o{ CERTIFICATES : "issues"
+    SCHOOLS ||--o{ RAZORPAY_ORDERS : "tops up via"
+
+    WALLETS ||--o{ WALLET_TRANSACTIONS : "logs"
+
+    STUDENTS ||--o{ CERTIFICATES : "receives"
+
+    WALLET_TRANSACTIONS ||--o| CERTIFICATES : "pays for"

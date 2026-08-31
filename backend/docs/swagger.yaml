@@ -1,0 +1,627 @@
+openapi: 3.0.0
+info:
+  title: CertifyPro API
+  description: School Certificate Management Platform - REST API
+  version: 1.0.0
+servers:
+  - url: http://localhost:5000/api
+    description: Local development
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+security:
+  - bearerAuth: []
+paths:
+  /auth/login:
+    post:
+      summary: Log in and receive access + refresh tokens
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, description: "Email, school login_id, or distributor username depending on role" }
+                password: { type: string }
+                role: { type: string, enum: [superAdmin, schoolAdmin, distributor] }
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken: { type: string }
+                  refreshToken: { type: string }
+                  user:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      name: { type: string }
+                      email: { type: string }
+                      role: { type: string }
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /auth/refresh:
+    post:
+      summary: Exchange a refresh token for a new access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: New access token issued
+        '401':
+          description: Invalid or expired refresh token
+
+  /auth/logout:
+    post:
+      summary: Revoke a refresh token
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: Logged out
+
+  /auth/forgot-password:
+    post:
+      summary: Request a password reset link by email
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string }
+      responses:
+        '200':
+          description: Generic success response (does not reveal whether the email exists)
+
+  /auth/set-password:
+    post:
+      summary: Set a new password using a setup/reset token
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token: { type: string }
+                password: { type: string, minLength: 8 }
+      responses:
+        '200':
+          description: Password set successfully
+
+  /auth/me:
+    get:
+      summary: Get the current logged-in user
+      responses:
+        '200':
+          description: Current user object
+
+  /schools:
+    get:
+      summary: List all schools (Super Admin only)
+      responses:
+        '200':
+          description: Array of schools with admin, wallet, and distributor info
+    post:
+      summary: Create a new school (Super Admin only)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, adminName, adminEmail]
+              properties:
+                name: { type: string }
+                adminName: { type: string }
+                adminEmail: { type: string }
+                adminMobile: { type: string }
+                udise_code: { type: string }
+                village: { type: string }
+                city: { type: string }
+                district: { type: string }
+                taluka: { type: string }
+                pin_code: { type: string }
+                phone: { type: string }
+                medium: { type: string }
+                board: { type: string }
+                distributorId: { type: string }
+      responses:
+        '201':
+          description: School created, wallet initialized, setup email sent
+
+  /schools/{id}/status:
+    put:
+      summary: Approve, reject, suspend, or reactivate a school (Super Admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string, enum: [pending, active, rejected, suspended] }
+                rejectionReason: { type: string }
+      responses:
+        '200':
+          description: School status updated
+
+  /schools/me:
+    get:
+      summary: Get the logged-in School Admin's own school profile
+      responses:
+        '200':
+          description: School profile with wallet balance
+    put:
+      summary: Update own school profile, including logo/signature/stamp upload
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                logo: { type: string, format: binary }
+                signature: { type: string, format: binary }
+                stamp: { type: string, format: binary }
+      responses:
+        '200':
+          description: Updated school profile
+
+  /students:
+    get:
+      summary: List students for the logged-in school
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: standard
+          schema: { type: string }
+        - in: query
+          name: division
+          schema: { type: string }
+        - in: query
+          name: gender
+          schema: { type: string }
+      responses:
+        '200':
+          description: Array of students
+    post:
+      summary: Add a new student (with optional photo upload)
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [full_name]
+              properties:
+                full_name: { type: string }
+                photo: { type: string, format: binary }
+      responses:
+        '201':
+          description: Student created
+
+  /students/{id}:
+    get:
+      summary: Get a single student
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Student record }
+    put:
+      summary: Update a student
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Updated student record }
+    delete:
+      summary: Delete a student
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Student deleted }
+
+  /certificates/price:
+    get:
+      summary: Get price + GST breakdown for a certificate type
+      parameters:
+        - in: query
+          name: type
+          required: true
+          schema: { type: string, enum: [lc, bonafide, idcard] }
+      responses:
+        '200':
+          description: Price breakdown
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  price: { type: number }
+                  gst: { type: number }
+                  total: { type: number }
+
+  /certificates/generate:
+    post:
+      summary: Generate a certificate, debiting the school wallet atomically
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [studentId, type]
+              properties:
+                studentId: { type: string }
+                type: { type: string, enum: [lc, bonafide, idcard] }
+                purpose: { type: string, description: "Required for bonafide certificates" }
+      responses:
+        '201':
+          description: Certificate generated successfully
+        '402':
+          description: Insufficient wallet balance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  currentBalance: { type: number }
+                  required: { type: number }
+                  action: { type: string, example: TOPUP_REQUIRED }
+
+  /certificates:
+    get:
+      summary: List certificates for the logged-in school
+      responses:
+        '200': { description: Array of certificates }
+
+  /certificates/{id}/download:
+    get:
+      summary: Download the certificate PDF (valid for 5 days from generation)
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: PDF file stream }
+        '410': { description: Download window has expired }
+
+  /wallet/balance:
+    get:
+      summary: Get current wallet balance for the logged-in school
+      responses:
+        '200':
+          description: Balance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  balance: { type: number }
+
+  /wallet/transactions:
+    get:
+      summary: Get wallet transaction history (paginated)
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+      responses:
+        '200': { description: Paginated transaction list }
+
+  /payments/create-order:
+    post:
+      summary: Create a Razorpay order for wallet top-up
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount: { type: number, minimum: 50, maximum: 100000 }
+      responses:
+        '200':
+          description: Razorpay order created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orderId: { type: string }
+                  amount: { type: integer, description: "Amount in paise" }
+                  currency: { type: string }
+                  keyId: { type: string }
+
+  /payments/verify:
+    post:
+      summary: Verify a Razorpay payment and credit the wallet
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [razorpay_order_id, razorpay_payment_id, razorpay_signature]
+              properties:
+                razorpay_order_id: { type: string }
+                razorpay_payment_id: { type: string }
+                razorpay_signature: { type: string }
+      responses:
+        '200': { description: Payment verified, wallet credited }
+        '400': { description: Signature verification failed }
+
+  /payments/webhook:
+    post:
+      summary: Razorpay server-to-server webhook (backup credit path)
+      security: []
+      responses:
+        '200': { description: Webhook processed }
+
+  /distributors:
+    get:
+      summary: List all distributors (Super Admin only)
+      responses:
+        '200': { description: Array of distributors }
+    post:
+      summary: Create a new distributor (Super Admin only)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email]
+              properties:
+                name: { type: string }
+                email: { type: string }
+                mobile: { type: string }
+                city: { type: string }
+                district: { type: string }
+                commission_rate: { type: number }
+      responses:
+        '201': { description: Distributor created, setup email sent }
+
+  /distributors/me:
+    get:
+      summary: Get the logged-in distributor's own profile
+      responses:
+        '200': { description: Distributor profile }
+    put:
+      summary: Update own profile (name, mobile, city, district, address)
+      responses:
+        '200': { description: Updated profile }
+
+  /distributors/me/password:
+    put:
+      summary: Change own password
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string }
+                newPassword: { type: string, minLength: 8 }
+      responses:
+        '200': { description: Password changed }
+
+  /distributors/me/schools:
+    get:
+      summary: List schools added by this distributor, optionally filtered by status
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [pending, active, rejected, suspended] }
+      responses:
+        '200': { description: Array of schools }
+    post:
+      summary: Add a new school as a distributor (starts as 'pending')
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, adminName, adminEmail]
+              properties:
+                name: { type: string }
+                adminName: { type: string }
+                adminEmail: { type: string }
+      responses:
+        '201': { description: School submitted for approval }
+
+  /distributors/me/commission:
+    get:
+      summary: Get live-calculated commission totals, monthly and per-school breakdown
+      responses:
+        '200':
+          description: Commission data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  commissionRate: { type: number }
+                  totalRevenue: { type: number }
+                  totalCertificates: { type: integer }
+                  totalCommission: { type: number }
+                  monthly: { type: array, items: { type: object } }
+                  perSchool: { type: array, items: { type: object } }
+
+  /master-data:
+    get:
+      summary: List master data items, optionally filtered by category
+      parameters:
+        - in: query
+          name: category
+          schema: { type: string, enum: [standard, division, district, taluka, city, medium, religion, caste, grant_type, board_name, management_type] }
+      responses:
+        '200': { description: Master data items or grouped categories }
+    post:
+      summary: Add a master data item (Super Admin only)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category, value]
+              properties:
+                category: { type: string }
+                value: { type: string }
+      responses:
+        '201': { description: Item created }
+
+  /master-data/{id}:
+    put:
+      summary: Update a master data item (Super Admin only)
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Item updated }
+    delete:
+      summary: Soft-delete a master data item (Super Admin only)
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Item removed }
+
+  /schools/{id}/students:
+    get:
+      summary: List students for a specific school (Super Admin only - used by School Detail page)
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Array of students for that school }
+
+  /schools/{id}/certificates:
+    get:
+      summary: List all certificates for a specific school (Super Admin only - used by School Detail page)
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Array of certificates with student names }
+
+  /students/import-template:
+    get:
+      summary: Download an .xlsx template with the correct column headers for bulk import
+      responses:
+        '200': { description: XLSX file stream }
+
+  /students/import:
+    post:
+      summary: Bulk-import students from an uploaded .xlsx/.xls/.csv file
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '200':
+          description: Import results - each row validated independently
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created: { type: integer }
+                  failed: { type: integer }
+                  errors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        row: { type: integer }
+                        error: { type: string }
+
+  /notifications:
+    get:
+      summary: List the logged-in user's notifications, most recent first
+      responses:
+        '200': { description: Array of notifications }
+
+  /notifications/{id}/read:
+    put:
+      summary: Mark a single notification as read
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Marked as read }
+
+  /notifications/read-all:
+    put:
+      summary: Mark all of the logged-in user's notifications as read
+      responses:
+        '200': { description: All marked as read }
+
+  /reports/overview:
+    get:
+      summary: Platform-wide top-line numbers (Super Admin only)
+      responses:
+        '200': { description: Schools, students, certificates, wallets, distributors summary }
+
+  /reports/revenue:
+    get:
+      summary: Monthly revenue and GST trend across the whole platform (Super Admin only)
+      parameters:
+        - in: query
+          name: months
+          schema: { type: integer, default: 6, maximum: 24 }
+      responses:
+        '200': { description: Monthly trend array }
+
+  /reports/certificates-by-type:
+    get:
+      summary: Certificate count and revenue grouped by type (Super Admin only)
+      responses:
+        '200': { description: Breakdown by lc/bonafide/idcard }
+
+  /reports/top-schools:
+    get:
+      summary: Schools ranked by certificate revenue (Super Admin only)
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10, maximum: 50 }
+      responses:
+        '200': { description: Ranked school list }
+
+  /reports/distributor-performance:
+    get:
+      summary: All distributors ranked by revenue generated through their schools (Super Admin only)
+      responses:
+        '200': { description: Ranked distributor list with estimated commission }
+

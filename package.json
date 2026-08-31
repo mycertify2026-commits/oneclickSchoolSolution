@@ -1,0 +1,16 @@
+{
+  "name": "one-click-school-solutions",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node start.js",
+    "install:all": "npm install --prefix backend && npm install --prefix frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^3.11.174",
+    "pg": "^8.22.0"
+  }
+}

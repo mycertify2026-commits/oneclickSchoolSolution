@@ -1,0 +1,61 @@
+{
+  "name": "one-click-school-solutions-backend",
+  "version": "1.0.0",
+  "description": "One Click School Solutions backend - Node.js + Express + MySQL",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "migrate": "node src/config/migrate.js",
+    "migrate:idcard-design": "node src/config/migrate-add-idcard-design.js",
+    "migrate:sync-schema": "node src/config/migrate-sync-schema.js",
+    "migrate:add-receipts": "node src/config/migrate-add-receipts.js",
+    "migrate:add-certificate-pricing": "node src/config/migrate-add-certificate-pricing.js",
+    "migrate:add-commission-engine": "node src/config/migrate-add-commission-engine.js",
+    "migrate:fix-wallet-requests": "node src/config/migrate-fix-wallet-requests.js",
+    "migrate:add-current-class": "node src/config/migrate-add-current-class.js",
+    "migrate:add-school-geo-photos": "node src/config/migrate-add-school-geo-photos.js",
+    "migrate:add-email-logs": "node src/config/migrate-add-email-logs.js",
+    "migrate:add-certificate-templates": "node src/config/migrate-add-certificate-templates.js",
+    "migrate:add-idcard-bg-opacity": "node src/config/migrate-add-idcard-bg-opacity.js",
+    "migrate:add-idcard-feature-icons": "node src/config/migrate-add-idcard-feature-icons.js",
+    "migrate:soft-delete": "node src/config/migrate-soft-delete.js",
+    "migrate:wallet-system": "node src/config/migrate-wallet-system.js",
+    "seed": "node src/config/seed.js",
+    "seed:demo": "node src/config/seed-demo.js",
+    "test": "jest --runInBand"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^1.0.8",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.2.0",
+    "express-validator": "^7.1.0",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
+    "mysql2": "^3.10.0",
+    "nodemailer": "^6.9.13",
+    "pdfjs-dist": "^3.11.174",
+    "pdfkit": "^0.15.0",
+    "pg": "^8.22.0",
+    "qrcode": "^1.5.3",
+    "sharp": "^0.35.3",
+    "swagger-ui-express": "^5.0.1",
+    "tesseract.js": "^7.0.0",
+    "uuid": "^9.0.1",
+    "xlsx": "^0.18.5",
+    "yamljs": "^0.3.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.4",
+    "supertest": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

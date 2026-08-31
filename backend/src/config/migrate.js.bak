@@ -1,0 +1,106 @@
+const fs = require("fs");
+const path = require("path");
+const mysql = require("mysql2/promise");
+require("dotenv").config();
+
+async function migrate() {
+  const connection = await mysql.createConnection({
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    multipleStatements: true,
+  });
+
+  try {
+    await connection.query(`
+      CREATE DATABASE IF NOT EXISTS \`${process.env.DB_NAME}\`
+      CHARACTER SET utf8mb4
+      COLLATE utf8mb4_unicode_ci;
+    `);
+
+    await connection.query(`USE \`${process.env.DB_NAME}\``);
+
+    console.log("Connected to database.");
+
+    const schemaPath = path.join(__dirname, "schema.sql");
+    const schema = fs.readFileSync(schemaPath, "utf8");
+
+    const statements = schema
+      .split(";")
+      .map((s) => s.trim())
+      .filter((s) => s.length);
+
+    for (const statement of statements) {
+      try {
+        await connection.query(statement);
+      } catch (err) {
+        console.log("Skipped:", err.message);
+      }
+    }
+
+    console.log("Schema checked.");
+
+    const requiredColumns = {
+      users: [
+        ["deleted_at", "TIMESTAMP NULL DEFAULT NULL"],
+      ],
+      schools: [
+        ["deleted_at", "TIMESTAMP NULL DEFAULT NULL"],
+      ],
+      distributors: [
+        ["deleted_at", "TIMESTAMP NULL DEFAULT NULL"],
+      ],
+      students: [
+        ["deleted_at", "TIMESTAMP NULL DEFAULT NULL"],
+      ],
+      certificates: [
+        ["deleted_at", "TIMESTAMP NULL DEFAULT NULL"],
+      ],
+      wallet_transactions: [
+        ["deleted_at", "TIMESTAMP NULL DEFAULT NULL"],
+      ],
+      wallet_requests: [
+        ["deleted_at", "TIMESTAMP NULL DEFAULT NULL"],
+      ],
+      notifications: [
+        ["deleted_at", "TIMESTAMP NULL DEFAULT NULL"],
+      ],
+      bank_details: [
+        ["deleted_at", "TIMESTAMP NULL DEFAULT NULL"],
+      ]
+    };
+
+    for (const table of Object.keys(requiredColumns)) {
+      const [rows] = await connection.query(
+        `
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA=?
+        AND TABLE_NAME=?`,
+        [process.env.DB_NAME, table]
+      );
+
+      const existing = rows.map((r) => r.COLUMN_NAME);
+
+      for (const [column, definition] of requiredColumns[table]) {
+        if (!existing.includes(column)) {
+          console.log(`Adding ${table}.${column}`);
+
+          await connection.query(`
+            ALTER TABLE \`${table}\`
+            ADD COLUMN \`${column}\` ${definition}
+          `);
+        }
+      }
+    }
+
+    console.log("Database migration completed successfully.");
+  } catch (err) {
+    console.error(err);
+  } finally {
+    await connection.end();
+  }
+}
+
+migrate();
