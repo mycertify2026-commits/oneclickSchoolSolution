@@ -460,7 +460,19 @@ async function previewIdCard(req, res) {
 // GET /api/schools/:id/students (superAdmin) - student count + list for the School Detail page
 async function listStudentsForSchool(req, res) {
   try {
-    const [rows] = await pool.query('SELECT * FROM students WHERE school_id = ? ORDER BY full_name ASC', [req.params.id]);
+    // Excludes photo_data (raw BLOB bytes) - confirmed live this was
+    // bloating the response to hundreds of KB per request for a handful of
+    // students; the frontend only ever needs photo_url to build an image
+    // URL, never the raw bytes inline in JSON.
+    const [rows] = await pool.query(
+      `SELECT id, school_id, register_number, serial_id, full_name, mother_name, father_name, gender, dob,
+              aadhaar, religion, caste, sub_caste, nationality, mother_tongue, birth_village, birth_taluka,
+              birth_district, birth_state, birth_country, admission_standard, admission_division,
+              current_standard, current_division, admission_date, prev_school, prev_standard, roll_number,
+              blood_group, parent_mobile, address, photo_url, created_at, updated_at
+       FROM students WHERE school_id = ? ORDER BY full_name ASC`,
+      [req.params.id]
+    );
     res.json({ students: rows });
   } catch (err) {
     console.error('listStudentsForSchool error:', err.message);

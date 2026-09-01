@@ -17,7 +17,16 @@ async function listStudents(req, res) {
     const sortBy = SORTABLE_STUDENT_FIELDS.includes(req.query.sortBy) ? req.query.sortBy : 'full_name';
     const sortDir = String(req.query.sortDir).toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
 
-    let query = 'SELECT * FROM students WHERE school_id = ?';
+    // Excludes photo_data (raw BLOB bytes) - SELECT * was returning the full
+    // binary photo inline as a JSON number array for every student on every
+    // page load; the frontend only ever needs photo_url to build an image
+    // URL, never the raw bytes.
+    let query = `SELECT id, school_id, register_number, serial_id, full_name, mother_name, father_name, gender, dob,
+                        aadhaar, religion, caste, sub_caste, nationality, mother_tongue, birth_village, birth_taluka,
+                        birth_district, birth_state, birth_country, admission_standard, admission_division,
+                        current_standard, current_division, admission_date, prev_school, prev_standard, roll_number,
+                        blood_group, parent_mobile, address, photo_url, created_at, updated_at
+                 FROM students WHERE school_id = ?`;
     let countQuery = 'SELECT COUNT(*) as total FROM students WHERE school_id = ?';
     const params = [req.schoolId];
     const countParams = [req.schoolId];

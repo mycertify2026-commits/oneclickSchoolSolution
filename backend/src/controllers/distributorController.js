@@ -6,6 +6,7 @@ const { createNotification } = require('./notificationController');
 const { logAudit } = require('../utils/audit');
 const { sendDistributorCreatedEmail } = require('../utils/email');
 const { sendExport } = require('../utils/importExport');
+const { stripSchoolBlobFields } = require('../utils/stripBlobFields');
 
 // ===================== SUPER ADMIN SIDE =====================
 
@@ -106,7 +107,7 @@ async function assignDistributor(req, res) {
     await pool.query('UPDATE schools SET distributor_id = ? WHERE id = ?', [distributorId || null, req.params.id]);
     const [rows] = await pool.query('SELECT * FROM schools WHERE id = ?', [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ error: 'School not found' });
-    res.json({ school: rows[0] });
+    res.json({ school: stripSchoolBlobFields(rows[0]) });
   } catch (err) {
     console.error('assignDistributor error:', err.message);
     res.status(500).json({ error: 'Server error assigning distributor' });
@@ -360,7 +361,7 @@ async function updateMySchool(req, res) {
     await pool.query(`UPDATE schools SET ${updates.join(', ')} WHERE id = ?`, values);
 
     const [updatedRows] = await pool.query('SELECT * FROM schools WHERE id = ?', [req.params.id]);
-    res.json({ school: updatedRows[0] });
+    res.json({ school: stripSchoolBlobFields(updatedRows[0]) });
   } catch (err) {
     console.error('updateMySchool (distributor) error:', err.message);
     res.status(500).json({ error: 'Server error updating school' });

@@ -5,6 +5,7 @@ const { createAndSendPasswordToken } = require('./authController');
 const { createNotification } = require('./notificationController');
 const { logAudit } = require('../utils/audit');
 const { sendSuperDistributorCreatedEmail, sendDistributorCreatedEmail } = require('../utils/email');
+const { stripSchoolBlobFields } = require('../utils/stripBlobFields');
 
 // ===================== SUPER ADMIN SIDE =====================
 
@@ -663,7 +664,7 @@ async function updateMySchool(req, res) {
     await pool.query(`UPDATE schools SET ${updates.join(', ')} WHERE id = ?`, values);
 
     const [rows] = await pool.query('SELECT * FROM schools WHERE id = ?', [req.params.id]);
-    res.json({ school: rows[0] });
+    res.json({ school: stripSchoolBlobFields(rows[0]) });
   } catch (err) {
     console.error('SD updateMySchool error:', err.message);
     res.status(500).json({ error: 'Server error updating school' });
