@@ -42,7 +42,7 @@ export default function Header({ role, notifications = [] }) {
 
   return (
     <div className="app-header" ref={wrapRef}>
-      <button className="mobile-menu-btn" id="mobileSidebarToggle" onClick={() => document.getElementById('sidebar')?.classList.toggle('open')}>
+      <button className="mobile-menu-btn" id="mobileSidebarToggle" onClick={() => document.getElementById('sidebar')?.classList.toggle('mobile-open')}>
         <i className="fas fa-bars"></i>
       </button>
       <div className="header-title" id="headerTitle">One Click School Solutions</div>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Line, Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, LineElement, PointElement, LinearScale, CategoryScale, ArcElement, Tooltip, Legend } from 'chart.js';
 import Layout from '../components/Layout';
+import TruncatedName from '../components/TruncatedName';
 import api from '../api/client';
 
 ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, ArcElement, Tooltip, Legend);
@@ -153,7 +154,7 @@ export default function SaDashboard() {
                 <tr><td colSpan={7}>No schools yet.</td></tr>
               ) : recentSchools.map(s => (
                 <tr key={s.id}>
-                  <td>{s.name}</td>
+                  <td><TruncatedName name={s.name} /></td>
                   <td>{s.city || '-'}</td>
                   <td>{s.district || '-'}</td>
                   <td>{s.admin_name || '-'}</td>
@@ -180,7 +181,7 @@ export default function SaDashboard() {
                 <tr><td colSpan={6}>No pending approvals.</td></tr>
               ) : pendingList.map(s => (
                 <tr key={s.id}>
-                  <td>{s.name}</td>
+                  <td><TruncatedName name={s.name} /></td>
                   <td>{s.city || '-'}</td>
                   <td>{s.distributor_name || '-'}</td>
                   <td>{new Date(s.created_at).toLocaleDateString('en-IN')}</td>

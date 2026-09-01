@@ -412,6 +412,23 @@ h5 { font-size: 13px; font-weight: 600; }
   margin-bottom: 24px;
 }
 
+/* Grid/flex items default to min-width:auto, which floors their size at
+   their content's intrinsic width (e.g. an unbroken label like "Combined
+   Wallet Balance") - on a narrow screen this silently forces the column
+   wider than its 1fr track, which (since body has overflow-x:hidden)
+   clips the card instead of showing a scrollbar. min-width:0 lets these
+   items actually shrink to fit, and canvas/img get the same treatment so
+   a chart never does the same thing to its own card. */
+.stat-card, .stat-content, .chart-grid > .card, .chart-container {
+  min-width: 0;
+}
+.stat-label, .stat-value {
+  overflow-wrap: break-word;
+}
+canvas, img, svg {
+  max-width: 100%;
+}
+
 .stat-card {
   background: var(--white);
   border-radius: var(--radius-lg);

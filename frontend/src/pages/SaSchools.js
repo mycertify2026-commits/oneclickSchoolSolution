@@ -5,6 +5,15 @@ import { StatusBadge } from './SaDashboard';
 import api from '../api/client';
 
 const BLANK = { name: '', udise_code: '', city: '', taluka: '', district: '', phone: '', email: '', pin_code: '', medium: 'Marathi', board: 'Maharashtra SSC', distributorId: '', adminName: '', adminMobile: '', adminEmail: '' };
+
+// Long school names get cut to the first word in the list view (hover/title
+// shows the rest); the full name is always shown on the school's own detail
+// page after clicking through.
+function shortName(name) {
+  if (!name) return '—';
+  const words = String(name).trim().split(/\s+/);
+  return (words.length > 1 || name.length > 20) ? words[0] + '…' : name;
+}
 const EDIT_FIELDS = ['name', 'udise_code', 'village', 'city', 'taluka', 'district', 'pin_code', 'phone', 'email', 'medium', 'board'];
 
 export default function SaSchools() {
@@ -175,7 +184,7 @@ export default function SaSchools() {
                 <tr><td colSpan={8}>No schools found.</td></tr>
               ) : filtered.map(s => (
                 <tr key={s.id}>
-                  <td><span style={{ color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }} onClick={() => navigate(`/sa-schools/${s.id}`)}>{s.name}</span></td>
+                  <td><span style={{ color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }} title={s.name} onClick={() => navigate(`/sa-schools/${s.id}`)}>{shortName(s.name)}</span></td>
                   <td>{s.city || '-'}</td>
                   <td>{s.district || '-'}</td>
                   <td>{s.admin_name}<br /><span style={{ fontSize: 11, color: 'var(--text-light)' }}>{s.admin_email}</span></td>
