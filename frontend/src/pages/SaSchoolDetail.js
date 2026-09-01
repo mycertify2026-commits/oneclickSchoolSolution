@@ -62,8 +62,10 @@ export default function SaSchoolDetail() {
   const [certificates, setCertificates] = useState([]);
   const [activeTab, setActiveTab] = useState('info');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   const load = useCallback(async () => {
+    setLoadError('');
     try {
       const [schoolRes, studentsRes, certsRes] = await Promise.all([
         api.get(`/schools/${id}`),
@@ -73,6 +75,10 @@ export default function SaSchoolDetail() {
       setSchool(schoolRes.data.school);
       setStudents(studentsRes.data.students);
       setCertificates(certsRes.data.certificates);
+    } catch (err) {
+      // Show the real reason (401/403/500/network) instead of always
+      // saying "School not found", which was masking the actual problem.
+      setLoadError(err.response?.data?.error || err.message || 'Failed to load school');
     } finally {
       setLoading(false);
     }
@@ -81,7 +87,16 @@ export default function SaSchoolDetail() {
   useEffect(() => { load(); }, [load]);
 
   if (loading) return <Layout role="superAdmin"><div>Loading...</div></Layout>;
-  if (!school) return <Layout role="superAdmin"><div>School not found. <Link to="/sa-schools">Back to Schools</Link></div></Layout>;
+  if (loadError || !school) return (
+    <Layout role="superAdmin">
+      <div style={{ padding: 20 }}>
+        <div style={{ background: '#FEE2E2', color: 'var(--danger)', padding: 12, borderRadius: 8, marginBottom: 12 }}>
+          {loadError || 'School not found'}
+        </div>
+        <Link to="/sa-schools">Back to Schools</Link>
+      </div>
+    </Layout>
+  );
 
   const lcList = certificates.filter(c => c.type === 'lc');
   const bonList = certificates.filter(c => c.type === 'bonafide');

@@ -482,7 +482,7 @@ canvas, img, svg {
 }
 
 /* ---- Tables ---- */
-.table-responsive { overflow-x: auto; }
+.table-responsive { overflow-x: auto; min-width: 0; }
 
 .data-table {
   width: 100%;
