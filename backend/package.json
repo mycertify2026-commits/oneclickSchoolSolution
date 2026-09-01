@@ -17,6 +17,7 @@
     "migrate:add-school-geo-photos": "node src/config/migrate-add-school-geo-photos.js",
     "migrate:add-email-logs": "node src/config/migrate-add-email-logs.js",
     "migrate:add-certificate-templates": "node src/config/migrate-add-certificate-templates.js",
+    "migrate:add-cart-items": "node src/config/migrate-add-cart-items.js",
     "migrate:add-idcard-bg-opacity": "node src/config/migrate-add-idcard-bg-opacity.js",
     "migrate:add-idcard-feature-icons": "node src/config/migrate-add-idcard-feature-icons.js",
     "migrate:soft-delete": "node src/config/migrate-soft-delete.js",
