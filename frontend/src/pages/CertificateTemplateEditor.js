@@ -248,7 +248,12 @@ export default function CertificateTemplateEditor() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+      {/* Precise drag/resize field placement needs real screen width to stay
+          usable, so this keeps its fixed desktop layout rather than
+          reflowing — on a narrow screen it scrolls horizontally instead of
+          breaking off-screen. Best used on a larger screen. */}
+      <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
+      <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', minWidth: 940 }}>
         {/* Toolbar */}
         <div className="card" style={{ padding: 16, width: 220, flexShrink: 0 }}>
           <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>Add Field</div>
@@ -348,6 +353,7 @@ export default function CertificateTemplateEditor() {
             ))}
           </div>
         </div>
+      </div>
       </div>
 
       <PdfPreviewModal show={!!previewPdf} pdfBase64={previewPdf} title="Test Certificate Preview" onClose={() => setPreviewPdf(null)} />

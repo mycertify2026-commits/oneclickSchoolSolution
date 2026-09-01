@@ -345,7 +345,7 @@ export default function SchoolSettings() {
           )}
 
           {activePanel === 'idDesigner' && (
-            <div className="id-designer" style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 24 }}>
+            <div className="id-designer">
               <div className="card">
                 <div className="card-header"><h3 className="card-title"><i className="fas fa-sliders-h"></i> ID Card Settings</h3></div>
                 <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
