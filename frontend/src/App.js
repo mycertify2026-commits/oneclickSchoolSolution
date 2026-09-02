@@ -4,6 +4,7 @@ import { TranslationProvider } from './context/TranslationContext';
 import ProtectedRoute from './components/ProtectedRoute';
 
 import Login from './pages/Login';
+import LandingPage from './pages/LandingPage';
 import VerifyCertificate from './pages/VerifyCertificate';
 import ForgotPassword from './pages/ForgotPassword';
 import SetPassword from './pages/SetPassword';
@@ -53,8 +54,10 @@ export default function App() {
       <AuthProvider>
         <BrowserRouter>
           <Routes>
-            {/* Each role has its own shareable login URL. Do not expose a role picker. */}
-            <Route path="/" element={<Navigate to="/login/school" replace />} />
+            {/* Each role still has its own direct, shareable login URL (used below) —
+                the landing page's own login selector just links into these same routes,
+                it does not replace them. */}
+            <Route path="/" element={<LandingPage />} />
             <Route path="/login/super-admin" element={<Login role="superAdmin" />} />
             <Route path="/login/school" element={<Login role="schoolAdmin" />} />
             <Route path="/login/distributor" element={<Login role="distributor" />} />
