@@ -702,21 +702,49 @@ function renderBonafideCopy(doc, ctx, qrBuffer, yOffset, copyLabel) {
   drawFrameIfAvailable(doc, framePath, 0, yOffset, PAGE_W, COPY_H);
 }
 
-// Renders one supplied landscape bonafide design. The artwork is intentionally
-// drawn first; its Student Copy heading and decorative border are already part
-// of the PNG and must not be recreated in PDF text.
+// Small filled check mark, drawn as a path rather than relying on a font
+// glyph (Helvetica's WinAnsi encoding doesn't reliably include ✓).
+function drawCheckGlyph(doc, cx, cy, size, color) {
+  const s = size / 2;
+  doc.save().lineWidth(Math.max(1, size / 5)).strokeColor(color).lineCap('round').lineJoin('round')
+    .moveTo(cx - s, cy).lineTo(cx - s / 4, cy + s * 0.7).lineTo(cx + s, cy - s * 0.6)
+    .stroke().restore();
+}
+
+// Small padlock, drawn from a rounded body + a stroked shackle arc — same
+// reasoning as the check mark above (no dependable lock glyph in Helvetica).
+function drawLockGlyph(doc, cx, topY, size, color) {
+  const bodyW = size, bodyH = size * 0.8;
+  const bodyX = cx - bodyW / 2, bodyY = topY + size * 0.35;
+  doc.save().strokeColor(color).lineWidth(1.2)
+    .path(`M ${bodyX + 2} ${bodyY} A ${bodyW / 2 - 2} ${size * 0.35} 0 0 1 ${bodyX + bodyW - 2} ${bodyY}`)
+    .stroke().restore();
+  doc.save().roundedRect(bodyX, bodyY, bodyW, bodyH, 1.5).fillColor(color).fill().restore();
+}
+
+// Small ornamental divider used either side of the board-name line —
+// a short gold hairline with a diamond at its outer end.
+function drawFlourish(doc, x, y, lineW, towardRight) {
+  const dx = towardRight ? lineW : -lineW;
+  doc.save().moveTo(x, y).lineTo(x + dx, y).lineWidth(0.6).strokeColor(GOLD).stroke().restore();
+  const dCx = x + dx;
+  doc.save().translate(dCx, y).rotate(45).rect(-2.5, -2.5, 5, 5).fillColor(GOLD).fill().restore();
+}
+
+// Renders one landscape bonafide certificate. Layout modeled directly on a
+// reference design the school provided: board/school identity + circular
+// emblem + certificate-ID/QR block up top, a labeled ID row, a navy title
+// banner, a centered certificate body, a photo with a "digitally signed"
+// badge, a 3-box Date/Place/Verified strip, and a 3-column signature row
+// with a seal in the middle.
 function renderSingleBonafide(doc, ctx, qrBuffer) {
   const { school, student, certificate, purpose, photoPath, logoPath, signaturePath, stampPath, templatePath } = ctx;
   const W = doc.page.width;
   const H = doc.page.height;
-  // Same NAVY/GOLD/TEXT/GREY palette as the LC certificate (drawHeader /
-  // drawTitleBanner) so the two certificates read as one professional
-  // system rather than two different designs.
   const black = TEXT;
   const muted = GREY;
-  // Keep the live content inside an even inset on every side of the frame.
-  const left = 70;
-  const right = W - 70;
+  const left = 36;
+  const right = W - 36;
   const contentW = right - left;
 
   if (canDraw(templatePath)) {
@@ -726,55 +754,89 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
     drawDoubleBorder(doc, 8, H - 8);
   }
 
-  const photoW = 72;
-  const photoH = 88;
-  const qrSize = 70;
-  // Reserve the same width on both sides so the certificate body stays
-  // visually centered when the photo is on the left and QR is on the right.
-  const sideW = 100;
-  const textW = contentW - sideW * 2;
-  const textX = left + sideW;
-  const sideX = right - sideW;
+  // ── "STUDENT COPY" pill, top centre ──────────────────────────────────────
+  const pillW = 110;
+  doc.save().roundedRect((W - pillW) / 2, 16, pillW, 15, 7).fillColor(NAVY).fill().restore();
+  doc.fillColor('#fff').font('Helvetica-Bold').fontSize(7.5)
+    .text('STUDENT COPY', (W - pillW) / 2, 20, { width: pillW, align: 'center', lineBreak: false });
 
-  // Logo, top-left of the text column — matches LC's header, which always
-  // leads with the school logo.
-  const logoSz = 34;
+  // ── Header: emblem (left) | board/school identity (centre) | cert-ID + QR (right) ──
+  // Everything here starts below the "STUDENT COPY" pill (bottom edge y=31)
+  // with a clear gap, so nothing overlaps it.
+  const logoSz = 60;
+  const logoCx = left + 46, logoCy = 80;
   if (canDraw(logoPath)) {
-    try { doc.image(logoPath, textX, 68, { width: logoSz, height: logoSz }); } catch (e) {}
-  } else {
-    doc.save().circle(textX + logoSz / 2, 68 + logoSz / 2, logoSz / 2).lineWidth(1).strokeColor(NAVY).stroke().restore();
+    try { doc.save().circle(logoCx, logoCy, logoSz / 2).clip().image(logoPath, logoCx - logoSz / 2, logoCy - logoSz / 2, { width: logoSz, height: logoSz }).restore(); } catch (e) {}
   }
+  doc.save().circle(logoCx, logoCy, logoSz / 2).lineWidth(1.5).strokeColor(NAVY).stroke()
+    .circle(logoCx, logoCy, logoSz / 2 - 3).lineWidth(0.6).strokeColor(GOLD).stroke().restore();
 
-  // School identity sits below the artwork's built-in Student Copy heading.
-  doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(8)
-    .text('MAHARASHTRA STATE EDUCATION BOARD', textX, 71, {
-      width: textW, align: 'center', lineBreak: false, ellipsis: true
-    });
-  doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(14)
-    .text(safe(school.name, 'SCHOOL NAME').toUpperCase(), textX, 84, {
-      width: textW, align: 'center', lineBreak: false, ellipsis: true
-    });
-  doc.fillColor(black).font('Helvetica').fontSize(7.5)
-    .text(
-      `Taluka: ${safe(school.taluka, '-')}  |  District: ${safe(school.district, '-')}`,
-      textX, 101, { width: textW, align: 'center', lineBreak: false, ellipsis: true }
-    );
-  doc.fillColor(muted).fontSize(7)
-    .text(
-      `U-DISE: ${safe(school.udise_code, '-')}  |  Recognized No.: ${safe(school.recog_no, '-')}`,
-      textX, 113, { width: textW, align: 'center', lineBreak: false, ellipsis: true }
-    );
+  const idBoxW = 130, idBoxX = right - idBoxW;
+  doc.save().roundedRect(idBoxX, 36, idBoxW, 14, 3).fillColor(NAVY).fill().restore();
+  doc.fillColor('#fff').font('Helvetica-Bold').fontSize(7)
+    .text('CERTIFICATE ID', idBoxX, 40, { width: idBoxW, align: 'center', lineBreak: false });
+  let idSz = 11;
+  doc.font('Helvetica-Bold');
+  while (idSz > 6.5 && doc.fontSize(idSz).widthOfString(safe(certificate.serial_number, '-')) > idBoxW - 6) idSz -= 0.5;
+  doc.fontSize(idSz).fillColor('#D6272B')
+    .text(safe(certificate.serial_number, '-'), idBoxX, 53, { width: idBoxW, align: 'center', lineBreak: false });
+  const qrSize = 58, qrX = idBoxX + (idBoxW - qrSize) / 2, qrY = 68;
+  if (qrBuffer) {
+    try { doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize }); } catch (e) {}
+  }
+  doc.fillColor(muted).font('Helvetica').fontSize(6)
+    .text(`S/N: ${safe(certificate.serial_number, '-')}`, idBoxX, qrY + qrSize + 3, { width: idBoxW, align: 'center', lineBreak: false, ellipsis: true });
 
-  // Title banner — same solid NAVY / GOLD-border style as the LC certificate's
-  // drawTitleBanner, instead of the previous plain colored text.
-  const bannerY = 128;
-  const bannerH = 17;
-  doc.save().roundedRect(textX, bannerY, textW, bannerH, 4).fillColor(NAVY).fill()
-    .lineWidth(0.8).strokeColor(GOLD).roundedRect(textX, bannerY, textW, bannerH, 4).stroke()
+  const textX = logoCx + logoSz / 2 + 16;
+  const textW = idBoxX - 16 - textX;
+  const boardY = 38;
+  doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(13)
+    .text('MAHARASHTRA STATE EDUCATION BOARD', textX, boardY, { width: textW, align: 'center', lineBreak: false, ellipsis: true });
+  drawFlourish(doc, textX + 2, boardY + 6, 8, false);
+  drawFlourish(doc, textX + textW - 2, boardY + 6, 8, true);
+  doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(17)
+    .text(safe(school.name, 'SCHOOL NAME').toUpperCase(), textX, boardY + 18, { width: textW, align: 'center', lineBreak: false, ellipsis: true });
+  doc.fillColor(black).font('Helvetica').fontSize(8.5)
+    .text(`Taluka: ${safe(school.taluka, '-')}, District: ${safe(school.district, '-')}, Maharashtra`,
+      textX, boardY + 40, { width: textW, align: 'center', lineBreak: false, ellipsis: true });
+  doc.fillColor(muted).font('Helvetica').fontSize(7.5)
+    .text(`U-DISE: ${safe(school.udise_code, '-')}   |   RECOG NO: ${safe(school.recog_no, '-')}`,
+      textX, boardY + 53, { width: textW, align: 'center', lineBreak: false, ellipsis: true });
+
+  // ── ID row: Gr. No. / Roll No. / SARAL ID / Aadhar No. ───────────────────
+  const idRowY = 140;
+  doc.save().moveTo(left, idRowY - 6).lineTo(right, idRowY - 6).lineWidth(0.6).strokeColor(GOLD).stroke().restore();
+  const idFields = [
+    ['Gr. No.', safe(student.register_number, '-')],
+    ['Roll No.', safe(student.roll_number, '-')],
+    ['SARAL ID', safe(student.serial_id, '-')],
+    ['Aadhar No.', student.aadhaar ? 'XXXX-XXXX-' + String(student.aadhaar).slice(-4) : '-'],
+  ];
+  const idSeg = contentW / idFields.length;
+  idFields.forEach(([label, value], i) => {
+    const x = left + i * idSeg;
+    doc.circle(x + 6, idRowY + 4, 2.5).fillColor(GOLD).fill();
+    doc.fillColor(black).font('Helvetica-Bold').fontSize(7.5)
+      .text(`${label}: `, x + 14, idRowY, { continued: true, lineBreak: false });
+    doc.font('Helvetica').fillColor(muted).text(value, { lineBreak: false, width: idSeg - 18 });
+  });
+
+  // ── "This is to certify that" + title banner ──────────────────────────────
+  doc.fillColor(muted).font('Helvetica-Oblique').fontSize(9)
+    .text('This is to certify that', left, 162, { width: contentW, align: 'center', lineBreak: false });
+
+  const bannerY = 176, bannerH = 22;
+  doc.save().roundedRect(left, bannerY, contentW, bannerH, 5).fillColor(NAVY).fill()
+    .lineWidth(1).strokeColor(GOLD).roundedRect(left, bannerY, contentW, bannerH, 5).stroke()
     .restore();
-  doc.fillColor('#fff').font('Helvetica-Bold').fontSize(11)
-    .text('BONAFIDE CERTIFICATE', textX, bannerY + 4, { width: textW, align: 'center', lineBreak: false });
+  doc.fillColor('#fff').font('Helvetica-Bold').fontSize(14)
+    .text('BONAFIDE CERTIFICATE', left, bannerY + 6, { width: contentW, align: 'center', lineBreak: false });
 
+  // ── Student name ───────────────────────────────────────────────────────
+  doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(17)
+    .text(safe(student.full_name).toUpperCase(), left, 208, { width: contentW, align: 'center', lineBreak: false, ellipsis: true });
+
+  // ── Body paragraph (centered, shrink-to-fit above the footer strip) ──────
   const heShe = student.gender === 'Male' ? 'He' : student.gender === 'Female' ? 'She' : 'He/She';
   const hisHer = student.gender === 'Male' ? 'His' : student.gender === 'Female' ? 'Her' : 'His/Her';
   const birthPlace = [
@@ -784,114 +846,90 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
   ].filter(Boolean).join(', ');
   const currentDivision = student.current_division || student.admission_division;
   const standardValue = safe(student.current_standard || student.admission_standard, '-') +
-    (currentDivision ? ` (Div. ${safe(currentDivision)})` : '');
+    (currentDivision ? ` Div. ${safe(currentDivision)}` : '');
 
-  // Split into (text, bold) segments instead of one flat string, so the
-  // school-entered values stand out — everything the school typed in is
-  // bold, the surrounding certificate wording stays regular weight.
-  const segments = [
-    { text: 'This is to certify that ' },
-    { text: safe(student.full_name).toUpperCase(), bold: true },
-    { text: ' is / was a bonafide student of this School / College studying in Std. ' },
-    { text: standardValue, bold: true },
-    { text: ' during the year ' },
-    { text: safe(student.academic_year) || currentAcademicYear(), bold: true },
-    { text: `. Mother's name is ` },
-    { text: safe(student.mother_name, '-').toUpperCase(), bold: true },
-    { text: `. ${heShe} is ` },
-    { text: safe(student.caste, 'N/A'), bold: true },
-    { text: ` by Caste. ${hisHer} date of Birth according to our Register is ` },
-    { text: `${fmtDate(student.dob)} (in words ${dobInWords(student.dob)})`, bold: true },
-    { text: `. ${hisHer} place of Birth is ` },
-    { text: birthPlace || '-', bold: true },
-    { text: `. ${heShe} bears a good moral character.` },
-  ];
-  if (purpose) {
-    segments.push({ text: ' This certificate is issued for: ' }, { text: String(purpose), bold: true }, { text: '.' });
-  }
-  const plainPara = segments.map(s => s.text).join('');
+  let para = `is / was a bonafide student of this School / College Studying in Std. ${standardValue} ` +
+    `during the year ${safe(student.academic_year) || currentAcademicYear()}. Mother's name is ${safe(student.mother_name, '-').toUpperCase()}. ` +
+    `${heShe} is ${safe(student.caste, 'N/A')} by Caste. ${hisHer} date of Birth according to our Register is ${fmtDate(student.dob)} ` +
+    `(in words ${dobInWords(student.dob)}). ${hisHer} place of Birth is ${birthPlace || '-'}. ${heShe} bears a good moral character.`;
+  if (purpose) para += ` This certificate is issued on the request for the purpose of: ${purpose}.`;
 
-  // Give the dynamic content real visual weight — roughly a third to a half
-  // of the page, not the cramped ~22% box this used to be squeezed into.
-  // Measured against the plain (non-bold) concatenation, which is narrower
-  // than the mixed bold/regular render, so the chosen size always still fits.
-  const bodyX = textX + 10;
-  const bodyW = textW - 20;
-  const bodyH = 164;
-  const bodyY = 157;
-  let bodySize = 14;
-  while (bodySize > 8 && doc.font('Helvetica').fontSize(bodySize)
-    .heightOfString(plainPara, { width: bodyW, lineGap: 3 }) > bodyH) bodySize -= 0.5;
-  // pdfkit's `continued: true` reliably flows mixed-font text only under
-  // left alignment — combined with `align: 'center'` it recomputes centering
-  // per fragment instead of per line, scrambling multi-line output. Left
-  // alignment is also the more common real-world certificate body style.
-  doc.fillColor(black).fontSize(bodySize);
-  segments.forEach((seg, i) => {
-    doc.font(seg.bold ? 'Helvetica-Bold' : 'Helvetica');
-    const isLast = i === segments.length - 1;
-    if (i === 0) {
-      doc.text(seg.text, bodyX, bodyY, { width: bodyW, height: bodyH, align: 'left', lineGap: 3, continued: !isLast });
-    } else {
-      doc.text(seg.text, { continued: !isLast });
-    }
-  });
+  const bodyY = 232;
+  const photoResW = 66, photoResX = right - photoResW - 4;
+  const bodyW = contentW - photoResW - 16;
+  const bodyBottom = 344;
+  let bodySize = 10.5;
+  doc.font('Helvetica');
+  while (bodySize > 7 && doc.fontSize(bodySize).heightOfString(para, { width: bodyW, align: 'center', lineGap: 2 }) > bodyBottom - bodyY) bodySize -= 0.5;
+  doc.fillColor(black).fontSize(bodySize)
+    .text(para, left, bodyY, { width: bodyW, align: 'center', lineGap: 2 });
 
-  // Everything below shifts down by the same amount the paragraph box grew
-  // (124 -> 164, +40) so nothing overlaps the larger text above.
-  const Y = (v) => v + 40;
-
-  // Keep the certificate body above the media row. The QR stays on the right,
-  // but both media blocks begin only after the complete text paragraph.
-  doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(7)
-    .text('BONAFIDE NO.', sideX, Y(287), { width: sideW, align: 'center', lineBreak: false });
-  doc.fillColor(black).fontSize(8)
-    .text(safe(certificate.serial_number, '-'), sideX, Y(298), { width: sideW, align: 'center', lineBreak: false, ellipsis: true });
-  if (qrBuffer) {
-    try { doc.image(qrBuffer, sideX + (sideW - qrSize) / 2, Y(313), { width: qrSize, height: qrSize }); } catch (e) {}
-    doc.fillColor(muted).font('Helvetica').fontSize(5.5)
-      .text('Scan to verify', sideX, Y(385), { width: sideW, align: 'center', lineBreak: false });
-  }
-
-  // Student photo sits below the text in the matching left-side column.
-  const photoLeftX = left + (sideW - photoW) / 2;
-  doc.save().roundedRect(photoLeftX, Y(292), photoW, photoH, 3)
-    .lineWidth(0.8).strokeColor(GOLD).stroke().restore();
+  // ── Student photo + digitally-signed badge, right of the body text ───────
+  const photoResH = 78, photoResY = bodyY;
+  doc.save().roundedRect(photoResX, photoResY, photoResW, photoResH, 3).lineWidth(1).strokeColor(GOLD).stroke().restore();
   if (canDraw(photoPath)) {
-    try { doc.image(photoPath, photoLeftX + 1, Y(293), { width: photoW - 2, height: photoH - 2 }); } catch (e) {}
+    try { doc.image(photoPath, photoResX + 1, photoResY + 1, { width: photoResW - 2, height: photoResH - 2 }); } catch (e) {}
   } else {
     doc.fillColor(muted).font('Helvetica').fontSize(7)
-      .text('PHOTO', photoLeftX, Y(329), { width: photoW, align: 'center', lineBreak: false });
+      .text('PHOTO', photoResX, photoResY + photoResH / 2 - 4, { width: photoResW, align: 'center', lineBreak: false });
   }
+  const badgeY = photoResY + photoResH + 6, badgeH = 14;
+  doc.save().roundedRect(photoResX, badgeY, photoResW, badgeH, 6).fillColor('#ECFDF5').fill()
+    .lineWidth(0.6).strokeColor('#10B981').roundedRect(photoResX, badgeY, photoResW, badgeH, 6).stroke().restore();
+  drawCheckGlyph(doc, photoResX + 10, badgeY + badgeH / 2, 7, '#10B981');
+  doc.fillColor('#047857').font('Helvetica-Bold').fontSize(6.2)
+    .text('Digitally Signed', photoResX + 16, badgeY + 4, { width: photoResW - 18, lineBreak: false });
 
-  doc.fillColor(muted).font('Helvetica-Bold').fontSize(7)
-    .text(`Gr. No.: ${safe(student.register_number, '-')}`, left, Y(399), { lineBreak: false });
-  doc.text(`Roll No.: ${safe(student.roll_number, '-')}`, left + 185, Y(399), { lineBreak: false });
-  doc.text(`SARAL ID: ${safe(student.serial_id, '-')}`, left + 370, Y(399), { lineBreak: false });
+  // ── Footer strip: Date of Issue | Place | Verified ───────────────────────
+  const stripY = 354, stripH = 44, stripSeg = contentW / 3;
+  doc.save().moveTo(left, stripY - 8).lineTo(right, stripY - 8).lineWidth(0.6).strokeColor(GOLD).stroke().restore();
 
-  doc.save().moveTo(left, Y(420)).lineTo(right, Y(420))
-    .lineWidth(0.5).strokeColor(GOLD).stroke().restore();
-  doc.fillColor(muted).font('Helvetica').fontSize(6.5)
-    .text('Certified that the above information is true to the best of our knowledge as per school records.',
-      left, Y(427), { width: contentW, align: 'center', lineBreak: false });
-  doc.fillColor(black).font('Helvetica-Bold').fontSize(7)
-    .text(`DATE: ${fmtDate(new Date())}`, left, Y(449), { lineBreak: false });
-  doc.text(`PLACE: ${safe(school.city || school.village || school.taluka, '-')}, Dist. ${safe(school.district, '-')}`,
-    left, Y(461), { lineBreak: false });
+  doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(7.5)
+    .text('DATE OF ISSUE', left, stripY, { width: stripSeg, align: 'center', lineBreak: false });
+  doc.fillColor(black).font('Helvetica').fontSize(9)
+    .text(fmtDate(new Date()), left, stripY + 12, { width: stripSeg, align: 'center', lineBreak: false });
 
-  const signX = right - 160;
-  if (canDraw(stampPath)) {
-    try { doc.image(stampPath, signX + 62, Y(430), { width: 34, height: 34 }); } catch (e) {}
-  }
+  doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(7.5)
+    .text('PLACE', left + stripSeg, stripY, { width: stripSeg, align: 'center', lineBreak: false });
+  doc.fillColor(black).font('Helvetica').fontSize(9)
+    .text(`${safe(school.city || school.village || school.taluka, '-')}, Dist. ${safe(school.district, '-')}`,
+      left + stripSeg, stripY + 12, { width: stripSeg, align: 'center', lineBreak: false, ellipsis: true });
+
+  const verX = left + stripSeg * 2;
+  drawLockGlyph(doc, verX + stripSeg / 2, stripY - 2, 11, NAVY);
+  doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(7.5)
+    .text('VERIFIED', verX, stripY + 12, { width: stripSeg, align: 'center', lineBreak: false });
+  doc.fillColor(muted).font('Helvetica').fontSize(6)
+    .text('This is a digitally-generated certificate. No physical signature is needed.',
+      verX + 6, stripY + 23, { width: stripSeg - 12, align: 'center', lineGap: 1 });
+
+  // ── Signature row: Class Teacher | seal | Principal ──────────────────────
+  const sigY = 414, lineY = sigY + 32;
+  const sigColW = contentW / 3;
+
   if (canDraw(signaturePath)) {
-    try { doc.image(signaturePath, signX, Y(455), { width: 150, height: 22 }); } catch (e) {}
+    try { doc.image(signaturePath, left + 20, sigY, { width: sigColW - 60, height: 24, fit: [sigColW - 60, 24] }); } catch (e) {}
   }
-  doc.save().moveTo(signX, Y(480)).lineTo(right, Y(480))
-    .lineWidth(0.5).strokeColor(GOLD).stroke().restore();
-  doc.fillColor(black).font('Helvetica-Bold').fontSize(7)
-    .text(`(${safe(school.principal_name, 'HEAD MASTER').toUpperCase()})`, signX, Y(484),
-      { width: 160, align: 'center', lineBreak: false, ellipsis: true });
-  doc.text('HEAD MASTER', signX, Y(496), { width: 160, align: 'center', lineBreak: false });
+  doc.save().moveTo(left + 15, lineY).lineTo(left + sigColW - 25, lineY).lineWidth(0.7).strokeColor('#999').stroke().restore();
+  doc.fillColor(black).font('Helvetica-Bold').fontSize(8)
+    .text('Class Teacher', left + 15, lineY + 4, { width: sigColW - 40, align: 'center', lineBreak: false });
+
+  const sealCx = W / 2, sealCy = lineY - 10, sealR = 26;
+  if (canDraw(stampPath)) {
+    try { doc.save().circle(sealCx, sealCy, sealR).clip().image(stampPath, sealCx - sealR, sealCy - sealR, { width: sealR * 2, height: sealR * 2 }).restore(); } catch (e) {}
+  }
+  doc.save().circle(sealCx, sealCy, sealR).lineWidth(1.2).strokeColor(NAVY).stroke()
+    .circle(sealCx, sealCy, sealR - 4).lineWidth(0.6).strokeColor(GOLD).stroke().restore();
+
+  const principalSigX = right - (sigColW - 40);
+  if (canDraw(signaturePath)) {
+    try { doc.image(signaturePath, principalSigX, sigY, { width: sigColW - 60, height: 24, fit: [sigColW - 60, 24] }); } catch (e) {}
+  }
+  doc.save().moveTo(right - sigColW + 25, lineY).lineTo(right - 15, lineY).lineWidth(0.7).strokeColor('#999').stroke().restore();
+  doc.fillColor(black).font('Helvetica-Bold').fontSize(8)
+    .text('Principal', right - sigColW + 25, lineY + 4, { width: sigColW - 40, align: 'center', lineBreak: false });
+  doc.fillColor(muted).font('Helvetica').fontSize(6.5)
+    .text('(Digital Signature)', right - sigColW + 25, lineY + 15, { width: sigColW - 40, align: 'center', lineBreak: false });
 }
 
 async function generateBonafidePdf({ school, student, certificate, outputPath, photoPath, logoPath, purpose, signaturePath, stampPath }) {
