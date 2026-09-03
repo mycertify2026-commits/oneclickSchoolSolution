@@ -4,7 +4,7 @@ import { StatusBadge } from './DistDashboard';
 import GeoPhotoCapture from '../components/GeoPhotoCapture';
 import api from '../api/client';
 
-const BLANK = { name: '', adminName: '', adminEmail: '', adminMobile: '', udise_code: '', village: '', city: '', district: '', taluka: '', pin_code: '', phone: '', medium: '', board: '' };
+const BLANK = { name: '', adminName: '', adminEmail: '', adminMobile: '', udise_code: '', village: '', city: '', district: '', taluka: '', pin_code: '', phone: '', medium: '', board: '', class_from: '', class_to: '' };
 const TABS = [
   { key: '', label: 'All' }, { key: 'pending', label: 'Pending' }, { key: 'active', label: 'Approved' }, { key: 'rejected', label: 'Rejected' }
 ];
@@ -66,7 +66,8 @@ export default function DistSchools() {
     setEditForm({
       name: school.name || '', udise_code: school.udise_code || '', village: school.village || '',
       city: school.city || '', taluka: school.taluka || '', district: school.district || '',
-      pin_code: school.pin_code || '', phone: school.phone || '', medium: school.medium || '', board: school.board || ''
+      pin_code: school.pin_code || '', phone: school.phone || '', medium: school.medium || '', board: school.board || '',
+      class_from: school.class_from || '', class_to: school.class_to || ''
     });
     setError('');
     setShowEditModal(true);
@@ -126,6 +127,10 @@ export default function DistSchools() {
               <Field label="Phone" value={form.phone} onChange={v => handleChange('phone', v)} />
               <Field label="PIN Code" value={form.pin_code} onChange={v => handleChange('pin_code', v)} />
               <Field label="Medium" value={form.medium} onChange={v => handleChange('medium', v)} />
+            </div>
+            <div className="form-row form-row-2">
+              <Field label="Lower Class" value={form.class_from} onChange={v => handleChange('class_from', v)} placeholder="e.g. 1st" />
+              <Field label="Upper Class" value={form.class_to} onChange={v => handleChange('class_to', v)} placeholder="e.g. 10th" />
             </div>
           </div>
 
@@ -229,6 +234,10 @@ export default function DistSchools() {
               <div className="form-row form-row-2">
                 <Field label="Medium" value={editForm.medium} onChange={v => setEditForm(p => ({ ...p, medium: v }))} />
                 <Field label="Board" value={editForm.board} onChange={v => setEditForm(p => ({ ...p, board: v }))} />
+              </div>
+              <div className="form-row form-row-2">
+                <Field label="Lower Class" value={editForm.class_from} onChange={v => setEditForm(p => ({ ...p, class_from: v }))} placeholder="e.g. 1st" />
+                <Field label="Upper Class" value={editForm.class_to} onChange={v => setEditForm(p => ({ ...p, class_to: v }))} placeholder="e.g. 10th" />
               </div>
             </div>
             <div className="modal-footer">

@@ -164,10 +164,11 @@ async function migrate() {
     `);
     const certPricingCount = await client.query('SELECT COUNT(*) AS c FROM certificate_pricing');
     if (parseInt(certPricingCount.rows[0].c) === 0) {
-      await client.query(`INSERT INTO certificate_pricing (type, price) VALUES ('lc', 50.00), ('bonafide', 30.00)`);
-      console.log('  + certificate_pricing seeded lc=50.00, bonafide=30.00');
+      await client.query(`INSERT INTO certificate_pricing (type, price) VALUES ('lc', 50.00), ('bonafide', 30.00), ('relation', 30.00)`);
+      console.log('  + certificate_pricing seeded lc=50.00, bonafide=30.00, relation=30.00');
     } else {
-      console.log('  - certificate_pricing rows already present, skipping seed');
+      await client.query(`INSERT INTO certificate_pricing (type, price) VALUES ('relation', 30.00) ON CONFLICT (type) DO NOTHING`);
+      console.log('  - certificate_pricing: lc/bonafide rows already present; ensured relation=30.00 row exists');
     }
 
     console.log('\n9. receipts table');
@@ -249,6 +250,91 @@ async function migrate() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ledger_super_distributor ON commission_ledger (super_distributor_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ledger_created ON commission_ledger (created_at)`);
     console.log('  + commission_ledger ensured');
+
+    console.log('\n12. certificates — soft-delete column');
+    await client.query(`ALTER TABLE certificates ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP NULL DEFAULT NULL`);
+    console.log('  + certificates.deleted_at ensured');
+
+    console.log('\n13. certificate_templates + template_fields tables');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS certificate_templates (
+        id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::VARCHAR,
+        school_id VARCHAR(36) NOT NULL,
+        doc_type VARCHAR(20) NOT NULL,
+        name VARCHAR(150),
+        version VARCHAR(30),
+        source_file_url VARCHAR(500),
+        source_file_data BYTEA,
+        source_file_type VARCHAR(10) NOT NULL,
+        background_url VARCHAR(500),
+        background_data BYTEA,
+        page_width_pt DECIMAL(8,2) NOT NULL,
+        page_height_pt DECIMAL(8,2) NOT NULL,
+        page_count INT NOT NULL DEFAULT 1,
+        orientation VARCHAR(10) NOT NULL DEFAULT 'portrait',
+        analysis_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        analysis_error TEXT,
+        status VARCHAR(20) NOT NULL DEFAULT 'draft',
+        is_active SMALLINT NOT NULL DEFAULT 0,
+        created_by VARCHAR(36),
+        deleted_at TIMESTAMP NULL DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_certtpl_school FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_cert_templates_school ON certificate_templates (school_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_cert_templates_school_type_active ON certificate_templates (school_id, doc_type, is_active)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS template_fields (
+        id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::VARCHAR,
+        template_id VARCHAR(36) NOT NULL,
+        field_type VARCHAR(20) NOT NULL DEFAULT 'text',
+        field_key VARCHAR(60),
+        static_text VARCHAR(255),
+        label VARCHAR(100),
+        x DECIMAL(8,2) NOT NULL,
+        y DECIMAL(8,2) NOT NULL,
+        width DECIMAL(8,2) NOT NULL,
+        height DECIMAL(8,2) NOT NULL,
+        font_size DECIMAL(5,2) NOT NULL DEFAULT 11.00,
+        font_weight VARCHAR(10) NOT NULL DEFAULT 'normal',
+        align VARCHAR(10) NOT NULL DEFAULT 'left',
+        color VARCHAR(20) NOT NULL DEFAULT '#1a1a1a',
+        source VARCHAR(20) NOT NULL DEFAULT 'manual',
+        confidence DECIMAL(5,2),
+        is_confirmed SMALLINT NOT NULL DEFAULT 0,
+        sort_order INT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_tplfield_template FOREIGN KEY (template_id) REFERENCES certificate_templates(id) ON DELETE CASCADE
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_template_fields_template ON template_fields (template_id)`);
+    console.log('  + certificate_templates / template_fields ensured');
+
+    console.log('\n14. distributors — PAN + payout bank details (shared table: also covers Super Distributor profiles)');
+    const distributorPayoutCols = [
+      ['pan_number', 'VARCHAR(20)'],
+      ['bank_account_holder', 'VARCHAR(150)'],
+      ['bank_name', 'VARCHAR(150)'],
+      ['bank_account_number', 'VARCHAR(40)'],
+      ['bank_ifsc', 'VARCHAR(20)'],
+    ];
+    for (const [name, def] of distributorPayoutCols) {
+      await client.query(`ALTER TABLE distributors ADD COLUMN IF NOT EXISTS ${name} ${def}`);
+    }
+    console.log(`  + ${distributorPayoutCols.length} distributors columns ensured`);
+
+    console.log('\n15. schools — class range (which standards the school covers)');
+    await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS class_from VARCHAR(20)`);
+    await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS class_to VARCHAR(20)`);
+    console.log('  + schools.class_from / class_to ensured');
+
+    console.log('\n16. Relation Certificate — references a second (sibling) student');
+    await client.query(`ALTER TABLE certificates ADD COLUMN IF NOT EXISTS related_student_id VARCHAR(36)`);
+    await client.query(`ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS related_student_id VARCHAR(36)`);
+    console.log('  + certificates.related_student_id / cart_items.related_student_id ensured');
 
     console.log('\nPostgreSQL catch-up migration completed successfully.');
   } catch (err) {

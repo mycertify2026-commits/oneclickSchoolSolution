@@ -5,10 +5,11 @@ const distributorController = require('../controllers/distributorController');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { handleValidationErrors } = require('../middleware/validate');
 const { sanitizeBody } = require('../middleware/sanitize');
-const { uploadSchoolPhoto } = require('../middleware/upload');
+const { uploadSchoolPhoto, uploadAvatar } = require('../middleware/upload');
 
 router.get('/me', authenticate, requireRole('distributor'), distributorController.getMyProfile);
 router.put('/me', authenticate, requireRole('distributor'), sanitizeBody, distributorController.updateMyProfile);
+router.put('/me/avatar', authenticate, requireRole('distributor'), uploadAvatar.single('avatar'), distributorController.uploadMyAvatar);
 router.put('/me/password', authenticate, requireRole('distributor'),
   body('newPassword').isLength({ min: 8 }).withMessage('New password must be at least 8 characters'),
   handleValidationErrors,

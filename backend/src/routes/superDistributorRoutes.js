@@ -5,11 +5,12 @@ const c = require('../controllers/superDistributorController');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { handleValidationErrors } = require('../middleware/validate');
 const { sanitizeBody } = require('../middleware/sanitize');
-const { uploadSchoolPhoto } = require('../middleware/upload');
+const { uploadSchoolPhoto, uploadAvatar } = require('../middleware/upload');
 
 // ── Super Distributor's own routes (self-service) ──────────────────────────
 router.get('/me',          authenticate, requireRole('superDistributor'), c.getMyProfile);
 router.put('/me',          authenticate, requireRole('superDistributor'), sanitizeBody, c.updateMyProfile);
+router.put('/me/avatar',   authenticate, requireRole('superDistributor'), uploadAvatar.single('avatar'), c.uploadMyAvatar);
 router.put('/me/password', authenticate, requireRole('superDistributor'),
   body('newPassword').isLength({ min: 8 }).withMessage('New password must be at least 8 characters'),
   handleValidationErrors,

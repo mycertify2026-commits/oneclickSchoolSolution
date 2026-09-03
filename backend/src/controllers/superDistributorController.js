@@ -107,7 +107,8 @@ async function createSuperDistributor(req, res) {
 async function updateSuperDistributorByAdmin(req, res) {
   try {
     const { id } = req.params;
-    const { name, mobile, city, district, address, area_of_operation, commission_rate, is_active } = req.body;
+    const { name, mobile, city, district, address, area_of_operation, commission_rate, is_active,
+            pan_number, bank_account_holder, bank_name, bank_account_number, bank_ifsc } = req.body;
 
     const [userRows] = await pool.query("SELECT id FROM users WHERE id = ? AND role = 'superDistributor' AND deleted_at IS NULL", [id]);
     if (userRows.length === 0) return res.status(404).json({ error: 'Super distributor not found' });
@@ -123,13 +124,19 @@ async function updateSuperDistributorByAdmin(req, res) {
     if (address !== undefined) { updates.push('address = ?'); values.push(address); }
     if (area_of_operation !== undefined) { updates.push('area_of_operation = ?'); values.push(area_of_operation); }
     if (commission_rate !== undefined) { updates.push('commission_rate = ?'); values.push(commission_rate); }
+    if (pan_number !== undefined) { updates.push('pan_number = ?'); values.push(pan_number); }
+    if (bank_account_holder !== undefined) { updates.push('bank_account_holder = ?'); values.push(bank_account_holder); }
+    if (bank_name !== undefined) { updates.push('bank_name = ?'); values.push(bank_name); }
+    if (bank_account_number !== undefined) { updates.push('bank_account_number = ?'); values.push(bank_account_number); }
+    if (bank_ifsc !== undefined) { updates.push('bank_ifsc = ?'); values.push(bank_ifsc); }
     if (updates.length > 0) {
       values.push(id);
       await pool.query(`UPDATE distributors SET ${updates.join(', ')} WHERE user_id = ?`, values);
     }
 
     const [rows] = await pool.query(
-        `SELECT u.id, u.name, u.email, u.mobile, u.is_active, d.district, d.city, d.address, d.area_of_operation, d.commission_rate
+        `SELECT u.id, u.name, u.email, u.mobile, u.is_active, d.district, d.city, d.address, d.area_of_operation, d.commission_rate,
+                d.avatar_url, d.pan_number, d.bank_account_holder, d.bank_name, d.bank_account_number, d.bank_ifsc
        FROM users u LEFT JOIN distributors d ON d.user_id = u.id WHERE u.id = ?`,
       [id]
     );
@@ -181,7 +188,9 @@ async function isMySchool(sdUserId, schoolId) {
 async function getMyProfile(req, res) {
   try {
     const [rows] = await pool.query(
-        `SELECT u.id, u.name, u.email, u.mobile, d.district, d.city, d.address, d.area_of_operation
+        `SELECT u.id, u.name, u.email, u.mobile, d.district, d.city, d.address, d.area_of_operation,
+                d.avatar_url, d.commission_rate, d.pan_number, d.bank_account_holder, d.bank_name,
+                d.bank_account_number, d.bank_ifsc
        FROM users u LEFT JOIN distributors d ON d.user_id = u.id WHERE u.id = ?`,
       [req.user.id]
     );
@@ -195,7 +204,8 @@ async function getMyProfile(req, res) {
 
 async function updateMyProfile(req, res) {
   try {
-    const { name, mobile, city, district, address, area_of_operation } = req.body;
+    const { name, mobile, city, district, address, area_of_operation, pan_number,
+            bank_account_holder, bank_name, bank_account_number, bank_ifsc } = req.body;
     if (name !== undefined) await pool.query('UPDATE users SET name = ? WHERE id = ?', [name, req.user.id]);
     if (mobile !== undefined) await pool.query('UPDATE users SET mobile = ? WHERE id = ?', [mobile, req.user.id]);
 
@@ -205,13 +215,20 @@ async function updateMyProfile(req, res) {
     if (district !== undefined) { updates.push('district = ?'); values.push(district); }
     if (address !== undefined) { updates.push('address = ?'); values.push(address); }
     if (area_of_operation !== undefined) { updates.push('area_of_operation = ?'); values.push(area_of_operation); }
+    if (pan_number !== undefined) { updates.push('pan_number = ?'); values.push(pan_number); }
+    if (bank_account_holder !== undefined) { updates.push('bank_account_holder = ?'); values.push(bank_account_holder); }
+    if (bank_name !== undefined) { updates.push('bank_name = ?'); values.push(bank_name); }
+    if (bank_account_number !== undefined) { updates.push('bank_account_number = ?'); values.push(bank_account_number); }
+    if (bank_ifsc !== undefined) { updates.push('bank_ifsc = ?'); values.push(bank_ifsc); }
     if (updates.length > 0) {
       values.push(req.user.id);
       await pool.query(`UPDATE distributors SET ${updates.join(', ')} WHERE user_id = ?`, values);
     }
 
     const [rows] = await pool.query(
-      `SELECT u.id, u.name, u.email, u.mobile, d.district, d.city, d.address
+      `SELECT u.id, u.name, u.email, u.mobile, d.district, d.city, d.address, d.area_of_operation,
+              d.avatar_url, d.commission_rate, d.pan_number, d.bank_account_holder, d.bank_name,
+              d.bank_account_number, d.bank_ifsc
        FROM users u LEFT JOIN distributors d ON d.user_id = u.id WHERE u.id = ?`,
       [req.user.id]
     );
@@ -219,6 +236,19 @@ async function updateMyProfile(req, res) {
   } catch (err) {
     console.error('SD updateMyProfile error:', err.message);
     res.status(500).json({ error: 'Server error updating profile' });
+  }
+}
+
+// PUT /api/super-distributors/me/avatar - profile photo upload
+async function uploadMyAvatar(req, res) {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No image file provided' });
+    const avatarUrl = req.file.path;
+    await pool.query('UPDATE distributors SET avatar_url = ? WHERE user_id = ?', [avatarUrl, req.user.id]);
+    res.json({ avatar_url: avatarUrl });
+  } catch (err) {
+    console.error('SD uploadMyAvatar error:', err.message);
+    res.status(500).json({ error: 'Server error uploading profile photo' });
   }
 }
 
@@ -583,7 +613,7 @@ async function addMySchool(req, res) {
   try {
     const sdId = req.user.id;
     const { name, adminName, adminEmail, adminMobile, udise_code, village, city, district, taluka, pin_code, phone, medium, board, distributorId,
-             insideLat, insideLng, outsideLat, outsideLng } = req.body;
+             class_from, class_to, insideLat, insideLng, outsideLat, outsideLng } = req.body;
 
     if (!name || !adminName || !adminEmail) {
       return res.status(400).json({ error: 'School name, admin name, and admin email are required' });
@@ -620,11 +650,11 @@ async function addMySchool(req, res) {
     const loginId = `SCH${String(Number(countRows[0].count) + 1).padStart(3, '0')}`;
 
     await conn.query(
-      `INSERT INTO schools (id, admin_user_id, distributor_id, super_distributor_id, name, login_id, udise_code, village, city, district, taluka, pin_code, phone, email, medium, board, status,
+      `INSERT INTO schools (id, admin_user_id, distributor_id, super_distributor_id, name, login_id, udise_code, village, city, district, taluka, pin_code, phone, email, medium, board, class_from, class_to, status,
               inside_photo_url, inside_photo_lat, inside_photo_lng, inside_photo_captured_at,
               outside_photo_url, outside_photo_lat, outside_photo_lng, outside_photo_captured_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, NOW(), ?, ?, ?, NOW())`,
-      [schoolId, userId, distributorId || null, sdId, name, loginId, udise_code, village, city, district, taluka, pin_code, phone, adminEmail.toLowerCase().trim(), medium, board,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, NOW(), ?, ?, ?, NOW())`,
+      [schoolId, userId, distributorId || null, sdId, name, loginId, udise_code, village, city, district, taluka, pin_code, phone, adminEmail.toLowerCase().trim(), medium, board, class_from || null, class_to || null,
        insidePhotoFile.path, insideLat, insideLng, outsidePhotoFile.path, outsideLat, outsideLng]
     );
 
@@ -654,7 +684,7 @@ async function updateMySchool(req, res) {
     const mine = await isMySchool(req.user.id, req.params.id);
     if (!mine) return res.status(403).json({ error: 'Access denied' });
 
-    const EDITABLE = ['name', 'udise_code', 'village', 'city', 'district', 'taluka', 'pin_code', 'phone', 'medium', 'board'];
+    const EDITABLE = ['name', 'udise_code', 'village', 'city', 'district', 'taluka', 'pin_code', 'phone', 'medium', 'board', 'class_from', 'class_to'];
     const updates = [];
     const values = [];
     EDITABLE.forEach(f => { if (req.body[f] !== undefined) { updates.push(`${f} = ?`); values.push(req.body[f]); } });
@@ -698,7 +728,7 @@ module.exports = {
   // SA
   listSuperDistributors, createSuperDistributor, updateSuperDistributorByAdmin, deleteSuperDistributor,
   // SD own
-  getMyProfile, updateMyProfile, changeMyPassword, getDashboard,
+  getMyProfile, updateMyProfile, uploadMyAvatar, changeMyPassword, getDashboard,
   listMyDistributors, createMyDistributor, getMyDistributor, updateMyDistributor, deleteMyDistributor,
   listMySchools, addMySchool, updateMySchool, deleteMySchool
 };

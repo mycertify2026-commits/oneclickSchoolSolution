@@ -271,7 +271,7 @@ async function sendCertificateGeneratedEmail(to, name, payload = {}) {
   const items = payload.items && payload.items.length
     ? payload.items
     : [{ studentName: payload.studentName, type: payload.type, serial: payload.serial }];
-  const TYPE_LABELS = { lc: 'Leaving Certificate', bonafide: 'Bonafide', idcard: 'ID Card' };
+  const TYPE_LABELS = { lc: 'Leaving Certificate', bonafide: 'Bonafide', idcard: 'ID Card', relation: 'Relation Certificate' };
   const rows = items.map(i => `
     <tr>
       <td style="padding:6px 10px 6px 0;color:#64748b">${escapeHtml(TYPE_LABELS[i.type] || i.type)}</td>

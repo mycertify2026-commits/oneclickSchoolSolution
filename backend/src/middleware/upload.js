@@ -8,7 +8,7 @@ const UPLOAD_ROOT = path.join(__dirname, '..', '..', 'uploads');
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
-['photos', 'idcards', 'certificates', 'branding', 'templates', 'imports', 'wallet', 'bank-qr', 'school-photos', 'cert-templates'].forEach(d => ensureDir(path.join(UPLOAD_ROOT, d)));
+['photos', 'idcards', 'certificates', 'branding', 'templates', 'imports', 'wallet', 'bank-qr', 'school-photos', 'cert-templates', 'avatars'].forEach(d => ensureDir(path.join(UPLOAD_ROOT, d)));
 
 const photoStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, path.join(UPLOAD_ROOT, 'photos')),
@@ -38,6 +38,11 @@ const bankQrStorage = multer.diskStorage({
 const schoolPhotoStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, path.join(UPLOAD_ROOT, 'school-photos')),
   filename: (req, file, cb) => cb(null, `${file.fieldname}-${uuidv4()}${path.extname(file.originalname) || '.jpg'}`)
+});
+
+const avatarStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, path.join(UPLOAD_ROOT, 'avatars')),
+  filename: (req, file, cb) => cb(null, `avatar-${uuidv4()}${path.extname(file.originalname) || '.jpg'}`)
 });
 
 const imageFilter = (req, file, cb) => {
@@ -78,6 +83,7 @@ const uploadImport = multer({ storage: importStorage, fileFilter: importFilter, 
 const uploadWalletScreenshot = multer({ storage: walletScreenshotStorage, fileFilter: imageFilter, limits: { fileSize: 5 * 1024 * 1024 } });
 const uploadBankQr = multer({ storage: bankQrStorage, fileFilter: imageFilter, limits: { fileSize: 3 * 1024 * 1024 } });
 const uploadSchoolPhoto = multer({ storage: schoolPhotoStorage, fileFilter: imageFilter, limits: { fileSize: 5 * 1024 * 1024 } });
+const uploadAvatar = multer({ storage: avatarStorage, fileFilter: imageFilter, limits: { fileSize: 3 * 1024 * 1024 } });
 
 // Custom certificate template source upload (School Admin's own LC/Bonafide/
 // ID-card format) — unlike uploadTemplate (PNG-only, the older plain-
@@ -94,4 +100,4 @@ const certTemplateFilter = (req, file, cb) => {
 };
 const uploadCertTemplateSource = multer({ storage: certTemplateStorage, fileFilter: certTemplateFilter, limits: { fileSize: 12 * 1024 * 1024 } });
 
-module.exports = { upload, uploadBranding, uploadTemplate, uploadImport, uploadWalletScreenshot, uploadBankQr, uploadSchoolPhoto, uploadCertTemplateSource, UPLOAD_ROOT };
+module.exports = { upload, uploadBranding, uploadTemplate, uploadImport, uploadWalletScreenshot, uploadBankQr, uploadSchoolPhoto, uploadCertTemplateSource, uploadAvatar, UPLOAD_ROOT };

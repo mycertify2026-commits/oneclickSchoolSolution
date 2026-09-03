@@ -4,7 +4,7 @@ import Layout from '../components/Layout';
 import { StatusBadge } from './SaDashboard';
 import api from '../api/client';
 
-const BLANK = { name: '', udise_code: '', city: '', taluka: '', district: '', phone: '', email: '', pin_code: '', medium: 'Marathi', board: 'Maharashtra SSC', distributorId: '', adminName: '', adminMobile: '', adminEmail: '' };
+const BLANK = { name: '', udise_code: '', city: '', taluka: '', district: '', phone: '', email: '', pin_code: '', medium: 'Marathi', board: 'Maharashtra SSC', distributorId: '', adminName: '', adminMobile: '', adminEmail: '', class_from: '', class_to: '' };
 
 // Long school names get cut to the first word in the list view (hover/title
 // shows the rest); the full name is always shown on the school's own detail
@@ -14,7 +14,7 @@ function shortName(name) {
   const words = String(name).trim().split(/\s+/);
   return (words.length > 1 || name.length > 20) ? words[0] + '…' : name;
 }
-const EDIT_FIELDS = ['name', 'udise_code', 'village', 'city', 'taluka', 'district', 'pin_code', 'phone', 'email', 'medium', 'board'];
+const EDIT_FIELDS = ['name', 'udise_code', 'village', 'city', 'taluka', 'district', 'pin_code', 'phone', 'email', 'medium', 'board', 'class_from', 'class_to'];
 
 export default function SaSchools() {
   const [schools, setSchools] = useState([]);
@@ -262,6 +262,10 @@ export default function SaSchools() {
                     </select>
                   </div>
                 </div>
+                <div className="form-row form-row-2">
+                  <Field label="Lower Class" value={form.class_from} onChange={v => handleChange('class_from', v)} placeholder="e.g. 1st" />
+                  <Field label="Upper Class" value={form.class_to} onChange={v => handleChange('class_to', v)} placeholder="e.g. 10th" />
+                </div>
               </div>
               <div className="form-section">
                 <div className="form-section-title"><i className="fas fa-user"></i><h4>School Admin Details</h4></div>
@@ -308,6 +312,10 @@ export default function SaSchools() {
                 <Field label="Email" value={editForm.email} onChange={v => handleEditChange('email', v)} />
                 <Field label="Medium" value={editForm.medium} onChange={v => handleEditChange('medium', v)} />
                 <Field label="Board" value={editForm.board} onChange={v => handleEditChange('board', v)} />
+              </div>
+              <div className="form-row form-row-2">
+                <Field label="Lower Class" value={editForm.class_from} onChange={v => handleEditChange('class_from', v)} placeholder="e.g. 1st" />
+                <Field label="Upper Class" value={editForm.class_to} onChange={v => handleEditChange('class_to', v)} placeholder="e.g. 10th" />
               </div>
             </div>
             <div className="modal-footer">

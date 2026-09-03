@@ -7,7 +7,7 @@ import api from '../api/client';
 const BLANK = {
   name: '', adminName: '', adminEmail: '', adminMobile: '',
   udise_code: '', village: '', city: '', district: '', taluka: '',
-  pin_code: '', phone: '', medium: '', board: '', distributorId: ''
+  pin_code: '', phone: '', medium: '', board: '', distributorId: '', class_from: '', class_to: ''
 };
 
 export default function SdSchools() {
@@ -65,7 +65,7 @@ export default function SdSchools() {
 
   function openEdit(s) {
     setEditingSchool(s);
-    setEditForm({ name: s.name, udise_code: s.udise_code || '', city: s.city || '', district: s.district || '', taluka: s.taluka || '', pin_code: s.pin_code || '', phone: s.phone || '', medium: s.medium || '', board: s.board || '' });
+    setEditForm({ name: s.name, udise_code: s.udise_code || '', city: s.city || '', district: s.district || '', taluka: s.taluka || '', pin_code: s.pin_code || '', phone: s.phone || '', medium: s.medium || '', board: s.board || '', class_from: s.class_from || '', class_to: s.class_to || '' });
     setError('');
     setShowEditModal(true);
   }
@@ -164,6 +164,10 @@ export default function SdSchools() {
                 <F label="Medium" value={form.medium} onChange={v => hc('medium', v)} />
               </div>
               <div className="form-row form-row-2">
+                <F label="Lower Class" value={form.class_from} onChange={v => hc('class_from', v)} placeholder="e.g. 1st" />
+                <F label="Upper Class" value={form.class_to} onChange={v => hc('class_to', v)} placeholder="e.g. 10th" />
+              </div>
+              <div className="form-row form-row-2">
                 <div className="form-group">
                   <label className="form-label">Assign Distributor (optional)</label>
                   <select className="form-control" value={form.distributorId} onChange={e => hc('distributorId', e.target.value)}>
@@ -219,6 +223,10 @@ export default function SdSchools() {
                 <F label="Phone" value={editForm.phone} onChange={v => setEditForm(p => ({ ...p, phone: v }))} />
                 <F label="Medium" value={editForm.medium} onChange={v => setEditForm(p => ({ ...p, medium: v }))} />
               </div>
+              <div className="form-row form-row-2">
+                <F label="Lower Class" value={editForm.class_from} onChange={v => setEditForm(p => ({ ...p, class_from: v }))} placeholder="e.g. 1st" />
+                <F label="Upper Class" value={editForm.class_to} onChange={v => setEditForm(p => ({ ...p, class_to: v }))} placeholder="e.g. 10th" />
+              </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowEditModal(false)}>Cancel</button>
@@ -231,11 +239,11 @@ export default function SdSchools() {
   );
 }
 
-function F({ label, value, onChange, type = 'text' }) {
+function F({ label, value, onChange, type = 'text', placeholder }) {
   return (
     <div className="form-group">
       <label className="form-label">{label}</label>
-      <input type={type} className="form-control" value={value || ''} onChange={e => onChange(e.target.value)} />
+      <input type={type} className="form-control" value={value || ''} placeholder={placeholder} onChange={e => onChange(e.target.value)} />
     </div>
   );
 }

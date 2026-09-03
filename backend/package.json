@@ -23,6 +23,7 @@
     "migrate:soft-delete": "node src/config/migrate-soft-delete.js",
     "migrate:wallet-system": "node src/config/migrate-wallet-system.js",
     "migrate:pg-catchup": "node src/config/migrate-pg-catchup.js",
+    "migrate:add-profile-fields": "node src/config/migrate-add-profile-fields.js",
     "seed": "node src/config/seed.js",
     "seed:demo": "node src/config/seed-demo.js",
     "test": "jest --runInBand"

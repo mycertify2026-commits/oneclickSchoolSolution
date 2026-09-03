@@ -194,7 +194,7 @@ async function generateCertificate(req, res) {
       [req.user.id]
     );
     if (recipientRows[0]) {
-      const TYPE_LABELS = { lc: 'Leaving Certificate', bonafide: 'Bonafide', idcard: 'ID Card' };
+      const TYPE_LABELS = { lc: 'Leaving Certificate', bonafide: 'Bonafide', idcard: 'ID Card', relation: 'Relation Certificate' };
       sendCertificateGeneratedEmail(recipientRows[0].email, recipientRows[0].name, { studentName: student.full_name, type: TYPE_LABELS[type], serial, schoolId: req.schoolId, certificateId: certId })
         .catch(e => console.error('Certificate-generated email failed:', e.message));
     }
@@ -604,7 +604,7 @@ async function verifyCertificate(req, res) {
     }
 
     const cert = rows[0];
-    const TYPE_LABELS = { lc: 'Leaving Certificate', bonafide: 'Bonafide Certificate', idcard: 'Student ID Card' };
+    const TYPE_LABELS = { lc: 'Leaving Certificate', bonafide: 'Bonafide Certificate', idcard: 'Student ID Card', relation: 'Relation Certificate' };
 
     let studentPhotoDataUrl = null;
     let photoBytes = cert.photo_data;
@@ -732,7 +732,7 @@ async function requestCertificate(req, res) {
     // Notify Super Admin
     const [adminRows] = await pool.query("SELECT id FROM users WHERE role='superAdmin' LIMIT 1");
     if (adminRows[0]) {
-      const TYPE_LABELS = { lc: 'Leaving Certificate', bonafide: 'Bonafide', idcard: 'ID Card' };
+      const TYPE_LABELS = { lc: 'Leaving Certificate', bonafide: 'Bonafide', idcard: 'ID Card', relation: 'Relation Certificate' };
       await createNotification(
         adminRows[0].id,
         `📋 New Certificate Request — ${TYPE_LABELS[type]} for ${student.full_name} from ${school.name} | Code: ${approvalCode} | ₹${(price + gst).toFixed(2)}`
@@ -794,7 +794,7 @@ async function adminListRequests(req, res) {
 //       → generate PDF → insert certificate → mark 'approved'. Each failure reverts
 //       the status so the request can be retried by the SA.
 async function adminApproveRequest(req, res) {
-  const TYPE_LABELS = { lc: 'Leaving Certificate', bonafide: 'Bonafide', idcard: 'ID Card' };
+  const TYPE_LABELS = { lc: 'Leaving Certificate', bonafide: 'Bonafide', idcard: 'ID Card', relation: 'Relation Certificate' };
   let certReq;
 
   // ── Step 1: Atomically claim the request with a row-level lock ────────────
@@ -1011,7 +1011,7 @@ async function adminRejectRequest(req, res) {
 
     const [studentRows] = await pool.query('SELECT full_name FROM students WHERE id = ?', [certReq.student_id]);
     const studentName = studentRows[0]?.full_name || 'Student';
-    const TYPE_LABELS = { lc: 'Leaving Certificate', bonafide: 'Bonafide', idcard: 'ID Card' };
+    const TYPE_LABELS = { lc: 'Leaving Certificate', bonafide: 'Bonafide', idcard: 'ID Card', relation: 'Relation Certificate' };
 
     await pool.query(
       `UPDATE certificate_requests SET status='rejected', rejection_reason=?, approved_by=?, resolved_at=NOW() WHERE id=?`,

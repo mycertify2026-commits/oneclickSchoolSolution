@@ -115,7 +115,8 @@ async function assignDistributor(req, res) {
 }
 
 // PUT /api/distributors/:id (superAdmin) - edit any distributor's profile and commission rate
-const DISTRIBUTOR_ADMIN_EDITABLE_FIELDS = ['city', 'district', 'address', 'area_of_operation', 'commission_rate'];
+const DISTRIBUTOR_ADMIN_EDITABLE_FIELDS = ['city', 'district', 'address', 'area_of_operation', 'commission_rate',
+  'pan_number', 'bank_account_holder', 'bank_name', 'bank_account_number', 'bank_ifsc'];
 async function updateDistributorByAdmin(req, res) {
   try {
     const { name, mobile, is_active } = req.body;
@@ -197,7 +198,8 @@ async function getMyProfile(req, res) {
 
 async function updateMyProfile(req, res) {
   try {
-    const { name, mobile, city, district, address } = req.body;
+    const { name, mobile, city, district, address, area_of_operation, pan_number,
+            bank_account_holder, bank_name, bank_account_number, bank_ifsc } = req.body;
     if (name !== undefined) await pool.query('UPDATE users SET name = ? WHERE id = ?', [name, req.user.id]);
     if (mobile !== undefined) await pool.query('UPDATE users SET mobile = ? WHERE id = ?', [mobile, req.user.id]);
 
@@ -206,6 +208,12 @@ async function updateMyProfile(req, res) {
     if (city !== undefined) { updates.push('city = ?'); values.push(city); }
     if (district !== undefined) { updates.push('district = ?'); values.push(district); }
     if (address !== undefined) { updates.push('address = ?'); values.push(address); }
+    if (area_of_operation !== undefined) { updates.push('area_of_operation = ?'); values.push(area_of_operation); }
+    if (pan_number !== undefined) { updates.push('pan_number = ?'); values.push(pan_number); }
+    if (bank_account_holder !== undefined) { updates.push('bank_account_holder = ?'); values.push(bank_account_holder); }
+    if (bank_name !== undefined) { updates.push('bank_name = ?'); values.push(bank_name); }
+    if (bank_account_number !== undefined) { updates.push('bank_account_number = ?'); values.push(bank_account_number); }
+    if (bank_ifsc !== undefined) { updates.push('bank_ifsc = ?'); values.push(bank_ifsc); }
 
     if (updates.length > 0) {
       values.push(req.user.id);
@@ -220,6 +228,19 @@ async function updateMyProfile(req, res) {
   } catch (err) {
     console.error('updateMyProfile error:', err.message);
     res.status(500).json({ error: 'Server error updating profile' });
+  }
+}
+
+// PUT /api/distributors/me/avatar - profile photo upload
+async function uploadMyAvatar(req, res) {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No image file provided' });
+    const avatarUrl = req.file.path;
+    await pool.query('UPDATE distributors SET avatar_url = ? WHERE user_id = ?', [avatarUrl, req.user.id]);
+    res.json({ avatar_url: avatarUrl });
+  } catch (err) {
+    console.error('uploadMyAvatar error:', err.message);
+    res.status(500).json({ error: 'Server error uploading profile photo' });
   }
 }
 
@@ -252,7 +273,7 @@ async function addSchool(req, res) {
     if (!distributorId) return res.status(404).json({ error: 'Distributor profile not found' });
 
     const { name, adminName, adminEmail, adminMobile, udise_code, village, city, district, taluka, pin_code, phone, medium, board,
-             insideLat, insideLng, outsideLat, outsideLng } = req.body;
+             class_from, class_to, insideLat, insideLng, outsideLat, outsideLng } = req.body;
     if (!name || !adminName || !adminEmail) {
       return res.status(400).json({ error: 'School name, admin name, and admin email are required' });
     }
@@ -282,11 +303,11 @@ async function addSchool(req, res) {
     const loginId = `SCH${String(countRows[0].count + 1).padStart(3, '0')}`;
 
     await conn.query(
-      `INSERT INTO schools (id, admin_user_id, distributor_id, name, login_id, udise_code, village, city, district, taluka, pin_code, phone, email, medium, board, status,
+      `INSERT INTO schools (id, admin_user_id, distributor_id, name, login_id, udise_code, village, city, district, taluka, pin_code, phone, email, medium, board, class_from, class_to, status,
               inside_photo_url, inside_photo_lat, inside_photo_lng, inside_photo_captured_at,
               outside_photo_url, outside_photo_lat, outside_photo_lng, outside_photo_captured_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, NOW(), ?, ?, ?, NOW())`,
-      [schoolId, userId, distributorId, name, loginId, udise_code, village, city, district, taluka, pin_code, phone, adminEmail.toLowerCase().trim(), medium, board,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, NOW(), ?, ?, ?, NOW())`,
+      [schoolId, userId, distributorId, name, loginId, udise_code, village, city, district, taluka, pin_code, phone, adminEmail.toLowerCase().trim(), medium, board, class_from || null, class_to || null,
        insidePhotoFile.path, insideLat, insideLng, outsidePhotoFile.path, outsideLat, outsideLng]
     );
 
@@ -333,7 +354,7 @@ async function getMySchools(req, res) {
   }
 }
 
-const DIST_SCHOOL_EDITABLE_FIELDS = ['name', 'udise_code', 'village', 'city', 'district', 'taluka', 'pin_code', 'phone', 'medium', 'board'];
+const DIST_SCHOOL_EDITABLE_FIELDS = ['name', 'udise_code', 'village', 'city', 'district', 'taluka', 'pin_code', 'phone', 'medium', 'board', 'class_from', 'class_to'];
 
 // PUT /api/distributors/me/schools/:id - a distributor may only edit a
 // school they submitted themselves, and only while it's still 'pending' -
@@ -488,6 +509,6 @@ async function exportDistributors(req, res) {
 
 module.exports = {
   listDistributors, createDistributor, assignDistributor, updateDistributorByAdmin, deleteDistributor,
-  getMyProfile, updateMyProfile, changeMyPassword,
+  getMyProfile, updateMyProfile, uploadMyAvatar, changeMyPassword,
   addSchool, getMySchools, updateMySchool, deleteMySchool, getMyCommission, exportDistributors
 };

@@ -85,7 +85,7 @@ async function generateLoginId(conn) {
 async function createSchool(req, res) {
   const conn = await pool.getConnection();
   try {
-    const { name, adminName, adminEmail, adminMobile, udise_code, village, city, district, taluka, pin_code, phone, medium, board, distributorId } = req.body;
+    const { name, adminName, adminEmail, adminMobile, udise_code, village, city, district, taluka, pin_code, phone, medium, board, distributorId, class_from, class_to } = req.body;
     if (!name || !adminName || !adminEmail) {
       return res.status(400).json({ error: 'School name, admin name, and admin email are required' });
     }
@@ -105,9 +105,9 @@ async function createSchool(req, res) {
     const schoolId = uuidv4();
     const loginId = await generateLoginId(conn);
     await conn.query(
-      `INSERT INTO schools (id, admin_user_id, distributor_id, name, login_id, udise_code, village, city, district, taluka, pin_code, phone, email, medium, board, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
-      [schoolId, userId, distributorId || null, name, loginId, udise_code, village, city, district, taluka, pin_code, phone, adminEmail.toLowerCase().trim(), medium, board]
+      `INSERT INTO schools (id, admin_user_id, distributor_id, name, login_id, udise_code, village, city, district, taluka, pin_code, phone, email, medium, board, class_from, class_to, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+      [schoolId, userId, distributorId || null, name, loginId, udise_code, village, city, district, taluka, pin_code, phone, adminEmail.toLowerCase().trim(), medium, board, class_from || null, class_to || null]
     );
 
     await conn.query(`INSERT INTO wallets (id, school_id, balance) VALUES (?, ?, 0)`, [uuidv4(), schoolId]);
@@ -224,7 +224,7 @@ async function getMySchool(req, res) {
   }
 }
 
-const SCHOOL_EDITABLE_FIELDS = ['name', 'udise_code', 'village', 'city', 'district', 'taluka', 'pin_code', 'phone', 'email', 'medium', 'board', 'cert_header', 'cert_footer', 'principal_name', 'recog_no'];
+const SCHOOL_EDITABLE_FIELDS = ['name', 'udise_code', 'village', 'city', 'district', 'taluka', 'pin_code', 'phone', 'email', 'medium', 'board', 'cert_header', 'cert_footer', 'principal_name', 'recog_no', 'class_from', 'class_to'];
 
 // PUT /api/schools/me (schoolAdmin) - update profile + upload logo/signature/stamp + cert header/footer text
 async function updateMySchool(req, res) {

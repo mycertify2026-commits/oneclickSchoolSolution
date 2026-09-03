@@ -875,4 +875,175 @@ async function generateBonafidePdf({ school, student, certificate, outputPath, p
   });
 }
 
-module.exports = { generateLcPdf, generateBonafidePdf, genSerial, fmtDate, dobInWords, fitCenteredText, fitSingleLineText, safe, sentenceCase };
+// Same layout scaffolding as Bonafide (photo/QR side columns, header,
+// signature footer) but the body names two students and states the sibling
+// relationship instead of one student's bonafide status. No school-specific
+// PNG frame exists for this type (only lc/bonafide/idcard have one), so it
+// always uses the plain default double-border frame.
+function renderSingleRelation(doc, ctx, qrBuffer) {
+  const { school, student, relatedStudent, certificate, photoPath, signaturePath, stampPath } = ctx;
+  const W = doc.page.width;
+  const H = doc.page.height;
+  const gold = '#7A8CA3';
+  const black = '#111827';
+  const muted = '#374151';
+  const left = 70;
+  const right = W - 70;
+  const contentW = right - left;
+
+  doc.rect(0, 0, W, H).fill('#FFFFFF');
+  drawDoubleBorder(doc, 8, H - 8);
+
+  const photoW = 72;
+  const photoH = 88;
+  const qrSize = 70;
+  const sideW = 100;
+  const textW = contentW - sideW * 2;
+  const textX = left + sideW;
+  const sideX = right - sideW;
+
+  doc.fillColor(gold).font('Helvetica-Bold').fontSize(16)
+    .text(safe(school.name, 'SCHOOL NAME').toUpperCase(), textX, 78, {
+      width: textW, align: 'center', lineBreak: false, ellipsis: true
+    });
+  doc.fillColor(black).font('Helvetica').fontSize(7.5)
+    .text(
+      `Taluka: ${safe(school.taluka, '-')}  |  District: ${safe(school.district, '-')}`,
+      textX, 99, { width: textW, align: 'center', lineBreak: false, ellipsis: true }
+    );
+  doc.fillColor(muted).fontSize(7)
+    .text(
+      `U-DISE: ${safe(school.udise_code, '-')}  |  Recognized No.: ${safe(school.recog_no, '-')}`,
+      textX, 112, { width: textW, align: 'center', lineBreak: false, ellipsis: true }
+    );
+
+  doc.save().moveTo(textX + 12, 127).lineTo(textX + textW - 12, 127)
+    .lineWidth(0.8).strokeColor(gold).stroke().restore();
+  doc.fillColor(gold).font('Helvetica-Bold').fontSize(13)
+    .text('RELATION CERTIFICATE', textX, 135, { width: textW, align: 'center', lineBreak: false });
+
+  const standardOf = (s) => {
+    const div = s.current_division || s.admission_division;
+    return safe(s.current_standard || s.admission_standard, '-') + (div ? ` (Div. ${safe(div)})` : '');
+  };
+  const sameParents = safe(student.father_name).trim().toLowerCase() &&
+    safe(student.father_name).trim().toLowerCase() === safe(relatedStudent.father_name).trim().toLowerCase();
+
+  const segments = [
+    { text: 'This is to certify that ' },
+    { text: safe(student.full_name).toUpperCase(), bold: true },
+    { text: ', studying in Std. ' },
+    { text: standardOf(student), bold: true },
+    { text: `, son/daughter of ` },
+    { text: safe(student.father_name, '-').toUpperCase(), bold: true },
+    { text: ' and ' },
+    { text: safe(student.mother_name, '-').toUpperCase(), bold: true },
+    { text: ', and ' },
+    { text: safe(relatedStudent.full_name).toUpperCase(), bold: true },
+    { text: ', studying in Std. ' },
+    { text: standardOf(relatedStudent), bold: true },
+    sameParents
+      ? { text: ', son/daughter of the same parents,' }
+      : { text: `, son/daughter of ${safe(relatedStudent.father_name, '-').toUpperCase()} and ${safe(relatedStudent.mother_name, '-').toUpperCase()},`, bold: true },
+    { text: ' are real brother/sister and are bonafide students of this School as per our records.' },
+  ];
+  const plainPara = segments.map(s => s.text).join('');
+
+  const bodyX = textX + 10;
+  const bodyW = textW - 20;
+  const bodyH = 164;
+  const bodyY = 157;
+  let bodySize = 14;
+  while (bodySize > 8 && doc.font('Helvetica').fontSize(bodySize)
+    .heightOfString(plainPara, { width: bodyW, lineGap: 3 }) > bodyH) bodySize -= 0.5;
+  doc.fillColor(black).fontSize(bodySize);
+  segments.forEach((seg, i) => {
+    doc.font(seg.bold ? 'Helvetica-Bold' : 'Helvetica');
+    const isLast = i === segments.length - 1;
+    if (i === 0) {
+      doc.text(seg.text, bodyX, bodyY, { width: bodyW, height: bodyH, align: 'left', lineGap: 3, continued: !isLast });
+    } else {
+      doc.text(seg.text, { continued: !isLast });
+    }
+  });
+
+  const Y = (v) => v + 40;
+
+  doc.fillColor(gold).font('Helvetica-Bold').fontSize(7)
+    .text('CERTIFICATE NO.', sideX, Y(287), { width: sideW, align: 'center', lineBreak: false });
+  doc.fillColor(black).fontSize(8)
+    .text(safe(certificate.serial_number, '-'), sideX, Y(298), { width: sideW, align: 'center', lineBreak: false, ellipsis: true });
+  if (qrBuffer) {
+    try { doc.image(qrBuffer, sideX + (sideW - qrSize) / 2, Y(313), { width: qrSize, height: qrSize }); } catch (e) {}
+    doc.fillColor(muted).font('Helvetica').fontSize(5.5)
+      .text('Scan to verify', sideX, Y(385), { width: sideW, align: 'center', lineBreak: false });
+  }
+
+  const photoLeftX = left + (sideW - photoW) / 2;
+  doc.save().roundedRect(photoLeftX, Y(292), photoW, photoH, 3)
+    .lineWidth(0.8).strokeColor(gold).stroke().restore();
+  if (canDraw(photoPath)) {
+    try { doc.image(photoPath, photoLeftX + 1, Y(293), { width: photoW - 2, height: photoH - 2 }); } catch (e) {}
+  } else {
+    doc.fillColor(muted).font('Helvetica').fontSize(7)
+      .text('PHOTO', photoLeftX, Y(329), { width: photoW, align: 'center', lineBreak: false });
+  }
+
+  doc.fillColor(muted).font('Helvetica-Bold').fontSize(7)
+    .text(`Gr. No.: ${safe(student.register_number, '-')}`, left, Y(399), { lineBreak: false });
+  doc.text(`Sibling Gr. No.: ${safe(relatedStudent.register_number, '-')}`, left + 250, Y(399), { lineBreak: false });
+
+  doc.save().moveTo(left, Y(420)).lineTo(right, Y(420))
+    .lineWidth(0.5).strokeColor(gold).stroke().restore();
+  doc.fillColor(muted).font('Helvetica').fontSize(6.5)
+    .text('Certified that the above information is true to the best of our knowledge as per school records.',
+      left, Y(427), { width: contentW, align: 'center', lineBreak: false });
+  doc.fillColor(black).font('Helvetica-Bold').fontSize(7)
+    .text(`DATE: ${fmtDate(new Date())}`, left, Y(449), { lineBreak: false });
+  doc.text(`PLACE: ${safe(school.city || school.village || school.taluka, '-')}, Dist. ${safe(school.district, '-')}`,
+    left, Y(461), { lineBreak: false });
+
+  const signX = right - 160;
+  if (canDraw(stampPath)) {
+    try { doc.image(stampPath, signX + 62, Y(430), { width: 34, height: 34 }); } catch (e) {}
+  }
+  if (canDraw(signaturePath)) {
+    try { doc.image(signaturePath, signX, Y(455), { width: 150, height: 22 }); } catch (e) {}
+  }
+  doc.save().moveTo(signX, Y(480)).lineTo(right, Y(480))
+    .lineWidth(0.5).strokeColor(gold).stroke().restore();
+  doc.fillColor(black).font('Helvetica-Bold').fontSize(7)
+    .text(`(${safe(school.principal_name, 'HEAD MASTER').toUpperCase()})`, signX, Y(484),
+      { width: 160, align: 'center', lineBreak: false, ellipsis: true });
+  doc.text('HEAD MASTER', signX, Y(496), { width: 160, align: 'center', lineBreak: false });
+}
+
+async function generateRelationPdf({ school, student, relatedStudent, certificate, outputPath, photoPath, signaturePath, stampPath }) {
+  const [safeSignaturePath, safeStampPath, safePhotoPath] = await Promise.all([
+    toPdfSafe(signaturePath),
+    toPdfSafe(stampPath),
+    toPdfSafe(photoPath),
+  ]);
+  const qrBuffer = await QRCode.toBuffer(buildVerifyUrl(certificate.id), { width: 80, margin: 1 }).catch(() => null);
+
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ size: [842, 555.37], margin: 0 });
+      const stream = fs.createWriteStream(outputPath);
+      doc.pipe(stream);
+
+      const ctx = {
+        school, student, relatedStudent, certificate,
+        photoPath: safePhotoPath, signaturePath: safeSignaturePath, stampPath: safeStampPath,
+      };
+
+      renderSingleRelation(doc, ctx, qrBuffer);
+
+      doc.end();
+      stream.on('finish', () => resolve(outputPath));
+      stream.on('error', reject);
+    } catch (e) { reject(e); }
+  });
+}
+
+module.exports = { generateLcPdf, generateBonafidePdf, generateRelationPdf, genSerial, fmtDate, dobInWords, fitCenteredText, fitSingleLineText, safe, sentenceCase };
