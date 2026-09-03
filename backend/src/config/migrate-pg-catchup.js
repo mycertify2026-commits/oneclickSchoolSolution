@@ -164,11 +164,10 @@ async function migrate() {
     `);
     const certPricingCount = await client.query('SELECT COUNT(*) AS c FROM certificate_pricing');
     if (parseInt(certPricingCount.rows[0].c) === 0) {
-      await client.query(`INSERT INTO certificate_pricing (type, price) VALUES ('lc', 50.00), ('bonafide', 30.00), ('relation', 30.00)`);
-      console.log('  + certificate_pricing seeded lc=50.00, bonafide=30.00, relation=30.00');
+      await client.query(`INSERT INTO certificate_pricing (type, price) VALUES ('lc', 50.00), ('bonafide', 30.00)`);
+      console.log('  + certificate_pricing seeded lc=50.00, bonafide=30.00');
     } else {
-      await client.query(`INSERT INTO certificate_pricing (type, price) VALUES ('relation', 30.00) ON CONFLICT (type) DO NOTHING`);
-      console.log('  - certificate_pricing: lc/bonafide rows already present; ensured relation=30.00 row exists');
+      console.log('  - certificate_pricing rows already present, skipping seed');
     }
 
     console.log('\n9. receipts table');
@@ -330,11 +329,6 @@ async function migrate() {
     await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS class_from VARCHAR(20)`);
     await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS class_to VARCHAR(20)`);
     console.log('  + schools.class_from / class_to ensured');
-
-    console.log('\n16. Relation Certificate — references a second (sibling) student');
-    await client.query(`ALTER TABLE certificates ADD COLUMN IF NOT EXISTS related_student_id VARCHAR(36)`);
-    await client.query(`ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS related_student_id VARCHAR(36)`);
-    console.log('  + certificates.related_student_id / cart_items.related_student_id ensured');
 
     console.log('\nPostgreSQL catch-up migration completed successfully.');
   } catch (err) {

@@ -17,7 +17,7 @@ function fmtDate(d) {
   return `${dd}/${mm}/${dt.getFullYear()}`;
 }
 
-const TYPE_LABELS = { lc: 'Leaving Certificate', bonafide: 'Bonafide Certificate', idcard: 'Student ID Card', relation: 'Relation Certificate' };
+const TYPE_LABELS = { lc: 'Leaving Certificate', bonafide: 'Bonafide Certificate', idcard: 'Student ID Card' };
 
 // Generates a simple, self-contained receipt PDF — school + student +
 // certificate identification and the final receipt amount only (no

@@ -8,8 +8,7 @@ import PdfPreviewModal from '../components/PdfPreviewModal';
 const BASE_TYPES = [
   { key: 'lc',       label: 'Leaving Certificate',  price: 50 },
   { key: 'bonafide', label: 'Bonafide Certificate', price: 30 },
-  { key: 'idcard',   label: 'ID Card',              price: 20 },
-  { key: 'relation', label: 'Relation Certificate', price: 30 }
+  { key: 'idcard',   label: 'ID Card',              price: 20 }
 ];
 
 const LC_REASON_OPTIONS = [
@@ -24,7 +23,6 @@ export default function Certificates() {
   const queryParams = new URLSearchParams(window.location.search);
   const [selectedType, setSelectedType] = useState(queryParams.get('type') === 'idcard' ? 'idcard' : 'lc');
   const [selectedStudent, setSelectedStudent] = useState(queryParams.get('studentId') || '');
-  const [selectedRelatedStudent, setSelectedRelatedStudent] = useState('');
   const [purpose, setPurpose] = useState('');
   const [cart, setCart] = useState({ items: [], total: 0, walletBalance: 0 });
   const [recent, setRecent] = useState([]);
@@ -105,7 +103,6 @@ export default function Certificates() {
 
   async function handlePreview() {
     if (!selectedStudent) { setError('Select a student first'); return; }
-    if (selectedType === 'relation' && !selectedRelatedStudent) { setError('Select the sibling/related student'); return; }
     setError('');
     setPreview({ show: true, pdfBase64: null, title: TYPES.find(t => t.key === selectedType).label });
     try {
@@ -113,7 +110,6 @@ export default function Certificates() {
         studentId: selectedStudent,
         type: selectedType,
         purpose: buildPurpose(),
-        ...(selectedType === 'relation' ? { relatedStudentId: selectedRelatedStudent } : {}),
       });
       setPreview(p => ({ ...p, pdfBase64: data.pdfBase64 }));
     } catch (e) {
@@ -126,9 +122,6 @@ export default function Certificates() {
     if (!selectedStudent) { setError('Select a student first'); return; }
     if (selectedType === 'lc' && !lcDateOfLeaving) {
       setError('Please enter the Date of Leaving for the LC'); return;
-    }
-    if (selectedType === 'relation' && !selectedRelatedStudent) {
-      setError('Select the sibling/related student'); return;
     }
     setError(''); setMessage('');
     // Hard copy ID card goes direct, not via cart
@@ -150,11 +143,10 @@ export default function Certificates() {
         studentId: selectedStudent,
         type: selectedType,
         purpose: buildPurpose(),
-        ...(selectedType === 'relation' ? { relatedStudentId: selectedRelatedStudent } : {}),
       });
       const typeLabel = TYPES.find(t => t.key === selectedType)?.label || 'Certificate';
       setCartNotice({ message: `${typeLabel} added to cart`, itemCount: cart.items.length + 1 });
-      setSelectedStudent(''); setSelectedRelatedStudent(''); setPurpose('');
+      setSelectedStudent(''); setPurpose('');
       await loadCart();
       setTab('cart');
     } catch (e) {
@@ -259,10 +251,10 @@ export default function Certificates() {
       {tab === 'new' && (
         <div className="card">
           {/* Certificate type cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14, marginBottom: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 20 }}>
             {TYPES.map(t => (
               <div key={t.key} className={`cert-type-card${selectedType === t.key ? ' active' : ''}`}
-                onClick={() => { setSelectedType(t.key); setSelectedRelatedStudent(''); setError(''); }}>
+                onClick={() => { setSelectedType(t.key); setError(''); }}>
                 <h4 style={{ margin: '0 0 6px' }}>{t.label}</h4>
                 <div style={{ color: 'var(--primary)', fontWeight: 700, fontSize: 20 }}>₹{t.price}</div>
               </div>
@@ -309,17 +301,6 @@ export default function Certificates() {
                 <input className="form-control" value={purpose} onChange={e => setPurpose(e.target.value)} placeholder="e.g. Passport application" />
               </div>
             )}
-            {selectedType === 'relation' && (
-              <div className="form-group">
-                <label className="form-label">Sibling / Related Student *</label>
-                <select className="form-control" value={selectedRelatedStudent} onChange={e => { setSelectedRelatedStudent(e.target.value); setError(''); }}>
-                  <option value="">-- Select --</option>
-                  {students.filter(s => s.id !== selectedStudent).map(s => (
-                    <option key={s.id} value={s.id}>{s.full_name} ({s.admission_standard}-{s.admission_division})</option>
-                  ))}
-                </select>
-              </div>
-            )}
           </div>
 
           {/* LC-specific fields */}
@@ -362,11 +343,11 @@ export default function Certificates() {
 
           <div style={{ display: 'flex', gap: 10 }}>
             {!(selectedType === 'idcard' && idCardCopyType === 'hard') && (
-              <button className="btn btn-outline" onClick={handlePreview} disabled={!selectedStudent || (selectedType === 'relation' && !selectedRelatedStudent)}>
+              <button className="btn btn-outline" onClick={handlePreview} disabled={!selectedStudent}>
                 <i className="fas fa-eye" style={{ marginRight: 6 }}></i>Preview
               </button>
             )}
-            <button className="btn btn-primary" onClick={handleAddToCart} disabled={!selectedStudent || hardCopyLoading || (selectedType === 'relation' && !selectedRelatedStudent)}>
+            <button className="btn btn-primary" onClick={handleAddToCart} disabled={!selectedStudent || hardCopyLoading}>
               {selectedType === 'idcard' && idCardCopyType === 'hard'
                 ? <><i className="fas fa-print" style={{ marginRight: 6 }}></i>{hardCopyLoading ? 'Submitting...' : `Request Hard Copy (₹${idCardPricing.hard})`}</>
                 : <><i className="fas fa-cart-plus" style={{ marginRight: 6 }}></i>Add to Cart</>
@@ -385,12 +366,7 @@ export default function Certificates() {
                 <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 24 }}>Cart is empty</td></tr>
               ) : cart.items.map(item => (
                 <tr key={item.id}>
-                  <td style={{ fontWeight: 600 }}>
-                    {item.student_name}
-                    {item.related_student_name && (
-                      <div style={{ fontWeight: 400, fontSize: 12, color: 'var(--text-secondary)' }}>with {item.related_student_name}</div>
-                    )}
-                  </td>
+                  <td style={{ fontWeight: 600 }}>{item.student_name}</td>
                   <td><span className="badge badge-primary">{item.type?.toUpperCase()}</span></td>
                   <td>₹{item.price}</td>
                   <td>

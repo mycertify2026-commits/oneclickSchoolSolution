@@ -6,7 +6,7 @@
 // school with no active template renders byte-for-byte identically to
 // before this feature existed.
 const { pool } = require('../config/db');
-const { generateLcPdf, generateBonafidePdf, generateRelationPdf } = require('./certificatePdf');
+const { generateLcPdf, generateBonafidePdf } = require('./certificatePdf');
 const { generateIdCardPdf } = require('./idCardPdf');
 const { renderFromTemplate } = require('./templateRenderer');
 
@@ -55,7 +55,6 @@ async function renderCertificatePdf(args) {
   if (type === 'idcard') return generateIdCardPdf(args);
   if (type === 'lc') return generateLcPdf(args);
   if (type === 'bonafide') return generateBonafidePdf(args);
-  if (type === 'relation') return generateRelationPdf(args);
   throw new Error(`Unknown certificate type: ${type}`);
 }
 

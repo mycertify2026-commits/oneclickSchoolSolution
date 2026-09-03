@@ -37,10 +37,10 @@ function resolveUpload(urlOrPath) {
 }
 
 exports.getPrices = async (req, res) => {
-  const [lc, bonafide, idcard, relation] = await Promise.all([
-    getPriceForType('lc'), getPriceForType('bonafide'), getPriceForType('idcard'), getPriceForType('relation'),
+  const [lc, bonafide, idcard] = await Promise.all([
+    getPriceForType('lc'), getPriceForType('bonafide'), getPriceForType('idcard'),
   ]);
-  res.json({ prices: { lc, bonafide, idcard, relation }, gstRate: 0 });
+  res.json({ prices: { lc, bonafide, idcard }, gstRate: 0 });
 };
 
 // Frontend sends LC details as a JSON string in `purpose`
@@ -64,22 +64,12 @@ function parseLcPurpose(purpose) {
 exports.previewCertificate = async (req, res) => {
   try {
     const school = await getSchool(req);
-    const { studentId, type, purpose, relatedStudentId } = req.body;
+    const { studentId, type, purpose } = req.body;
     if (!studentId || !type || !isValidType(type)) return res.status(400).json({ message: 'Invalid student or certificate type' });
-    if (type === 'relation' && (!relatedStudentId || relatedStudentId === studentId)) {
-      return res.status(400).json({ message: 'Please select a different sibling/related student' });
-    }
 
     const [studentRows] = await pool.query('SELECT * FROM students WHERE id=? AND school_id=?', [studentId, school.id]);
     if (!studentRows.length) return res.status(404).json({ message: 'Student not found' });
     const student = studentRows[0];
-
-    let relatedStudent = null;
-    if (type === 'relation') {
-      const [relatedRows] = await pool.query('SELECT * FROM students WHERE id=? AND school_id=?', [relatedStudentId, school.id]);
-      if (!relatedRows.length) return res.status(404).json({ message: 'Related student not found' });
-      relatedStudent = relatedRows[0];
-    }
 
     const previewId = `preview-${uuid()}`;
     const certDir = path.join(UPLOAD_ROOT, 'certificates');
@@ -104,8 +94,8 @@ exports.previewCertificate = async (req, res) => {
     );
     if (studentData) restoreIfMissing(photoPath, studentData.photo_data);
 
-    const PREFIX_BY_TYPE = { lc: 'LC', bonafide: 'BON', idcard: 'IDC', relation: 'REL' };
-    const certificate = { id: previewId, serial_number: 'PREVIEW-' + genSerial(PREFIX_BY_TYPE[type]) };
+    const prefix = type === 'lc' ? 'LC' : type === 'bonafide' ? 'BON' : 'IDC';
+    const certificate = { id: previewId, serial_number: 'PREVIEW-' + genSerial(prefix) };
 
     if (type === 'lc') {
       const [existingOriginal] = await pool.query(
@@ -119,8 +109,6 @@ exports.previewCertificate = async (req, res) => {
       });
     } else if (type === 'bonafide') {
       await renderCertificatePdf({ type: 'bonafide', school, student, certificate, outputPath, photoPath, logoPath, purpose, signaturePath, stampPath });
-    } else if (type === 'relation') {
-      await renderCertificatePdf({ type: 'relation', school, student, relatedStudent, certificate, outputPath, photoPath, signaturePath, stampPath });
     } else {
       await renderCertificatePdf({ type: 'idcard', school, student, certificate, outputPath, photoPath, logoPath, signaturePath, stampPath });
     }
@@ -138,11 +126,10 @@ exports.listCart = async (req, res) => {
   try {
     const school = await getSchool(req);
     const [items] = await pool.query(
-      `SELECT ci.*, s.full_name AS student_name, rs.full_name AS related_student_name,
+      `SELECT ci.*, s.full_name AS student_name,
               COALESCE(s.current_standard, s.admission_standard) as admission_standard,
               COALESCE(s.current_division, s.admission_division) as admission_division
        FROM cart_items ci JOIN students s ON s.id = ci.student_id
-       LEFT JOIN students rs ON rs.id = ci.related_student_id
        WHERE ci.school_id=? AND ci.status='in_cart' ORDER BY ci.created_at DESC`, [school.id]);
     const [wallets] = await pool.query('SELECT balance FROM wallets WHERE school_id=?', [school.id]);
     const total = items.reduce((sum, i) => sum + parseFloat(i.price) + parseFloat(i.gst_amount), 0);
@@ -155,15 +142,8 @@ exports.listCart = async (req, res) => {
 exports.addToCart = async (req, res) => {
   try {
     const school = await getSchool(req);
-    const { studentId, type, purpose, relatedStudentId } = req.body;
+    const { studentId, type, purpose } = req.body;
     if (!studentId || !type || !isValidType(type)) return res.status(400).json({ message: 'Invalid student or certificate type' });
-    if (type === 'relation' && (!relatedStudentId || relatedStudentId === studentId)) {
-      return res.status(400).json({ message: 'Please select a different sibling/related student' });
-    }
-    if (type === 'relation') {
-      const [relatedRows] = await pool.query('SELECT id FROM students WHERE id=? AND school_id=?', [relatedStudentId, school.id]);
-      if (!relatedRows.length) return res.status(404).json({ message: 'Related student not found' });
-    }
 
     const [existing] = await pool.query(
       "SELECT id FROM cart_items WHERE school_id=? AND student_id=? AND type=? AND status='in_cart'",
@@ -192,10 +172,10 @@ exports.addToCart = async (req, res) => {
 
     await pool.query(
       `INSERT INTO cart_items
-       (id, school_id, student_id, related_student_id, type, purpose, certificate_variant, leaving_date, since_when,
+       (id, school_id, student_id, type, purpose, certificate_variant, leaving_date, since_when,
         leaving_reason, leaving_remark, check_by_label, price, gst_amount, status, added_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'in_cart',?)`,
-      [id, school.id, studentId, type === 'relation' ? relatedStudentId : null, type, purpose || null, variant,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'in_cart',?)`,
+      [id, school.id, studentId, type, purpose || null, variant,
        lc?.dateOfLeaving || null, null, lc?.reasonForLeaving || null, lc?.remarks || null,
        'Check By', price, gst, req.user.id]
     );
@@ -387,14 +367,9 @@ exports.verifyOtp = async (req, res) => {
       try {
         const [studentRows] = await pool.query('SELECT * FROM students WHERE id=?', [item.student_id]);
         const student = studentRows[0];
-        let relatedStudent = null;
-        if (item.type === 'relation' && item.related_student_id) {
-          const [relatedRows] = await pool.query('SELECT * FROM students WHERE id=?', [item.related_student_id]);
-          relatedStudent = relatedRows[0];
-        }
         const certId = uuid();
-        const PREFIX_BY_TYPE = { lc: 'LC', bonafide: 'BON', idcard: 'IDC', relation: 'REL' };
-        const serial = genSerial(PREFIX_BY_TYPE[item.type]);
+        const prefix = item.type === 'lc' ? 'LC' : item.type === 'bonafide' ? 'BON' : 'IDC';
+        const serial = genSerial(prefix);
         const subdir = item.type === 'idcard' ? 'idcards' : 'certificates';
         const certDir = path.join(UPLOAD_ROOT, subdir);
         if (!fs.existsSync(certDir)) fs.mkdirSync(certDir, { recursive: true });
@@ -416,19 +391,17 @@ exports.verifyOtp = async (req, res) => {
           });
         } else if (item.type === 'bonafide') {
           await renderCertificatePdf({ type: 'bonafide', school, student, certificate, outputPath, photoPath, logoPath, purpose: item.purpose, signaturePath, stampPath });
-        } else if (item.type === 'relation') {
-          await renderCertificatePdf({ type: 'relation', school, student, relatedStudent, certificate, outputPath, photoPath, signaturePath, stampPath });
         } else {
           await renderCertificatePdf({ type: 'idcard', school, student, certificate, outputPath, photoPath, logoPath, signaturePath, stampPath });
         }
 
         await pool.query(
            `INSERT INTO certificates
-            (id, school_id, student_id, related_student_id, cart_item_id, type, serial_number, price, gst_amount,
+            (id, school_id, student_id, cart_item_id, type, serial_number, price, gst_amount,
              wallet_transaction_id, pdf_path, purpose, certificate_variant, leaving_date, since_when,
              leaving_reason, leaving_remark, check_by_label, expires_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-          [certId, school.id, student.id, item.related_student_id || null, item.id, item.type, serial, item.price, item.gst_amount,
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [certId, school.id, student.id, item.id, item.type, serial, item.price, item.gst_amount,
            txId, `/${subdir}/${serial}.pdf`, item.purpose || null, item.certificate_variant || 'original',
            item.leaving_date || null, item.since_when || null, item.leaving_reason || null,
            item.leaving_remark || null, item.check_by_label || 'Check By',

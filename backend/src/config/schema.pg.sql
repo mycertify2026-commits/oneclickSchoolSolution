@@ -303,7 +303,6 @@ CREATE TABLE IF NOT EXISTS certificates (
   leaving_reason TEXT,
   leaving_remark TEXT,
   check_by_label VARCHAR(50) DEFAULT 'Check By',
-  related_student_id VARCHAR(36),
   qr_payload TEXT,
   expires_at TIMESTAMP NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

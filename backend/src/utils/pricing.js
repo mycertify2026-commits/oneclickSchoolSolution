@@ -4,10 +4,10 @@
 // id_card_pricing table so there is only ever one authoritative idcard price.
 const { pool } = require('../config/db');
 
-const VALID_TYPES = ['lc', 'bonafide', 'idcard', 'relation'];
+const VALID_TYPES = ['lc', 'bonafide', 'idcard'];
 // Used only if a price row is somehow missing — keeps the app usable rather
 // than crashing certificate generation over a data problem.
-const FALLBACK_PRICES = { lc: 50, bonafide: 30, idcard: 20, relation: 30 };
+const FALLBACK_PRICES = { lc: 50, bonafide: 30, idcard: 20 };
 
 function isValidType(type) {
   return VALID_TYPES.includes(type);

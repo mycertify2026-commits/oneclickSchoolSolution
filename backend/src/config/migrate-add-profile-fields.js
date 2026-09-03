@@ -39,26 +39,6 @@ const SCHOOL_CLASS_RANGE_COLUMNS = [
   { name: 'class_to', definition: 'VARCHAR(20)' },
 ];
 
-const RELATED_STUDENT_COLUMN = [{ name: 'related_student_id', definition: 'VARCHAR(36)' }];
-
-async function ensureRelationPricing(connection, dbName) {
-  const [tables] = await connection.query(
-    `SELECT COUNT(*) as count FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'certificate_pricing'`,
-    [dbName]
-  );
-  if (tables[0].count === 0) {
-    console.log('  - certificate_pricing: table not present yet, skipping relation-price seed (run migrate:add-certificate-pricing first)');
-    return;
-  }
-  const [rows] = await connection.query(`SELECT type FROM certificate_pricing WHERE type = 'relation'`);
-  if (rows.length === 0) {
-    await connection.query(`INSERT INTO certificate_pricing (type, price) VALUES ('relation', 30.00)`);
-    console.log('  + certificate_pricing: seeded relation=30.00');
-  } else {
-    console.log('  - certificate_pricing.relation: already present, skipping seed');
-  }
-}
-
 async function migrate() {
   const connection = await mysql.createConnection({
     host: process.env.DB_HOST,
@@ -75,12 +55,6 @@ async function migrate() {
     await addMissingColumns(connection, dbName, 'distributors', DISTRIBUTOR_PAYOUT_COLUMNS);
     console.log('\nschools (class range):');
     await addMissingColumns(connection, dbName, 'schools', SCHOOL_CLASS_RANGE_COLUMNS);
-    console.log('\ncertificates (relation certificate — references a second student):');
-    await addMissingColumns(connection, dbName, 'certificates', RELATED_STUDENT_COLUMN);
-    console.log('\ncart_items (relation certificate — references a second student):');
-    await addMissingColumns(connection, dbName, 'cart_items', RELATED_STUDENT_COLUMN);
-    console.log('\ncertificate_pricing (relation certificate price):');
-    await ensureRelationPricing(connection, dbName);
     console.log('\nProfile-fields migration completed successfully.');
   } catch (err) {
     console.error('Profile-fields migration failed:', err.message);
