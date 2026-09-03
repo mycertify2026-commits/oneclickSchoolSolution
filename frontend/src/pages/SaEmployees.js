@@ -1,9 +1,22 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Layout from '../components/Layout';
 import api from '../api/client';
 
-const BLANK_DIST = { name: '', email: '', mobile: '', city: '', district: '', commission_rate: '10', password: '', confirmPassword: '' };
-const BLANK_SD   = { name: '', email: '', mobile: '', city: '', district: '', address: '', password: '', confirmPassword: '' };
+const BLANK_DIST = {
+  name: '', email: '', mobile: '', city: '', district: '', area_of_operation: '', commission_rate: '10',
+  pan_number: '', bank_account_holder: '', bank_name: '', bank_account_number: '', bank_ifsc: '',
+  password: '', confirmPassword: '',
+};
+const BLANK_SD = {
+  name: '', email: '', mobile: '', city: '', district: '', address: '', area_of_operation: '', commission_rate: '2',
+  pan_number: '', bank_account_holder: '', bank_name: '', bank_account_number: '', bank_ifsc: '',
+  password: '', confirmPassword: '',
+};
+
+function avatarToUrl(filePath) {
+  if (!filePath) return null;
+  return `/uploads/avatars/${String(filePath).split(/[\\/]/).pop()}`;
+}
 
 export default function SaEmployees() {
   const [tab, setTab] = useState('distributors');
@@ -15,6 +28,9 @@ export default function SaEmployees() {
   const [editingDist, setEditingDist] = useState(null);
   const [distForm, setDistForm] = useState(BLANK_DIST);
   const [editDistForm, setEditDistForm] = useState({});
+  const [distAvatarUrl, setDistAvatarUrl] = useState('');
+  const [uploadingDistAvatar, setUploadingDistAvatar] = useState(false);
+  const distAvatarInputRef = useRef(null);
 
   // ── Super Distributor state ────────────────────────────────────────────────
   const [superDistributors, setSuperDistributors] = useState([]);
@@ -23,6 +39,9 @@ export default function SaEmployees() {
   const [editingSd, setEditingSd] = useState(null);
   const [sdForm, setSdForm] = useState(BLANK_SD);
   const [editSdForm, setEditSdForm] = useState({});
+  const [sdAvatarUrl, setSdAvatarUrl] = useState('');
+  const [uploadingSdAvatar, setUploadingSdAvatar] = useState(false);
+  const sdAvatarInputRef = useRef(null);
 
   // ── Shared ─────────────────────────────────────────────────────────────────
   const [error, setError] = useState('');
@@ -72,9 +91,34 @@ export default function SaEmployees() {
 
   function openEditDist(d) {
     setEditingDist(d);
-    setEditDistForm({ name: d.name, mobile: d.mobile || '', city: d.city || '', district: d.district || '', address: d.address || '', commission_rate: d.commission_rate, is_active: d.is_active });
+    setEditDistForm({
+      name: d.name, mobile: d.mobile || '', city: d.city || '', district: d.district || '', address: d.address || '',
+      area_of_operation: d.area_of_operation || '', commission_rate: d.commission_rate,
+      pan_number: d.pan_number || '', bank_account_holder: d.bank_account_holder || '', bank_name: d.bank_name || '',
+      bank_account_number: d.bank_account_number || '', bank_ifsc: d.bank_ifsc || '',
+      is_active: d.is_active,
+    });
+    setDistAvatarUrl(d.avatar_url || '');
     setError('');
     setShowEditDistModal(true);
+  }
+
+  async function handleDistAvatarChange(e) {
+    const file = e.target.files?.[0];
+    if (!file || !editingDist) return;
+    setError('');
+    setUploadingDistAvatar(true);
+    try {
+      const data = new FormData();
+      data.append('avatar', file);
+      const res = await api.put(`/distributors/${editingDist.id}/avatar`, data, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setDistAvatarUrl(res.data.avatar_url);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not upload profile photo');
+    } finally {
+      setUploadingDistAvatar(false);
+      if (distAvatarInputRef.current) distAvatarInputRef.current.value = '';
+    }
   }
 
   async function handleSaveEditDist() {
@@ -120,9 +164,34 @@ export default function SaEmployees() {
 
   function openEditSd(sd) {
     setEditingSd(sd);
-    setEditSdForm({ name: sd.name, mobile: sd.mobile || '', city: sd.city || '', district: sd.district || '', address: sd.address || '', is_active: sd.is_active });
+    setEditSdForm({
+      name: sd.name, mobile: sd.mobile || '', city: sd.city || '', district: sd.district || '', address: sd.address || '',
+      area_of_operation: sd.area_of_operation || '', commission_rate: sd.commission_rate,
+      pan_number: sd.pan_number || '', bank_account_holder: sd.bank_account_holder || '', bank_name: sd.bank_name || '',
+      bank_account_number: sd.bank_account_number || '', bank_ifsc: sd.bank_ifsc || '',
+      is_active: sd.is_active,
+    });
+    setSdAvatarUrl(sd.avatar_url || '');
     setError('');
     setShowEditSdModal(true);
+  }
+
+  async function handleSdAvatarChange(e) {
+    const file = e.target.files?.[0];
+    if (!file || !editingSd) return;
+    setError('');
+    setUploadingSdAvatar(true);
+    try {
+      const data = new FormData();
+      data.append('avatar', file);
+      const res = await api.put(`/super-distributors/${editingSd.id}/avatar`, data, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setSdAvatarUrl(res.data.avatar_url);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not upload profile photo');
+    } finally {
+      setUploadingSdAvatar(false);
+      if (sdAvatarInputRef.current) sdAvatarInputRef.current.value = '';
+    }
   }
 
   async function handleSaveEditSd() {
@@ -204,16 +273,17 @@ export default function SaEmployees() {
         <div className="card">
           <div className="table-responsive">
             <table className="data-table">
-              <thead><tr><th>Name</th><th>Email</th><th>Mobile</th><th>District</th><th>Distributors</th><th>Direct Schools</th><th>Status</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Name</th><th>Email</th><th>Mobile</th><th>District</th><th>Commission Rate</th><th>Distributors</th><th>Direct Schools</th><th>Status</th><th>Actions</th></tr></thead>
               <tbody>
                 {superDistributors.length === 0 ? (
-                  <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>No super distributors yet.</td></tr>
+                  <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>No super distributors yet.</td></tr>
                 ) : superDistributors.map(sd => (
                   <tr key={sd.id}>
                     <td>{sd.name}</td>
                     <td>{sd.email}</td>
                     <td>{sd.mobile || '—'}</td>
                     <td>{sd.district || '—'}</td>
+                    <td>{sd.commission_rate !== null && sd.commission_rate !== undefined ? `${sd.commission_rate}%` : '—'}</td>
                     <td>{sd.distributor_count ?? 0}</td>
                     <td>{sd.direct_school_count ?? 0}</td>
                     <td><span className={`badge ${sd.is_active ? 'badge-success' : 'badge-danger'}`}>{sd.is_active ? 'Active' : 'Inactive'}</span></td>
@@ -232,12 +302,12 @@ export default function SaEmployees() {
       {/* ── Add Distributor Modal ── */}
       {showAddDistModal && (
         <div className="modal-overlay show" style={{ display: 'flex' }} onClick={() => setShowAddDistModal(false)}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
+          <div className="modal-box modal-lg" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3><i className="fas fa-user-tie" style={{ color: 'var(--primary)', marginRight: 8 }}></i>Add Distributor</h3>
               <button className="modal-close" onClick={() => setShowAddDistModal(false)}>×</button>
             </div>
-            <div className="modal-body">
+            <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
               {error && <ErrBox msg={error} />}
               <div className="form-row form-row-2">
                 <Field label="Full Name *" value={distForm.name} onChange={v => setDistForm(p => ({ ...p, name: v }))} />
@@ -249,13 +319,27 @@ export default function SaEmployees() {
                 <Field label="District" value={distForm.district} onChange={v => setDistForm(p => ({ ...p, district: v }))} />
               </div>
               <div className="form-row form-row-2">
+                <Field label="Area of Operation" value={distForm.area_of_operation} onChange={v => setDistForm(p => ({ ...p, area_of_operation: v }))} />
                 <Field label="Commission Rate (%)" value={distForm.commission_rate} onChange={v => setDistForm(p => ({ ...p, commission_rate: v }))} />
+              </div>
+              <div className="form-row form-row-2">
+                <Field label="PAN Card Number" value={distForm.pan_number} onChange={v => setDistForm(p => ({ ...p, pan_number: v.toUpperCase() }))} placeholder="ABCDE1234F" />
+              </div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-secondary)', margin: '4px 0 8px' }}>Payout Bank Details</div>
+              <div className="form-row form-row-2">
+                <Field label="Account Holder Name" value={distForm.bank_account_holder} onChange={v => setDistForm(p => ({ ...p, bank_account_holder: v }))} />
+                <Field label="Bank Name" value={distForm.bank_name} onChange={v => setDistForm(p => ({ ...p, bank_name: v }))} />
+              </div>
+              <div className="form-row form-row-2">
+                <Field label="Account Number" value={distForm.bank_account_number} onChange={v => setDistForm(p => ({ ...p, bank_account_number: v }))} />
+                <Field label="IFSC Code" value={distForm.bank_ifsc} onChange={v => setDistForm(p => ({ ...p, bank_ifsc: v.toUpperCase() }))} placeholder="SBIN0001234" />
               </div>
               <div className="form-row form-row-2">
                 <Field label="Password" value={distForm.password} onChange={v => setDistForm(p => ({ ...p, password: v }))} type="password" placeholder="Leave blank to email a setup link" />
                 <Field label="Confirm Password" value={distForm.confirmPassword} onChange={v => setDistForm(p => ({ ...p, confirmPassword: v }))} type="password" />
               </div>
               <div className="form-hint">{distForm.password ? 'The distributor can log in with this password.' : 'A password setup email will be sent automatically.'}</div>
+              <div className="form-hint" style={{ marginTop: 4 }}>Profile photo can be added after the distributor is created, from Edit.</div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowAddDistModal(false)}>Cancel</button>
@@ -268,13 +352,32 @@ export default function SaEmployees() {
       {/* ── Edit Distributor Modal ── */}
       {showEditDistModal && (
         <div className="modal-overlay show" style={{ display: 'flex' }} onClick={() => setShowEditDistModal(false)}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
+          <div className="modal-box modal-lg" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3><i className="fas fa-edit" style={{ color: 'var(--primary)', marginRight: 8 }}></i>Edit Distributor</h3>
               <button className="modal-close" onClick={() => setShowEditDistModal(false)}>×</button>
             </div>
-            <div className="modal-body">
+            <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
               {error && <ErrBox msg={error} />}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 18 }}>
+                <div style={{
+                  width: 64, height: 64, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
+                  background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  border: '1px solid var(--border)',
+                }}>
+                  {distAvatarUrl
+                    ? <img src={avatarToUrl(distAvatarUrl)} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <i className="fas fa-user" style={{ fontSize: 24, color: 'var(--text-light)' }}></i>}
+                </div>
+                <div>
+                  <input ref={distAvatarInputRef} type="file" accept="image/*" onChange={handleDistAvatarChange} style={{ display: 'none' }} id="dist-admin-avatar-input" />
+                  <button type="button" className="btn btn-sm btn-outline" onClick={() => distAvatarInputRef.current?.click()} disabled={uploadingDistAvatar}>
+                    {uploadingDistAvatar ? 'Uploading...' : 'Change Photo'}
+                  </button>
+                </div>
+              </div>
+
               <div className="form-row form-row-2">
                 <Field label="Full Name *" value={editDistForm.name} onChange={v => setEditDistForm(p => ({ ...p, name: v }))} />
                 <Field label="Mobile" value={editDistForm.mobile} onChange={v => setEditDistForm(p => ({ ...p, mobile: v }))} />
@@ -284,9 +387,22 @@ export default function SaEmployees() {
                 <Field label="District" value={editDistForm.district} onChange={v => setEditDistForm(p => ({ ...p, district: v }))} />
                 <Field label="Commission Rate (%)" value={editDistForm.commission_rate} onChange={v => setEditDistForm(p => ({ ...p, commission_rate: v }))} />
               </div>
+              <div className="form-row form-row-2">
+                <Field label="Area of Operation" value={editDistForm.area_of_operation} onChange={v => setEditDistForm(p => ({ ...p, area_of_operation: v }))} />
+                <Field label="PAN Card Number" value={editDistForm.pan_number} onChange={v => setEditDistForm(p => ({ ...p, pan_number: v.toUpperCase() }))} placeholder="ABCDE1234F" />
+              </div>
               <div className="form-group">
                 <label className="form-label">Address</label>
                 <textarea className="form-control" rows={2} value={editDistForm.address || ''} onChange={e => setEditDistForm(p => ({ ...p, address: e.target.value }))} />
+              </div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-secondary)', margin: '4px 0 8px' }}>Payout Bank Details</div>
+              <div className="form-row form-row-2">
+                <Field label="Account Holder Name" value={editDistForm.bank_account_holder} onChange={v => setEditDistForm(p => ({ ...p, bank_account_holder: v }))} />
+                <Field label="Bank Name" value={editDistForm.bank_name} onChange={v => setEditDistForm(p => ({ ...p, bank_name: v }))} />
+              </div>
+              <div className="form-row form-row-2">
+                <Field label="Account Number" value={editDistForm.bank_account_number} onChange={v => setEditDistForm(p => ({ ...p, bank_account_number: v }))} />
+                <Field label="IFSC Code" value={editDistForm.bank_ifsc} onChange={v => setEditDistForm(p => ({ ...p, bank_ifsc: v.toUpperCase() }))} placeholder="SBIN0001234" />
               </div>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginTop: 10 }}>
                 <input type="checkbox" checked={Boolean(editDistForm.is_active)} onChange={e => setEditDistForm(p => ({ ...p, is_active: e.target.checked }))} />
@@ -304,12 +420,12 @@ export default function SaEmployees() {
       {/* ── Add Super Distributor Modal ── */}
       {showAddSdModal && (
         <div className="modal-overlay show" style={{ display: 'flex' }} onClick={() => setShowAddSdModal(false)}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
+          <div className="modal-box modal-lg" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3><i className="fas fa-users-cog" style={{ color: 'var(--primary)', marginRight: 8 }}></i>Add Super Distributor</h3>
               <button className="modal-close" onClick={() => setShowAddSdModal(false)}>×</button>
             </div>
-            <div className="modal-body">
+            <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
               {error && <ErrBox msg={error} />}
               <div className="form-row form-row-2">
                 <Field label="Full Name *" value={sdForm.name} onChange={v => setSdForm(p => ({ ...p, name: v }))} />
@@ -320,15 +436,32 @@ export default function SaEmployees() {
                 <Field label="City" value={sdForm.city} onChange={v => setSdForm(p => ({ ...p, city: v }))} />
                 <Field label="District *" value={sdForm.district} onChange={v => setSdForm(p => ({ ...p, district: v }))} />
               </div>
+              <div className="form-row form-row-2">
+                <Field label="Area of Operation" value={sdForm.area_of_operation} onChange={v => setSdForm(p => ({ ...p, area_of_operation: v }))} />
+                <Field label="Commission Rate (%)" value={sdForm.commission_rate} onChange={v => setSdForm(p => ({ ...p, commission_rate: v }))} />
+              </div>
               <div className="form-group">
                 <label className="form-label">Address</label>
                 <textarea className="form-control" rows={2} value={sdForm.address} onChange={e => setSdForm(p => ({ ...p, address: e.target.value }))} />
+              </div>
+              <div className="form-row form-row-2">
+                <Field label="PAN Card Number" value={sdForm.pan_number} onChange={v => setSdForm(p => ({ ...p, pan_number: v.toUpperCase() }))} placeholder="ABCDE1234F" />
+              </div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-secondary)', margin: '4px 0 8px' }}>Payout Bank Details</div>
+              <div className="form-row form-row-2">
+                <Field label="Account Holder Name" value={sdForm.bank_account_holder} onChange={v => setSdForm(p => ({ ...p, bank_account_holder: v }))} />
+                <Field label="Bank Name" value={sdForm.bank_name} onChange={v => setSdForm(p => ({ ...p, bank_name: v }))} />
+              </div>
+              <div className="form-row form-row-2">
+                <Field label="Account Number" value={sdForm.bank_account_number} onChange={v => setSdForm(p => ({ ...p, bank_account_number: v }))} />
+                <Field label="IFSC Code" value={sdForm.bank_ifsc} onChange={v => setSdForm(p => ({ ...p, bank_ifsc: v.toUpperCase() }))} placeholder="SBIN0001234" />
               </div>
               <div className="form-row form-row-2">
                 <Field label="Password" value={sdForm.password} onChange={v => setSdForm(p => ({ ...p, password: v }))} type="password" placeholder="Leave blank to email a setup link" />
                 <Field label="Confirm Password" value={sdForm.confirmPassword} onChange={v => setSdForm(p => ({ ...p, confirmPassword: v }))} type="password" />
               </div>
               <div className="form-hint">{sdForm.password ? 'They can log in with this password.' : 'A password setup email will be sent automatically.'}</div>
+              <div className="form-hint" style={{ marginTop: 4 }}>Profile photo can be added after the super distributor is created, from Edit.</div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowAddSdModal(false)}>Cancel</button>
@@ -341,13 +474,32 @@ export default function SaEmployees() {
       {/* ── Edit Super Distributor Modal ── */}
       {showEditSdModal && (
         <div className="modal-overlay show" style={{ display: 'flex' }} onClick={() => setShowEditSdModal(false)}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
+          <div className="modal-box modal-lg" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3><i className="fas fa-edit" style={{ color: 'var(--primary)', marginRight: 8 }}></i>Edit Super Distributor</h3>
               <button className="modal-close" onClick={() => setShowEditSdModal(false)}>×</button>
             </div>
-            <div className="modal-body">
+            <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
               {error && <ErrBox msg={error} />}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 18 }}>
+                <div style={{
+                  width: 64, height: 64, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
+                  background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  border: '1px solid var(--border)',
+                }}>
+                  {sdAvatarUrl
+                    ? <img src={avatarToUrl(sdAvatarUrl)} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <i className="fas fa-user" style={{ fontSize: 24, color: 'var(--text-light)' }}></i>}
+                </div>
+                <div>
+                  <input ref={sdAvatarInputRef} type="file" accept="image/*" onChange={handleSdAvatarChange} style={{ display: 'none' }} id="sd-admin-avatar-input" />
+                  <button type="button" className="btn btn-sm btn-outline" onClick={() => sdAvatarInputRef.current?.click()} disabled={uploadingSdAvatar}>
+                    {uploadingSdAvatar ? 'Uploading...' : 'Change Photo'}
+                  </button>
+                </div>
+              </div>
+
               <div className="form-row form-row-2">
                 <Field label="Full Name *" value={editSdForm.name} onChange={v => setEditSdForm(p => ({ ...p, name: v }))} />
                 <Field label="Mobile" value={editSdForm.mobile} onChange={v => setEditSdForm(p => ({ ...p, mobile: v }))} />
@@ -355,10 +507,24 @@ export default function SaEmployees() {
               <div className="form-row form-row-3">
                 <Field label="City" value={editSdForm.city} onChange={v => setEditSdForm(p => ({ ...p, city: v }))} />
                 <Field label="District *" value={editSdForm.district} onChange={v => setEditSdForm(p => ({ ...p, district: v }))} />
+                <Field label="Commission Rate (%)" value={editSdForm.commission_rate} onChange={v => setEditSdForm(p => ({ ...p, commission_rate: v }))} />
+              </div>
+              <div className="form-row form-row-2">
+                <Field label="Area of Operation" value={editSdForm.area_of_operation} onChange={v => setEditSdForm(p => ({ ...p, area_of_operation: v }))} />
+                <Field label="PAN Card Number" value={editSdForm.pan_number} onChange={v => setEditSdForm(p => ({ ...p, pan_number: v.toUpperCase() }))} placeholder="ABCDE1234F" />
               </div>
               <div className="form-group">
                 <label className="form-label">Address</label>
                 <textarea className="form-control" rows={2} value={editSdForm.address || ''} onChange={e => setEditSdForm(p => ({ ...p, address: e.target.value }))} />
+              </div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-secondary)', margin: '4px 0 8px' }}>Payout Bank Details</div>
+              <div className="form-row form-row-2">
+                <Field label="Account Holder Name" value={editSdForm.bank_account_holder} onChange={v => setEditSdForm(p => ({ ...p, bank_account_holder: v }))} />
+                <Field label="Bank Name" value={editSdForm.bank_name} onChange={v => setEditSdForm(p => ({ ...p, bank_name: v }))} />
+              </div>
+              <div className="form-row form-row-2">
+                <Field label="Account Number" value={editSdForm.bank_account_number} onChange={v => setEditSdForm(p => ({ ...p, bank_account_number: v }))} />
+                <Field label="IFSC Code" value={editSdForm.bank_ifsc} onChange={v => setEditSdForm(p => ({ ...p, bank_ifsc: v.toUpperCase() }))} placeholder="SBIN0001234" />
               </div>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginTop: 10 }}>
                 <input type="checkbox" checked={Boolean(editSdForm.is_active)} onChange={e => setEditSdForm(p => ({ ...p, is_active: e.target.checked }))} />

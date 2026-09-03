@@ -38,6 +38,7 @@ router.post('/', sanitizeBody,
   distributorController.createDistributor
 );
 router.put('/:id', sanitizeBody, distributorController.updateDistributorByAdmin);
+router.put('/:id/avatar', uploadAvatar.single('avatar'), distributorController.uploadDistributorAvatarByAdmin);
 router.delete('/:id', distributorController.deleteDistributor);
 
 module.exports = router;

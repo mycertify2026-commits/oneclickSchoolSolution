@@ -29,7 +29,8 @@ async function listDistributors(req, res) {
 async function createDistributor(req, res) {
   const conn = await pool.getConnection();
   try {
-    const { name, email, mobile, city, district, address, area_of_operation, commission_rate, password, confirmPassword } = req.body;
+    const { name, email, mobile, city, district, address, area_of_operation, commission_rate, password, confirmPassword,
+            pan_number, bank_account_holder, bank_name, bank_account_number, bank_ifsc } = req.body;
     if (!name || !email) return res.status(400).json({ error: 'Name and email are required' });
 
     // Password is optional: if provided, the distributor can log in
@@ -58,8 +59,11 @@ async function createDistributor(req, res) {
 
     const distId = uuidv4();
     await conn.query(
-      `INSERT INTO distributors (id, user_id, commission_rate, city, district, address, area_of_operation) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [distId, userId, commission_rate || 10.0, city || null, district || null, address || null, area_of_operation || null]
+      `INSERT INTO distributors (id, user_id, commission_rate, city, district, address, area_of_operation,
+                                  pan_number, bank_account_holder, bank_name, bank_account_number, bank_ifsc)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [distId, userId, commission_rate || 10.0, city || null, district || null, address || null, area_of_operation || null,
+       pan_number || null, bank_account_holder || null, bank_name || null, bank_account_number || null, bank_ifsc || null]
     );
 
     await conn.commit();
@@ -117,6 +121,26 @@ async function assignDistributor(req, res) {
 // PUT /api/distributors/:id (superAdmin) - edit any distributor's profile and commission rate
 const DISTRIBUTOR_ADMIN_EDITABLE_FIELDS = ['city', 'district', 'address', 'area_of_operation', 'commission_rate',
   'pan_number', 'bank_account_holder', 'bank_name', 'bank_account_number', 'bank_ifsc'];
+
+// PUT /api/distributors/:id/avatar (superAdmin) - photo upload for a
+// distributor from the admin's own Edit modal (a distributor doesn't exist
+// yet at Add-modal time, so this only applies once the row is created).
+async function uploadDistributorAvatarByAdmin(req, res) {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No image file provided' });
+    const [rows] = await pool.query(
+      `SELECT d.id FROM distributors d JOIN users u ON u.id = d.user_id WHERE d.id = ? AND u.role = 'distributor'`,
+      [req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Distributor not found' });
+    const avatarUrl = req.file.path;
+    await pool.query('UPDATE distributors SET avatar_url = ? WHERE id = ?', [avatarUrl, req.params.id]);
+    res.json({ avatar_url: avatarUrl });
+  } catch (err) {
+    console.error('uploadDistributorAvatarByAdmin error:', err.message);
+    res.status(500).json({ error: 'Server error uploading profile photo' });
+  }
+}
 async function updateDistributorByAdmin(req, res) {
   try {
     const { name, mobile, is_active } = req.body;
@@ -509,6 +533,7 @@ async function exportDistributors(req, res) {
 
 module.exports = {
   listDistributors, createDistributor, assignDistributor, updateDistributorByAdmin, deleteDistributor,
+  uploadDistributorAvatarByAdmin,
   getMyProfile, updateMyProfile, uploadMyAvatar, changeMyPassword,
   addSchool, getMySchools, updateMySchool, deleteMySchool, getMyCommission, exportDistributors
 };

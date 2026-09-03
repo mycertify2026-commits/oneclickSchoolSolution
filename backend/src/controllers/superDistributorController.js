@@ -14,6 +14,7 @@ async function listSuperDistributors(req, res) {
     const [rows] = await pool.query(
       `SELECT u.id, u.name, u.email, u.mobile, u.is_active, u.created_at,
               sd.district, sd.city, sd.address, sd.area_of_operation, sd.commission_rate,
+              sd.avatar_url, sd.pan_number, sd.bank_account_holder, sd.bank_name, sd.bank_account_number, sd.bank_ifsc,
               (SELECT COUNT(*) FROM distributors d WHERE d.super_distributor_id = u.id AND d.deleted_at IS NULL) as distributor_count,
               (SELECT COUNT(*) FROM schools s WHERE s.super_distributor_id = u.id AND s.deleted_at IS NULL) as direct_school_count
        FROM users u
@@ -31,7 +32,8 @@ async function listSuperDistributors(req, res) {
 async function createSuperDistributor(req, res) {
   const conn = await pool.getConnection();
   try {
-    const { name, email, mobile, city, district, address, area_of_operation, commission_rate, password, confirmPassword } = req.body;
+    const { name, email, mobile, city, district, address, area_of_operation, commission_rate, password, confirmPassword,
+            pan_number, bank_account_holder, bank_name, bank_account_number, bank_ifsc } = req.body;
     if (!name || !email) return res.status(400).json({ error: 'Name and email are required' });
     if (!district) return res.status(400).json({ error: 'District is required' });
 
@@ -63,8 +65,11 @@ async function createSuperDistributor(req, res) {
     // Defaults to 2%, matching the business rule; Super Admin can override.
     const sdId = uuidv4();
     await conn.query(
-      `INSERT INTO distributors (id, user_id, commission_rate, city, district, address, area_of_operation) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [sdId, userId, commission_rate !== undefined && commission_rate !== '' ? commission_rate : 2.0, city || null, district, address || null, area_of_operation || null]
+      `INSERT INTO distributors (id, user_id, commission_rate, city, district, address, area_of_operation,
+                                  pan_number, bank_account_holder, bank_name, bank_account_number, bank_ifsc)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [sdId, userId, commission_rate !== undefined && commission_rate !== '' ? commission_rate : 2.0, city || null, district, address || null, area_of_operation || null,
+       pan_number || null, bank_account_holder || null, bank_name || null, bank_account_number || null, bank_ifsc || null]
     );
 
     await conn.commit();
@@ -90,7 +95,8 @@ async function createSuperDistributor(req, res) {
     }
 
     const [rows] = await pool.query(
-       `SELECT u.id, u.name, u.email, u.mobile, u.is_active, d.district, d.city, d.address, d.area_of_operation
+       `SELECT u.id, u.name, u.email, u.mobile, u.is_active, d.district, d.city, d.address, d.area_of_operation,
+               d.commission_rate, d.avatar_url, d.pan_number, d.bank_account_holder, d.bank_name, d.bank_account_number, d.bank_ifsc
        FROM users u LEFT JOIN distributors d ON d.user_id = u.id WHERE u.id = ?`,
       [userId]
     );
@@ -144,6 +150,22 @@ async function updateSuperDistributorByAdmin(req, res) {
   } catch (err) {
     console.error('updateSuperDistributorByAdmin error:', err.message);
     res.status(500).json({ error: 'Server error updating super distributor' });
+  }
+}
+
+// PUT /api/super-distributors/:id/avatar (superAdmin) - photo upload for a
+// super distributor from the admin's own Edit modal.
+async function uploadSuperDistributorAvatarByAdmin(req, res) {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No image file provided' });
+    const [rows] = await pool.query("SELECT id FROM users WHERE id = ? AND role = 'superDistributor' AND deleted_at IS NULL", [req.params.id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Super distributor not found' });
+    const avatarUrl = req.file.path;
+    await pool.query('UPDATE distributors SET avatar_url = ? WHERE user_id = ?', [avatarUrl, req.params.id]);
+    res.json({ avatar_url: avatarUrl });
+  } catch (err) {
+    console.error('uploadSuperDistributorAvatarByAdmin error:', err.message);
+    res.status(500).json({ error: 'Server error uploading profile photo' });
   }
 }
 
@@ -409,7 +431,8 @@ async function getDashboard(req, res) {
 async function listMyDistributors(req, res) {
   try {
     const [rows] = await pool.query(
-      `SELECT d.id, d.commission_rate, d.city, d.district, d.address, d.created_at,
+      `SELECT d.id, d.commission_rate, d.city, d.district, d.address, d.area_of_operation, d.avatar_url,
+              d.pan_number, d.bank_account_holder, d.bank_name, d.bank_account_number, d.bank_ifsc, d.created_at,
               u.name, u.email, u.mobile, u.is_active,
               (SELECT COUNT(*) FROM schools s WHERE s.distributor_id = d.id AND s.deleted_at IS NULL) as school_count
        FROM distributors d JOIN users u ON u.id = d.user_id
@@ -428,7 +451,8 @@ async function listMyDistributors(req, res) {
 async function createMyDistributor(req, res) {
   const conn = await pool.getConnection();
   try {
-    const { name, email, mobile, city, district, address, commission_rate, password, confirmPassword } = req.body;
+    const { name, email, mobile, city, district, address, area_of_operation, commission_rate, password, confirmPassword,
+            pan_number, bank_account_holder, bank_name, bank_account_number, bank_ifsc } = req.body;
     if (!name || !email) return res.status(400).json({ error: 'Name and email are required' });
 
     if (password !== undefined && password !== '') {
@@ -458,8 +482,11 @@ async function createMyDistributor(req, res) {
 
     const distId = uuidv4();
     await conn.query(
-      `INSERT INTO distributors (id, user_id, commission_rate, city, district, address, super_distributor_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [distId, userId, commission_rate || 10.0, city || null, district || sdDistrict, address || null, req.user.id]
+      `INSERT INTO distributors (id, user_id, commission_rate, city, district, address, area_of_operation, super_distributor_id,
+                                  pan_number, bank_account_holder, bank_name, bank_account_number, bank_ifsc)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [distId, userId, commission_rate || 10.0, city || null, district || sdDistrict, address || null, area_of_operation || null, req.user.id,
+       pan_number || null, bank_account_holder || null, bank_name || null, bank_account_number || null, bank_ifsc || null]
     );
 
     await conn.commit();
@@ -533,7 +560,8 @@ async function updateMyDistributor(req, res) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const { name, mobile, city, district, address, commission_rate, is_active } = req.body;
+    const { name, mobile, city, district, address, area_of_operation, commission_rate, is_active,
+            pan_number, bank_account_holder, bank_name, bank_account_number, bank_ifsc } = req.body;
     const [distRows] = await pool.query('SELECT user_id FROM distributors WHERE id = ?', [req.params.id]);
     const userId = distRows[0].user_id;
 
@@ -546,7 +574,13 @@ async function updateMyDistributor(req, res) {
     if (city !== undefined) { updates.push('city = ?'); values.push(city); }
     if (district !== undefined) { updates.push('district = ?'); values.push(district); }
     if (address !== undefined) { updates.push('address = ?'); values.push(address); }
+    if (area_of_operation !== undefined) { updates.push('area_of_operation = ?'); values.push(area_of_operation); }
     if (commission_rate !== undefined) { updates.push('commission_rate = ?'); values.push(commission_rate); }
+    if (pan_number !== undefined) { updates.push('pan_number = ?'); values.push(pan_number); }
+    if (bank_account_holder !== undefined) { updates.push('bank_account_holder = ?'); values.push(bank_account_holder); }
+    if (bank_name !== undefined) { updates.push('bank_name = ?'); values.push(bank_name); }
+    if (bank_account_number !== undefined) { updates.push('bank_account_number = ?'); values.push(bank_account_number); }
+    if (bank_ifsc !== undefined) { updates.push('bank_ifsc = ?'); values.push(bank_ifsc); }
     if (updates.length > 0) {
       values.push(req.params.id);
       await pool.query(`UPDATE distributors SET ${updates.join(', ')} WHERE id = ?`, values);
@@ -560,6 +594,22 @@ async function updateMyDistributor(req, res) {
   } catch (err) {
     console.error('SD updateMyDistributor error:', err.message);
     res.status(500).json({ error: 'Server error updating distributor' });
+  }
+}
+
+// PUT /api/super-distributors/me/distributors/:id/avatar
+async function uploadMyDistributorAvatar(req, res) {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No image file provided' });
+    if (!(await isMyDistributor(req.user.id, req.params.id))) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    const avatarUrl = req.file.path;
+    await pool.query('UPDATE distributors SET avatar_url = ? WHERE id = ?', [avatarUrl, req.params.id]);
+    res.json({ avatar_url: avatarUrl });
+  } catch (err) {
+    console.error('SD uploadMyDistributorAvatar error:', err.message);
+    res.status(500).json({ error: 'Server error uploading profile photo' });
   }
 }
 
@@ -727,8 +777,10 @@ async function deleteMySchool(req, res) {
 module.exports = {
   // SA
   listSuperDistributors, createSuperDistributor, updateSuperDistributorByAdmin, deleteSuperDistributor,
+  uploadSuperDistributorAvatarByAdmin,
   // SD own
   getMyProfile, updateMyProfile, uploadMyAvatar, changeMyPassword, getDashboard,
   listMyDistributors, createMyDistributor, getMyDistributor, updateMyDistributor, deleteMyDistributor,
+  uploadMyDistributorAvatar,
   listMySchools, addMySchool, updateMySchool, deleteMySchool
 };

@@ -45,13 +45,26 @@ export default function SdDistributorDetail() {
           <InfoRow label="Mobile" value={distributor.mobile || '—'} />
           <InfoRow label="City" value={distributor.city || '—'} />
           <InfoRow label="District" value={distributor.district || '—'} />
+          <InfoRow label="Area of Operation" value={distributor.area_of_operation || '—'} />
           <InfoRow label="Commission Rate" value={`${distributor.commission_rate}%`} />
+          <InfoRow label="PAN Card" value={distributor.pan_number || '—'} />
           <InfoRow label="Status" value={distributor.is_active ? '✅ Active' : '❌ Inactive'} />
         </div>
         {distributor.address && (
           <div style={{ marginTop: 12 }}>
             <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>Address</span>
             <p style={{ marginTop: 4 }}>{distributor.address}</p>
+          </div>
+        )}
+        {(distributor.bank_account_holder || distributor.bank_name || distributor.bank_account_number || distributor.bank_ifsc) && (
+          <div style={{ marginTop: 16 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>Payout Bank Details</span>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16, marginTop: 8 }}>
+              <InfoRow label="Account Holder" value={distributor.bank_account_holder || '—'} />
+              <InfoRow label="Bank Name" value={distributor.bank_name || '—'} />
+              <InfoRow label="Account Number" value={distributor.bank_account_number || '—'} />
+              <InfoRow label="IFSC Code" value={distributor.bank_ifsc || '—'} />
+            </div>
           </div>
         )}
       </div>

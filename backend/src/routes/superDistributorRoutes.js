@@ -29,6 +29,7 @@ router.post('/me/distributors',    authenticate, requireRole('superDistributor')
 );
 router.get('/me/distributors/:id',    authenticate, requireRole('superDistributor'), c.getMyDistributor);
 router.put('/me/distributors/:id',    authenticate, requireRole('superDistributor'), sanitizeBody, c.updateMyDistributor);
+router.put('/me/distributors/:id/avatar', authenticate, requireRole('superDistributor'), uploadAvatar.single('avatar'), c.uploadMyDistributorAvatar);
 router.delete('/me/distributors/:id', authenticate, requireRole('superDistributor'), c.deleteMyDistributor);
 
 // School management under SD
@@ -54,6 +55,7 @@ router.post('/',   authenticate, requireRole('superAdmin'), sanitizeBody,
   c.createSuperDistributor
 );
 router.put('/:id',    authenticate, requireRole('superAdmin'), sanitizeBody, c.updateSuperDistributorByAdmin);
+router.put('/:id/avatar', authenticate, requireRole('superAdmin'), uploadAvatar.single('avatar'), c.uploadSuperDistributorAvatarByAdmin);
 router.delete('/:id', authenticate, requireRole('superAdmin'), c.deleteSuperDistributor);
 
 module.exports = router;
