@@ -15,6 +15,7 @@ router.put('/distributor/:id',   authenticate, requireRole('distributor'), c.upd
 
 // Super Distributor
 router.get('/sd', authenticate, requireRole('superDistributor'), c.listSdCampRequests);
+router.put('/sd/:id', authenticate, requireRole('superDistributor'), c.updateSdCampRequest);
 
 // Super Admin
 router.get('/',    authenticate, requireRole('superAdmin'), c.listAllCampRequests);

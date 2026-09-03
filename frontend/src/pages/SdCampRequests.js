@@ -14,6 +14,10 @@ const STATUS_MAP = {
 export default function SdCampRequests() {
   const [requests, setRequests] = useState([]);
   const [filter, setFilter] = useState('');
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({ attender_name: '', attender_email: '', attender_phone: '', status: '', notes: '' });
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(() => {
     api.get('/camp-requests/sd').then(res => setRequests(res.data.campRequests)).catch(() => {});
@@ -21,12 +25,30 @@ export default function SdCampRequests() {
 
   useEffect(() => { load(); }, [load]);
 
+  function openEdit(r) {
+    setEditing(r);
+    setForm({ attender_name: r.attender_name || '', attender_email: r.attender_email || '', attender_phone: r.attender_phone || '', status: r.status, notes: r.notes || '' });
+    setError('');
+  }
+
+  async function handleSave() {
+    setError('');
+    setSaving(true);
+    try {
+      await api.put(`/camp-requests/sd/${editing.id}`, form);
+      setEditing(null);
+      load();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to update');
+    } finally { setSaving(false); }
+  }
+
   const visible = filter ? requests.filter(r => r.status === filter) : requests;
 
   return (
     <Layout role="superDistributor">
       <div className="page-header">
-        <div><h1 className="page-title">Camp Requests</h1><p className="page-subtitle">Camp requests from your schools and distributors</p></div>
+        <div><h1 className="page-title">Camp Requests</h1><p className="page-subtitle">Review camp requests from your schools and distributors</p></div>
       </div>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
@@ -41,11 +63,11 @@ export default function SdCampRequests() {
         <div className="table-responsive">
           <table className="data-table">
             <thead>
-              <tr><th>School</th><th>Distributor</th><th>Camp Name</th><th>Start</th><th>End</th><th>Camp Attender</th><th>Status</th></tr>
+              <tr><th>School</th><th>Distributor</th><th>Camp Name</th><th>Start</th><th>End</th><th>Camp Attender</th><th>Status</th><th>Actions</th></tr>
             </thead>
             <tbody>
               {visible.length === 0 ? (
-                <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 24 }}>No camp requests found.</td></tr>
+                <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 24 }}>No camp requests found.</td></tr>
               ) : visible.map(r => {
                 const [badgeCls, label] = STATUS_MAP[r.status] || ['badge-warning', r.status];
                 return (
@@ -55,8 +77,13 @@ export default function SdCampRequests() {
                     <td>{r.camp_name}</td>
                     <td>{r.start_date ? new Date(r.start_date).toLocaleDateString('en-IN') : '—'}</td>
                     <td>{r.end_date ? new Date(r.end_date).toLocaleDateString('en-IN') : '—'}</td>
-                    <td>{r.attender_name || '—'}</td>
+                    <td>{r.attender_name || <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>Not set</span>}</td>
                     <td><span className={`badge ${badgeCls}`}>{label}</span></td>
+                    <td>
+                      <button className="btn btn-sm btn-outline" onClick={() => openEdit(r)}>
+                        <i className="fas fa-edit" style={{ marginRight: 4 }}></i>Update
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -64,6 +91,55 @@ export default function SdCampRequests() {
           </table>
         </div>
       </div>
+
+      {editing && (
+        <div className="modal-overlay show" style={{ display: 'flex' }} onClick={() => setEditing(null)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3><i className="fas fa-edit" style={{ color: 'var(--primary)', marginRight: 8 }}></i>Update Camp Request</h3>
+              <button className="modal-close" onClick={() => setEditing(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              {error && <div style={{ background: '#FEE2E2', color: 'var(--danger)', padding: 10, borderRadius: 8, fontSize: 13, marginBottom: 14 }}>{error}</div>}
+              <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13 }}>
+                <strong>{editing.camp_name}</strong> — {editing.school_name}
+              </div>
+              <div className="form-row form-row-3">
+                <F label="Attender Name" value={form.attender_name} onChange={v => setForm(p => ({ ...p, attender_name: v }))} />
+                <F label="Attender Email" value={form.attender_email} onChange={v => setForm(p => ({ ...p, attender_email: v }))} />
+                <F label="Attender Phone" value={form.attender_phone} onChange={v => setForm(p => ({ ...p, attender_phone: v }))} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Mark as Under Review</label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={form.status === 'under_review'} onChange={e => setForm(p => ({ ...p, status: e.target.checked ? 'under_review' : p.status }))} />
+                  Set status to "Under Review"
+                </label>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>
+                  Final confirmation is done by the Super Admin once the camp is scheduled.
+                </p>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Notes</label>
+                <textarea className="form-control" rows={2} value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setEditing(null)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
+  );
+}
+
+function F({ label, value, onChange }) {
+  return (
+    <div className="form-group">
+      <label className="form-label">{label}</label>
+      <input type="text" className="form-control" value={value || ''} onChange={e => onChange(e.target.value)} />
+    </div>
   );
 }

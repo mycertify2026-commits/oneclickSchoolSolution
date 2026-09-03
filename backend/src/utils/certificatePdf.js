@@ -31,11 +31,28 @@ function canDraw(v) {
 
 function fmtDate(d) {
   if (!d) return '';
+  // A plain "YYYY-MM-DD" string (an HTML date input, or a DB DATE column
+  // that comes back as a string) must never be round-tripped through
+  // `new Date(string)` — that parses it as UTC midnight, and reading it
+  // back with the server's LOCAL getters can roll it back a day depending
+  // on server timezone. Read the calendar digits directly instead.
+  if (typeof d === 'string') {
+    const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+  }
   const dt = new Date(d);
   if (isNaN(dt.getTime())) return String(d);
-  const dd = String(dt.getDate()).padStart(2, '0');
-  const mm = String(dt.getMonth() + 1).padStart(2, '0');
-  return `${dd}/${mm}/${dt.getFullYear()}`;
+  // A DATE-type column that already arrived as a Date object (both mysql2
+  // and pg parse it that way) is pinned to UTC midnight — same rollback
+  // risk as above, so read it with UTC getters. A genuine instant (e.g.
+  // `new Date()` for "today's date" on a footer) essentially never lands
+  // exactly on UTC midnight, so this tells the two apart without needing
+  // to know the server's timezone at all.
+  const isUtcMidnight = dt.getUTCHours() === 0 && dt.getUTCMinutes() === 0 && dt.getUTCSeconds() === 0 && dt.getUTCMilliseconds() === 0;
+  const dd = String(isUtcMidnight ? dt.getUTCDate() : dt.getDate()).padStart(2, '0');
+  const mm = String((isUtcMidnight ? dt.getUTCMonth() : dt.getMonth()) + 1).padStart(2, '0');
+  const yyyy = isUtcMidnight ? dt.getUTCFullYear() : dt.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
 }
 
 const NUM_WORDS = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten',
@@ -53,11 +70,23 @@ function numToWords(n) {
 
 function dobInWords(dobStr) {
   if (!dobStr) return '';
+  // Same UTC-midnight vs local-instant distinction as fmtDate — see there
+  // for why this can't just always use one or the other.
+  if (typeof dobStr === 'string') {
+    const m = dobStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) {
+      const day = numToWords(parseInt(m[3], 10));
+      const month = MONTHS[parseInt(m[2], 10) - 1];
+      const year = numToWords(parseInt(m[1], 10));
+      return `${day} ${month} ${year}`;
+    }
+  }
   const dt = new Date(dobStr);
   if (isNaN(dt.getTime())) return '';
-  const day = numToWords(dt.getDate());
-  const month = MONTHS[dt.getMonth()];
-  const year = numToWords(dt.getFullYear());
+  const isUtcMidnight = dt.getUTCHours() === 0 && dt.getUTCMinutes() === 0 && dt.getUTCSeconds() === 0 && dt.getUTCMilliseconds() === 0;
+  const day = numToWords(isUtcMidnight ? dt.getUTCDate() : dt.getDate());
+  const month = MONTHS[isUtcMidnight ? dt.getUTCMonth() : dt.getMonth()];
+  const year = numToWords(isUtcMidnight ? dt.getUTCFullYear() : dt.getFullYear());
   return `${day} ${month} ${year}`;
 }
 
@@ -356,17 +385,23 @@ async function generateLcPdf({
 
       y = drawTitleBanner(doc, y, 'School leaving certificate');
 
-      // ── GR / Saral / Aadhaar bar ──
+      // ── U-DISE / Roll No. / G.R. No. / Saral ID bar ──
       const contentWidth = doc.page.width - 92;
-      const barW = contentWidth / 3;
-      doc.font('Helvetica').fontSize(8.5).fillColor(TEXT);
-      doc.text(`G.R. no.: ${sentenceCase(student.register_number, '-')}`,         46,           y, { width: barW });
-      doc.text(`Saral id: ${sentenceCase(student.serial_id, '-')}`,               46 + barW,    y, { width: barW });
-      doc.text(`Aadhar: ${student.aadhaar ? 'XXXX-XXXX-' + String(student.aadhaar).slice(-4) : '-'}`, 46 + 2 * barW, y, { width: barW });
-      y += 20;
+      const idBarSeg = contentWidth / 4;
+      doc.font('Helvetica-Bold').fontSize(9.5).fillColor(TEXT);
+      doc.text(`U-DISE: ${sentenceCase(school.udise_code, '-')}`,       46,               y, { width: idBarSeg });
+      doc.text(`Roll No.: ${sentenceCase(student.roll_number, '-')}`,   46 + idBarSeg,     y, { width: idBarSeg });
+      doc.text(`G.R. No.: ${sentenceCase(student.register_number, '-')}`, 46 + 2 * idBarSeg, y, { width: idBarSeg });
+      doc.text(`Saral ID: ${sentenceCase(student.serial_id, '-')}`,     46 + 3 * idBarSeg, y, { width: idBarSeg });
+      y += 16;
+      doc.font('Helvetica').fontSize(7.5).fillColor(GREY)
+        .text(`Aadhar: ${student.aadhaar ? 'XXXX-XXXX-' + String(student.aadhaar).slice(-4) : '-'}`, 46, y, { width: contentWidth });
+      y += 14;
 
       // ── Data rows — full content width, compact 18 pt height ──
-      const leavingDate = dateOfLeaving ? fmtDate(new Date(dateOfLeaving)) : '';
+      // Passed straight to fmtDate (not wrapped in `new Date()` first) so a
+      // plain "YYYY-MM-DD" string never goes through UTC-midnight parsing.
+      const leavingDate = dateOfLeaving ? fmtDate(dateOfLeaving) : '';
 
       const rows = [
         ['Name of student in full',        safe(student.full_name)],
@@ -381,9 +416,9 @@ async function generateLcPdf({
         ['Progress',                       'Good'],
         ['Conduct',                        'Good'],
         ['Date of Leaving',                leavingDate],
-        ['Class in which studying',        `${safe(student.current_standard || student.admission_standard)} standard (${safe(student.current_division || student.admission_division)})`],
         ['Date of admission (since when)', fmtDate(student.admission_date)],
         ['Reason for leaving',             safe(reasonForLeaving, '')],
+        ['Class in which studying',        `${safe(student.current_standard || student.admission_standard)} standard (${safe(student.current_division || student.admission_division)})`],
         ['Remarks',                        safe(remarks, '')],
       ];
 
@@ -671,14 +706,14 @@ function renderBonafideCopy(doc, ctx, qrBuffer, yOffset, copyLabel) {
 // drawn first; its Student Copy heading and decorative border are already part
 // of the PNG and must not be recreated in PDF text.
 function renderSingleBonafide(doc, ctx, qrBuffer) {
-  const { school, student, certificate, purpose, photoPath, signaturePath, stampPath, templatePath } = ctx;
+  const { school, student, certificate, purpose, photoPath, logoPath, signaturePath, stampPath, templatePath } = ctx;
   const W = doc.page.width;
   const H = doc.page.height;
-  // Default accent colour when no PNG border template is uploaded — a
-  // neutral slate, not the previous orange/gold.
-  const gold = '#7A8CA3';
-  const black = '#111827';
-  const muted = '#374151';
+  // Same NAVY/GOLD/TEXT/GREY palette as the LC certificate (drawHeader /
+  // drawTitleBanner) so the two certificates read as one professional
+  // system rather than two different designs.
+  const black = TEXT;
+  const muted = GREY;
   // Keep the live content inside an even inset on every side of the frame.
   const left = 70;
   const right = W - 70;
@@ -701,26 +736,44 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
   const textX = left + sideW;
   const sideX = right - sideW;
 
+  // Logo, top-left of the text column — matches LC's header, which always
+  // leads with the school logo.
+  const logoSz = 34;
+  if (canDraw(logoPath)) {
+    try { doc.image(logoPath, textX, 68, { width: logoSz, height: logoSz }); } catch (e) {}
+  } else {
+    doc.save().circle(textX + logoSz / 2, 68 + logoSz / 2, logoSz / 2).lineWidth(1).strokeColor(NAVY).stroke().restore();
+  }
+
   // School identity sits below the artwork's built-in Student Copy heading.
-  doc.fillColor(gold).font('Helvetica-Bold').fontSize(16)
-    .text(safe(school.name, 'SCHOOL NAME').toUpperCase(), textX, 78, {
+  doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(8)
+    .text('MAHARASHTRA STATE EDUCATION BOARD', textX, 71, {
+      width: textW, align: 'center', lineBreak: false, ellipsis: true
+    });
+  doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(14)
+    .text(safe(school.name, 'SCHOOL NAME').toUpperCase(), textX, 84, {
       width: textW, align: 'center', lineBreak: false, ellipsis: true
     });
   doc.fillColor(black).font('Helvetica').fontSize(7.5)
     .text(
       `Taluka: ${safe(school.taluka, '-')}  |  District: ${safe(school.district, '-')}`,
-      textX, 99, { width: textW, align: 'center', lineBreak: false, ellipsis: true }
+      textX, 101, { width: textW, align: 'center', lineBreak: false, ellipsis: true }
     );
   doc.fillColor(muted).fontSize(7)
     .text(
       `U-DISE: ${safe(school.udise_code, '-')}  |  Recognized No.: ${safe(school.recog_no, '-')}`,
-      textX, 112, { width: textW, align: 'center', lineBreak: false, ellipsis: true }
+      textX, 113, { width: textW, align: 'center', lineBreak: false, ellipsis: true }
     );
 
-  doc.save().moveTo(textX + 12, 127).lineTo(textX + textW - 12, 127)
-    .lineWidth(0.8).strokeColor(gold).stroke().restore();
-  doc.fillColor(gold).font('Helvetica-Bold').fontSize(13)
-    .text('BONAFIDE CERTIFICATE', textX, 135, { width: textW, align: 'center', lineBreak: false });
+  // Title banner — same solid NAVY / GOLD-border style as the LC certificate's
+  // drawTitleBanner, instead of the previous plain colored text.
+  const bannerY = 128;
+  const bannerH = 17;
+  doc.save().roundedRect(textX, bannerY, textW, bannerH, 4).fillColor(NAVY).fill()
+    .lineWidth(0.8).strokeColor(GOLD).roundedRect(textX, bannerY, textW, bannerH, 4).stroke()
+    .restore();
+  doc.fillColor('#fff').font('Helvetica-Bold').fontSize(11)
+    .text('BONAFIDE CERTIFICATE', textX, bannerY + 4, { width: textW, align: 'center', lineBreak: false });
 
   const heShe = student.gender === 'Male' ? 'He' : student.gender === 'Female' ? 'She' : 'He/She';
   const hisHer = student.gender === 'Male' ? 'His' : student.gender === 'Female' ? 'Her' : 'His/Her';

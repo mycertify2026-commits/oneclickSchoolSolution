@@ -226,6 +226,45 @@ async function listSdCampRequests(req, res) {
   }
 }
 
+// Camp requests from schools/distributors under this SD's hierarchy —
+// mirrors updateDistributorCampRequest's shape and its 'under_review' cap
+// (same tier of authority a Distributor already has one level down). Final
+// confirm/reject stays Super-Admin-only, same as the wallet-approval
+// pattern elsewhere in this app: it triggers an external confirmation
+// email and is intentionally centralized.
+async function updateSdCampRequest(req, res) {
+  try {
+    const sdId = req.user.id;
+    const [rows] = await pool.query(
+      `SELECT cr.* FROM camp_requests cr
+       LEFT JOIN distributors d ON d.id = cr.distributor_id
+       WHERE cr.id = ? AND (cr.super_distributor_id = ? OR d.super_distributor_id = ?)`,
+      [req.params.id, sdId, sdId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Camp request not found' });
+
+    const { attender_name, attender_email, attender_phone, status, notes } = req.body;
+    const allowedStatuses = ['under_review'];
+    const updates = ['updated_at = NOW()'];
+    const values = [];
+
+    if (attender_name !== undefined) { updates.push('attender_name = ?'); values.push(attender_name); }
+    if (attender_email !== undefined) { updates.push('attender_email = ?'); values.push(attender_email); }
+    if (attender_phone !== undefined) { updates.push('attender_phone = ?'); values.push(attender_phone); }
+    if (notes !== undefined) { updates.push('notes = ?'); values.push(notes); }
+    if (status !== undefined && allowedStatuses.includes(status)) { updates.push('status = ?'); values.push(status); }
+
+    values.push(req.params.id);
+    await pool.query(`UPDATE camp_requests SET ${updates.join(', ')} WHERE id = ?`, values);
+
+    const [updated] = await pool.query('SELECT * FROM camp_requests WHERE id = ?', [req.params.id]);
+    res.json({ campRequest: updated[0] });
+  } catch (err) {
+    console.error('updateSdCampRequest error:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+}
+
 // ── SUPER ADMIN ─────────────────────────────────────────────────────────────
 
 async function listAllCampRequests(req, res) {
@@ -290,6 +329,6 @@ async function updateCampRequestByAdmin(req, res) {
 module.exports = {
   listMyCampRequests, createCampRequest, cancelMyCampRequest,
   listDistributorCampRequests, updateDistributorCampRequest,
-  listSdCampRequests,
+  listSdCampRequests, updateSdCampRequest,
   listAllCampRequests, updateCampRequestByAdmin,
 };
