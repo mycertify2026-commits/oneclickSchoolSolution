@@ -13,7 +13,8 @@ function normaliseColor(val) {
   return m ? m[0] : val;
 }
 
-const BLANK = { name: '', udise_code: '', village: '', city: '', district: '', taluka: '', pin_code: '', phone: '', email: '', medium: '', board: '', principal_name: '', recog_no: '' };
+const BLANK = { name: '', udise_code: '', village: '', city: '', district: '', taluka: '', pin_code: '', phone: '', email: '', medium: '', board: '', principal_name: '', recog_no: '', lc_signature_label: '', bonafide_signature_label: '' };
+const SIGNATURE_DESIGNATION_PRESETS = ['Principal', 'Mukhyadhyapak', 'Headmaster'];
 const ID_CARD_PRESET_COLORS = [
   '#1a6fd4','#1557b0','#059669','#047857','#7c3aed','#5b21b6',
   '#dc2626','#b91c1c','#0891b2','#0e7490','#1f2937','#d97706',
@@ -43,7 +44,8 @@ const ID_CARD_BLANK = {
   id_card_show_register_number: true, id_card_show_aadhaar: true, id_card_show_dob: true,
   id_card_show_address: false, id_card_show_emergency_contact: true,
   id_card_border_color: '', id_card_bg_opacity: 0.15, id_card_show_feature_strip: true,
-  id_card_feature_icons: DEFAULT_FEATURE_ICONS
+  id_card_feature_icons: DEFAULT_FEATURE_ICONS,
+  id_card_orientation: 'horizontal', idcard_signature_label: ''
 };
 
 export default function SchoolSettings() {
@@ -88,7 +90,9 @@ export default function SchoolSettings() {
       id_card_bg_opacity: res.data.school.id_card_bg_opacity !== null && res.data.school.id_card_bg_opacity !== undefined
         ? Number(res.data.school.id_card_bg_opacity) : ID_CARD_BLANK.id_card_bg_opacity,
       id_card_show_feature_strip: Boolean(res.data.school.id_card_show_feature_strip ?? true),
-      id_card_feature_icons: parseFeatureIcons(res.data.school.id_card_feature_icons)
+      id_card_feature_icons: parseFeatureIcons(res.data.school.id_card_feature_icons),
+      id_card_orientation: res.data.school.id_card_orientation || ID_CARD_BLANK.id_card_orientation,
+      idcard_signature_label: res.data.school.idcard_signature_label || ''
     });
   }, []);
   const loadWallet = useCallback(async () => {
@@ -328,6 +332,28 @@ export default function SchoolSettings() {
                 <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={handleSaveInfo} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
               </div>
 
+              <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+                <h4 style={{ marginBottom: 4 }}>Signature Designation</h4>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
+                  The title shown under the signature line — set separately per document. ID Card's designation is set in ID Card Settings.
+                </p>
+                <div className="form-grid-2">
+                  <SignatureDesignationField
+                    label="Leaving Certificate (LC)"
+                    value={form.lc_signature_label}
+                    defaultLabel="Head master"
+                    onChange={v => handleChange('lc_signature_label', v)}
+                  />
+                  <SignatureDesignationField
+                    label="Bonafide Certificate"
+                    value={form.bonafide_signature_label}
+                    defaultLabel="Principal"
+                    onChange={v => handleChange('bonafide_signature_label', v)}
+                  />
+                </div>
+                <button className="btn btn-primary" style={{ marginTop: 4 }} onClick={handleSaveInfo} disabled={saving}>{saving ? 'Saving...' : 'Save Designations'}</button>
+              </div>
+
               <div className="card" style={{ padding: 20 }}>
                 <h4 style={{ marginBottom: 6 }}>Certificate Header Text</h4>
                 <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>Additional text shown below the school name and logo (e.g. recognition number, board information).</p>
@@ -349,6 +375,32 @@ export default function SchoolSettings() {
               <div className="card">
                 <div className="card-header"><h3 className="card-title"><i className="fas fa-sliders-h"></i> ID Card Settings</h3></div>
                 <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div className="form-group">
+                    <label className="form-label">Card Orientation</label>
+                    <div style={{ display: 'flex', gap: 16 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
+                        <input type="radio" name="idCardOrientation" value="horizontal"
+                          checked={idCardForm.id_card_orientation === 'horizontal'}
+                          onChange={() => setIdCardForm(p => ({ ...p, id_card_orientation: 'horizontal' }))} />
+                        Horizontal
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
+                        <input type="radio" name="idCardOrientation" value="vertical"
+                          checked={idCardForm.id_card_orientation === 'vertical'}
+                          onChange={() => setIdCardForm(p => ({ ...p, id_card_orientation: 'vertical' }))} />
+                        Vertical
+                      </label>
+                    </div>
+                    <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 6 }}>
+                      Controls the layout and proportions of every ID card generated for this school. The preview on the right updates to match.
+                    </p>
+                  </div>
+                  <SignatureDesignationField
+                    label="ID Card Signature Designation"
+                    value={idCardForm.idcard_signature_label}
+                    defaultLabel="Head Master"
+                    onChange={v => setIdCardForm(p => ({ ...p, idcard_signature_label: v }))}
+                  />
                   <div className="form-group">
                     <label className="form-label">Primary Color</label>
                     <ColorPicker
@@ -433,9 +485,13 @@ export default function SchoolSettings() {
               </div>
 
               <div>
-                <div style={{ marginBottom: 12, fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>Live Preview (Landscape) — exact same PDF a real card uses</div>
+                <div style={{ marginBottom: 12, fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>
+                  Live Preview ({idCardForm.id_card_orientation === 'vertical' ? 'Vertical' : 'Horizontal'}) — exact same PDF a real card uses
+                </div>
                 <IdCardLivePreview formValues={idCardForm} refreshKey={bgVersion} />
-                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 8 }}>Standard CR80 landscape card size (3.37" x 2.125") — unaffected by these settings.</div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 8 }}>
+                  Standard CR80 card size (3.37" x 2.125"), {idCardForm.id_card_orientation === 'vertical' ? 'rotated to portrait' : 'landscape'} per the orientation selected above.
+                </div>
               </div>
             </div>
           )}
@@ -588,6 +644,37 @@ function Field({ label, value, onChange, type = 'text' }) {
     <div className="form-group">
       <label className="form-label">{label}</label>
       <input type={type} className="form-control" value={value || ''} onChange={e => onChange(e.target.value)} />
+    </div>
+  );
+}
+
+// Dropdown of Principal / Mukhyadhyapak / Headmaster / Other — "Other" shows
+// a free-text input. The stored value is always just the plain label text
+// (e.g. "Mukhyadhyapak"), so a value that isn't one of the presets is
+// treated as an existing custom "Other" entry rather than losing it.
+function SignatureDesignationField({ label, value, defaultLabel, onChange }) {
+  const isPreset = SIGNATURE_DESIGNATION_PRESETS.includes(value);
+  const isOther = !!value && !isPreset;
+  const selectValue = isOther ? 'Other' : (value || '');
+
+  return (
+    <div className="form-group">
+      <label className="form-label">{label}</label>
+      <select className="form-control" value={selectValue} onChange={e => {
+        const v = e.target.value;
+        onChange(v === 'Other' ? (isOther ? value : '') : v);
+      }}>
+        <option value="">{`Default (${defaultLabel})`}</option>
+        {SIGNATURE_DESIGNATION_PRESETS.map(p => <option key={p} value={p}>{p}</option>)}
+        <option value="Other">Other</option>
+      </select>
+      {isOther && (
+        <input type="text" className="form-control" style={{ marginTop: 8 }} value={value}
+          placeholder="Enter designation" onChange={e => onChange(e.target.value)} />
+      )}
+      <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 6 }}>
+        Appears on the signature line of the generated document in place of "{defaultLabel}".
+      </p>
     </div>
   );
 }

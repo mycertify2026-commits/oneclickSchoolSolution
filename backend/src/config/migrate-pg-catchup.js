@@ -330,6 +330,13 @@ async function migrate() {
     await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS class_to VARCHAR(20)`);
     console.log('  + schools.class_from / class_to ensured');
 
+    console.log('\n16. schools — ID card orientation + per-document signature designation');
+    await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS id_card_orientation VARCHAR(10) NOT NULL DEFAULT 'horizontal'`);
+    await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS lc_signature_label VARCHAR(50)`);
+    await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS bonafide_signature_label VARCHAR(50)`);
+    await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS idcard_signature_label VARCHAR(50)`);
+    console.log('  + schools.id_card_orientation / lc_signature_label / bonafide_signature_label / idcard_signature_label ensured');
+
     console.log('\nPostgreSQL catch-up migration completed successfully.');
   } catch (err) {
     console.error('Migration failed:', err.message);

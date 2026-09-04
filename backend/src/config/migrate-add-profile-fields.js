@@ -39,6 +39,13 @@ const SCHOOL_CLASS_RANGE_COLUMNS = [
   { name: 'class_to', definition: 'VARCHAR(20)' },
 ];
 
+const SCHOOL_ID_CARD_AND_SIGNATURE_COLUMNS = [
+  { name: 'id_card_orientation', definition: "VARCHAR(10) NOT NULL DEFAULT 'horizontal'" },
+  { name: 'lc_signature_label', definition: 'VARCHAR(50)' },
+  { name: 'bonafide_signature_label', definition: 'VARCHAR(50)' },
+  { name: 'idcard_signature_label', definition: 'VARCHAR(50)' },
+];
+
 async function migrate() {
   const connection = await mysql.createConnection({
     host: process.env.DB_HOST,
@@ -55,6 +62,8 @@ async function migrate() {
     await addMissingColumns(connection, dbName, 'distributors', DISTRIBUTOR_PAYOUT_COLUMNS);
     console.log('\nschools (class range):');
     await addMissingColumns(connection, dbName, 'schools', SCHOOL_CLASS_RANGE_COLUMNS);
+    console.log('\nschools (ID card orientation + signature designation):');
+    await addMissingColumns(connection, dbName, 'schools', SCHOOL_ID_CARD_AND_SIGNATURE_COLUMNS);
     console.log('\nProfile-fields migration completed successfully.');
   } catch (err) {
     console.error('Profile-fields migration failed:', err.message);

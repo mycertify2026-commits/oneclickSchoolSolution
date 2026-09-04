@@ -224,7 +224,7 @@ async function getMySchool(req, res) {
   }
 }
 
-const SCHOOL_EDITABLE_FIELDS = ['name', 'udise_code', 'village', 'city', 'district', 'taluka', 'pin_code', 'phone', 'email', 'medium', 'board', 'cert_header', 'cert_footer', 'principal_name', 'recog_no', 'class_from', 'class_to'];
+const SCHOOL_EDITABLE_FIELDS = ['name', 'udise_code', 'village', 'city', 'district', 'taluka', 'pin_code', 'phone', 'email', 'medium', 'board', 'cert_header', 'cert_footer', 'principal_name', 'recog_no', 'class_from', 'class_to', 'lc_signature_label', 'bonafide_signature_label'];
 
 // PUT /api/schools/me (schoolAdmin) - update profile + upload logo/signature/stamp + cert header/footer text
 async function updateMySchool(req, res) {
@@ -273,8 +273,10 @@ async function updateMySchool(req, res) {
 const ID_CARD_DESIGN_FIELDS = [
   'id_card_primary_color', 'id_card_school_name', 'id_card_subtitle', 'id_card_footer_text',
   'id_card_show_register_number', 'id_card_show_aadhaar', 'id_card_show_dob', 'id_card_show_address', 'id_card_show_emergency_contact',
-  'id_card_border_color', 'id_card_bg_opacity', 'id_card_show_feature_strip', 'id_card_feature_icons'
+  'id_card_border_color', 'id_card_bg_opacity', 'id_card_show_feature_strip', 'id_card_feature_icons',
+  'id_card_orientation', 'idcard_signature_label'
 ];
+const VALID_ID_CARD_ORIENTATIONS = ['horizontal', 'vertical'];
 
 // Validates/normalizes the 5-slot per-icon feature-strip config so a
 // malformed value can never reach the database or the PDF renderer.
@@ -380,6 +382,9 @@ async function updateIdCardDesign(req, res) {
         const normalized = normalizeFeatureIcons(req.body[field]);
         if (normalized === null) { updates.pop(); return; } // skip malformed value rather than corrupt the column
         values.push(normalized);
+      } else if (field === 'id_card_orientation') {
+        if (!VALID_ID_CARD_ORIENTATIONS.includes(req.body[field])) { updates.pop(); return; }
+        values.push(req.body[field]);
       } else {
         values.push(req.body[field]);
       }

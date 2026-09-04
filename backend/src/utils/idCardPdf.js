@@ -109,11 +109,15 @@ async function generateIdCardPdf({ school, student, certificate, outputPath, pho
     isCurrent: i + 1 === admStd,
   }));
 
+  const isVertical = school.id_card_orientation === 'vertical';
+
   return new Promise((resolve, reject) => {
     try {
        // Reference image is 631 × 426 (1.481:1). Keep a practical PDF size
-       // while preserving that exact landscape proportion.
-       const W = 242, H = 163.4;
+       // while preserving that exact landscape proportion. Vertical is the
+       // same physical CR80 card stock rotated — width/height swapped.
+       const W = isVertical ? 163.4 : 242;
+       const H = isVertical ? 242 : 163.4;
       const MARGIN = 3;
 
       const doc = new PDFDocument({ size: [W, H], margin: 0, autoFirstPage: true });
@@ -127,7 +131,9 @@ async function generateIdCardPdf({ school, student, certificate, outputPath, pho
        const showFeatureStrip = school.id_card_show_feature_strip !== 0 && school.id_card_show_feature_strip !== false;
        const featureIcons = parseFeatureIcons(school.id_card_feature_icons);
 
-       drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, student, certificate, photoPath, logoPath, signaturePath, stampPath, qrBuffer, bgBuf, bgOpacity, borderColor, showFeatureStrip, featureIcons, GOLD, ORANGE, NAVY, GREY, TEXT, WHITE });
+       const drawArgs = { W, H, MARGIN, headerColor, accentColor, school, student, certificate, photoPath, logoPath, signaturePath, stampPath, qrBuffer, bgBuf, bgOpacity, borderColor, showFeatureStrip, featureIcons, GOLD, ORANGE, NAVY, GREY, TEXT, WHITE };
+       if (isVertical) drawFrontVertical(doc, drawArgs);
+       else drawFront(doc, drawArgs);
 
       doc.end();
       stream.on('finish', () => resolve(outputPath));
@@ -245,6 +251,7 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
     ['Blood Group', safe(student.blood_group)],
     ["Father's Name", safe(student.father_name)],
     ['Valid Till', safe(student.id_card_valid_till || ((student.current_standard || student.admission_standard) ? `${student.current_standard || student.admission_standard}th Standard` : ''))],
+    ['Authorized by', safe(school.idcard_signature_label, 'Head Master')],
   ];
   fields.forEach(([label, value], index) => {
     const y = 65 + index * 9;
@@ -316,6 +323,116 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   // Single clean border line (the old two-tone gray+gold frame is gone,
   // per explicit request to remove the yellow border) - color follows the
   // School Admin's choice, defaulting to a neutral gray.
+  doc.save().rect(1, CARD_TOP, W - 2, H - CARD_TOP - 1).lineWidth(1.2).strokeColor(borderColor || '#d1d5db').stroke().restore();
+}
+
+// ── FRONT — VERTICAL (portrait) ─────────────────────────────────────────────
+// Same physical CR80 card, rotated: a top identity band, a centered photo,
+// full-width label:value rows (more breathing room than the landscape
+// two-column layout), then the same UID strip and feature strip conventions
+// as the landscape design, just re-flowed for a narrower width.
+function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school, student, certificate, photoPath, logoPath, signaturePath, stampPath, qrBuffer, bgBuf, bgOpacity, borderColor, showFeatureStrip, featureIcons, GREY, TEXT, WHITE }) {
+  const FTR_H = 24, UID_H = 14;
+  const UID_Y = H - FTR_H - UID_H;
+  const CARD_TOP = 8;
+  const HDR_H = 50;
+
+  doc.rect(0, 0, W, H).fillColor(WHITE).fill();
+
+  // ── Header band: logo | school name (wraps to 2 lines) | QR ──────────────
+  doc.save().rect(0, CARD_TOP, W, HDR_H).fillColor(headerColor).fill().restore();
+
+  const logoSz = 26;
+  if (canDraw(logoPath)) {
+    try { doc.image(logoPath, 10, CARD_TOP + 12, { width: logoSz, height: logoSz }); } catch (e) {}
+  }
+
+  const qrSz = 26;
+  const qrX = W - 8 - qrSz, qrY = CARD_TOP + 10;
+  doc.save().roundedRect(qrX - 2, qrY - 2, qrSz + 4, qrSz + 4, 2).fillColor(WHITE).fill().restore();
+  if (qrBuffer) {
+    try { doc.image(qrBuffer, qrX, qrY, { width: qrSz, height: qrSz }); } catch (e) {}
+  }
+
+  const nameX = 10 + logoSz + 6;
+  const nameW = qrX - 6 - nameX;
+  const schoolName = safe(school.id_card_school_name || school.name, 'School name').toUpperCase();
+  const nameLines = splitSchoolName(doc, schoolName, nameW, 'Helvetica-Bold', 7.2);
+  nameLines.slice(0, 2).forEach((line, index) => {
+    doc.font('Helvetica-Bold').fontSize(7.2).fillColor(WHITE)
+      .text(line, nameX, CARD_TOP + 10 + index * 8.4, { width: nameW, align: 'center', lineBreak: false });
+  });
+  const subtitleValue = safe(school.id_card_subtitle) || (school.recog_no ? `Recog. No. ${school.recog_no}` : '');
+  if (subtitleValue) {
+    const subtitle = fitSingleLine(doc, subtitleValue, nameW, 'Helvetica', 5);
+    doc.font('Helvetica').fontSize(5).fillColor('#dbe4f5')
+      .text(subtitle, nameX, CARD_TOP + 10 + nameLines.slice(0, 2).length * 8.4 + 1, { width: nameW, align: 'center', lineBreak: false });
+  }
+
+  // ── Student photo, centered ───────────────────────────────────────────────
+  const PH_W = 60, PH_H = 64, PH_X = (W - PH_W) / 2, PH_Y = CARD_TOP + HDR_H + 8;
+  doc.save().roundedRect(PH_X, PH_Y, PH_W, PH_H, 2).lineWidth(0.8).strokeColor(headerColor).stroke().restore();
+  if (canDraw(photoPath)) {
+    try { doc.image(photoPath, PH_X + 1, PH_Y + 1, { width: PH_W - 2, height: PH_H - 2 }); }
+    catch (e) { drawPhotoPlaceholder(doc, PH_X, PH_Y, PH_W, PH_H, GREY); }
+  } else {
+    drawPhotoPlaceholder(doc, PH_X, PH_Y, PH_W, PH_H, GREY);
+  }
+
+  // ── Full-width label:value rows ───────────────────────────────────────────
+  const FX = 12, LABEL_W = 46, VALUE_X = FX + LABEL_W + 4;
+  const fieldWidth = W - VALUE_X - 10;
+  const fields = [
+    ['Student Name', safe(student.full_name)],
+    ['GR No.', safe(student.gr_number || student.register_number)],
+    ['Date of Birth', fmtDate(student.dob)],
+    ['Blood Group', safe(student.blood_group)],
+    ["Father's Name", safe(student.father_name)],
+    ['Valid Till', safe(student.id_card_valid_till || ((student.current_standard || student.admission_standard) ? `${student.current_standard || student.admission_standard}th Standard` : ''))],
+    ['Authorized by', safe(school.idcard_signature_label, 'Head Master')],
+  ];
+  const rowY0 = PH_Y + PH_H + 8;
+  fields.forEach(([label, value], index) => {
+    const y = rowY0 + index * 9;
+    doc.font('Helvetica').fontSize(6.4).fillColor(TEXT)
+      .text(label, FX, y, { width: LABEL_W, lineBreak: false, ellipsis: true });
+    doc.font('Helvetica').fontSize(6.4).fillColor(TEXT)
+      .text(':', FX + LABEL_W - 1, y, { width: 4, lineBreak: false });
+    const valueText = fitSingleLine(doc, value || '—', fieldWidth, 'Helvetica-Bold', 6.4);
+    doc.font('Helvetica-Bold').fontSize(6.4).fillColor(TEXT)
+      .text(valueText, VALUE_X, y, { width: fieldWidth, lineBreak: false });
+  });
+
+  // ── Student UID strip ──────────────────────────────────────────────────────
+  doc.rect(0, UID_Y, W, UID_H).fillColor(headerColor).fill();
+  const uid = safe(student.serial_id || certificate.serial_number || '');
+  const uidLabel = 'Student UID : ';
+  doc.font('Helvetica-Bold').fontSize(6.5).fillColor('#f6c744').text(uidLabel, 8, UID_Y + 4, { lineBreak: false, continued: true });
+  const uidValueW = W - 8 - doc.widthOfString(uidLabel) - 8;
+  const uidText = fitSingleLine(doc, uid, uidValueW, 'Helvetica-Bold', 6.5);
+  doc.font('Helvetica-Bold').fillColor(WHITE).text(uidText, { lineBreak: false });
+
+  // ── Feature strip ──────────────────────────────────────────────────────────
+  const featureY = UID_Y + UID_H;
+  doc.rect(0, featureY, W, FTR_H).fillColor(WHITE).fill();
+  const features = showFeatureStrip ? featureIcons.filter(f => f.visible !== false) : [];
+  const featureW = W / (features.length || 1);
+  features.forEach((feature, index) => {
+    const x = index * featureW;
+    if (index > 0) {
+      doc.save().moveTo(x, featureY + 4).lineTo(x, H - 4).lineWidth(0.3).strokeColor('#e5e7eb').stroke().restore();
+    }
+    drawFeatureIcon(doc, feature.key, x + featureW / 2, featureY + 7, headerColor);
+    if (feature.caption1) {
+      doc.font('Helvetica-Bold').fontSize(3.2).fillColor(TEXT)
+        .text(feature.caption1, x + 1, featureY + 13, { width: featureW - 2, align: 'center', lineBreak: false });
+    }
+    if (feature.caption2) {
+      doc.font('Helvetica-Bold').fontSize(2.9).fillColor(TEXT)
+        .text(feature.caption2, x + 1, featureY + 17, { width: featureW - 2, align: 'center', lineBreak: false });
+    }
+  });
+
   doc.save().rect(1, CARD_TOP, W - 2, H - CARD_TOP - 1).lineWidth(1.2).strokeColor(borderColor || '#d1d5db').stroke().restore();
 }
 

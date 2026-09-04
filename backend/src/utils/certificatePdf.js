@@ -459,17 +459,21 @@ async function generateLcPdf({
       doc.moveTo(C3, LINE_Y).lineTo(C3 + C3W - 4, LINE_Y).lineWidth(0.7).strokeColor('#999').stroke();
 
       doc.font('Helvetica').fontSize(9).fillColor(TEXT).text('Check by / prepared by', 46, LINE_Y + 5);
-      // Principal name in brackets ABOVE the "HEAD MASTER" label
+      // Principal name in brackets ABOVE the designation label — the label
+      // text itself is the school's own choice (Principal / Mukhyadhyapak /
+      // Headmaster / a custom title), set in School Settings > Certificate
+      // Header, and defaults to "Head master" only when unset.
+      const lcSignatureLabel = safe(school.lc_signature_label, 'Head master');
       if (school.principal_name) {
         doc.font('Helvetica-Bold').fontSize(8).fillColor(TEXT)
           .text(`(${sentenceCase(school.principal_name)})`, C3, LINE_Y + 4, { width: C3W, align: 'center' });
         doc.font('Helvetica-Bold').fontSize(9)
-          .text('Head master', C3, LINE_Y + 14, { width: C3W, align: 'center' });
+          .text(lcSignatureLabel, C3, LINE_Y + 14, { width: C3W, align: 'center' });
         doc.font('Helvetica').fontSize(7.5).fillColor(GREY)
           .text(sentenceCase(school.name), C3, LINE_Y + 26, { width: C3W, align: 'center' });
       } else {
         doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT)
-          .text('Head master', C3, LINE_Y + 5, { width: C3W, align: 'center' });
+          .text(lcSignatureLabel, C3, LINE_Y + 5, { width: C3W, align: 'center' });
         doc.font('Helvetica').fontSize(8).fillColor(GREY)
           .text(sentenceCase(school.name), C3, LINE_Y + 17, { width: C3W, align: 'center' });
       }
@@ -927,7 +931,7 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
   }
   doc.save().moveTo(right - sigColW + 25, lineY).lineTo(right - 15, lineY).lineWidth(0.7).strokeColor('#999').stroke().restore();
   doc.fillColor(black).font('Helvetica-Bold').fontSize(8)
-    .text('Principal', right - sigColW + 25, lineY + 4, { width: sigColW - 40, align: 'center', lineBreak: false });
+    .text(safe(school.bonafide_signature_label, 'Principal'), right - sigColW + 25, lineY + 4, { width: sigColW - 40, align: 'center', lineBreak: false });
   doc.fillColor(muted).font('Helvetica').fontSize(6.5)
     .text('(Digital Signature)', right - sigColW + 25, lineY + 15, { width: sigColW - 40, align: 'center', lineBreak: false });
 }
