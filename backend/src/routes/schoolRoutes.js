@@ -29,6 +29,7 @@ router.put('/me/id-card-bg', authenticate, requireRole('schoolAdmin'), attachSch
 router.delete('/me/id-card-bg', authenticate, requireRole('schoolAdmin'), attachSchool, schoolController.deleteIdCardBg);
 router.put('/me/id-card-watermark', authenticate, requireRole('schoolAdmin'), attachSchool, uploadBranding.single('watermark_image'), schoolController.uploadIdCardWatermark);
 router.delete('/me/id-card-watermark', authenticate, requireRole('schoolAdmin'), attachSchool, schoolController.deleteIdCardWatermark);
+router.delete('/me/asset/:asset', authenticate, requireRole('schoolAdmin'), attachSchool, schoolController.deleteSchoolAsset);
 router.put('/me/certificate-template/:type', authenticate, requireRole('schoolAdmin'), attachSchool, uploadTemplate.single('template'), schoolController.uploadCertificateTemplate);
 router.delete('/me/certificate-template/:type', authenticate, requireRole('schoolAdmin'), attachSchool, schoolController.deleteCertificateTemplate);
 

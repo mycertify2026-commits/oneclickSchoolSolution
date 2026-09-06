@@ -45,7 +45,8 @@ const ID_CARD_BLANK = {
   id_card_show_address: false, id_card_show_emergency_contact: true,
   id_card_border_color: '', id_card_bg_opacity: 0.15, id_card_show_feature_strip: true,
   id_card_feature_icons: DEFAULT_FEATURE_ICONS,
-  id_card_orientation: 'horizontal', idcard_signature_label: ''
+  id_card_orientation: 'horizontal', idcard_signature_label: '',
+  id_card_watermark_enabled: false, id_card_watermark_opacity: 0.1
 };
 
 export default function SchoolSettings() {
@@ -92,7 +93,10 @@ export default function SchoolSettings() {
       id_card_show_feature_strip: Boolean(res.data.school.id_card_show_feature_strip ?? true),
       id_card_feature_icons: parseFeatureIcons(res.data.school.id_card_feature_icons),
       id_card_orientation: res.data.school.id_card_orientation || ID_CARD_BLANK.id_card_orientation,
-      idcard_signature_label: res.data.school.idcard_signature_label || ''
+      idcard_signature_label: res.data.school.idcard_signature_label || '',
+      id_card_watermark_enabled: Boolean(res.data.school.id_card_watermark_enabled),
+      id_card_watermark_opacity: res.data.school.id_card_watermark_opacity !== null && res.data.school.id_card_watermark_opacity !== undefined
+        ? Number(res.data.school.id_card_watermark_opacity) : ID_CARD_BLANK.id_card_watermark_opacity,
     });
   }, []);
   const loadWallet = useCallback(async () => {
@@ -152,6 +156,16 @@ export default function SchoolSettings() {
       setSuccess('PNG template removed.');
     } catch (err) {
       setError(err.response?.data?.error || 'Could not remove template');
+    }
+  }
+
+  async function removeAsset(asset) {
+    try {
+      await api.delete(`/schools/me/asset/${asset}`);
+      setSchool(prev => ({ ...prev, [`${asset}_url`]: null }));
+      setSuccess(`${asset.charAt(0).toUpperCase() + asset.slice(1)} removed.`);
+    } catch (err) {
+      setError(err.response?.data?.error || `Could not remove ${asset}`);
     }
   }
 
@@ -310,9 +324,9 @@ export default function SchoolSettings() {
                 <h4 style={{ marginBottom: 4 }}>Logo, Signature and Stamp</h4>
                 <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>These appear on all certificates and ID cards.</p>
                 <div className="form-grid-3">
-                  <UploadBox label="School Logo" icon="fa-image" file={logoFile} existingUrl={fileToUrl(school?.logo_url)} onChange={setLogoFile} />
-                  <UploadBox label="Principal's Signature" icon="fa-signature" file={signatureFile} existingUrl={fileToUrl(school?.signature_url)} onChange={setSignatureFile} />
-                  <UploadBox label="School Stamp" icon="fa-stamp" file={stampFile} existingUrl={fileToUrl(school?.stamp_url)} onChange={setStampFile} />
+                  <UploadBox label="School Logo" icon="fa-image" file={logoFile} existingUrl={fileToUrl(school?.logo_url)} onChange={setLogoFile} onRemove={() => removeAsset('logo')} />
+                  <UploadBox label="Principal's Signature" icon="fa-signature" file={signatureFile} existingUrl={fileToUrl(school?.signature_url)} onChange={setSignatureFile} onRemove={() => removeAsset('signature')} />
+                  <UploadBox label="School Stamp" icon="fa-stamp" file={stampFile} existingUrl={fileToUrl(school?.stamp_url)} onChange={setStampFile} onRemove={() => removeAsset('stamp')} />
                 </div>
                 <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={handleSaveInfo} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
               </div>
@@ -325,9 +339,9 @@ export default function SchoolSettings() {
                 <h4 style={{ marginBottom: 4 }}>Logo, Signature and Stamp</h4>
                 <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>These appear on all certificates and ID cards. (Can also be changed in the School Information tab.)</p>
                 <div className="form-grid-3">
-                  <UploadBox label="School Logo" icon="fa-image" file={logoFile} existingUrl={fileToUrl(school?.logo_url)} onChange={setLogoFile} />
-                  <UploadBox label="Principal's Signature" icon="fa-signature" file={signatureFile} existingUrl={fileToUrl(school?.signature_url)} onChange={setSignatureFile} />
-                  <UploadBox label="School Stamp" icon="fa-stamp" file={stampFile} existingUrl={fileToUrl(school?.stamp_url)} onChange={setStampFile} />
+                  <UploadBox label="School Logo" icon="fa-image" file={logoFile} existingUrl={fileToUrl(school?.logo_url)} onChange={setLogoFile} onRemove={() => removeAsset('logo')} />
+                  <UploadBox label="Principal's Signature" icon="fa-signature" file={signatureFile} existingUrl={fileToUrl(school?.signature_url)} onChange={setSignatureFile} onRemove={() => removeAsset('signature')} />
+                  <UploadBox label="School Stamp" icon="fa-stamp" file={stampFile} existingUrl={fileToUrl(school?.stamp_url)} onChange={setStampFile} onRemove={() => removeAsset('stamp')} />
                 </div>
                 <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={handleSaveInfo} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
               </div>
@@ -480,6 +494,26 @@ export default function SchoolSettings() {
                         style={{ width: '100%' }} />
                     </div>
                     <BgImageUploader schoolId={school?.id} onSuccess={() => { setSuccess('Background saved!'); setBgVersion(v => v + 1); }} />
+                  </div>
+
+                  {/* Watermark — separate, opt-in effect drawn in the white body
+                      area of the card, distinct from the panel-only background above. */}
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, marginTop: 14 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>ID Card Watermark</div>
+                    <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
+                      A faint image drawn behind the photo and text on the card's white body area. Off by default — enable it once uploaded.
+                    </p>
+                    <CheckboxRow label="Enable watermark" checked={idCardForm.id_card_watermark_enabled} onChange={v => setIdCardForm(p => ({ ...p, id_card_watermark_enabled: v }))} />
+                    <div className="form-group" style={{ marginTop: 10 }}>
+                      <label className="form-label" style={{ fontSize: 12 }}>Watermark opacity: {Math.round(idCardForm.id_card_watermark_opacity * 100)}%</label>
+                      <input type="range" min="0" max="1" step="0.05" value={idCardForm.id_card_watermark_opacity}
+                        onChange={e => setIdCardForm(p => ({ ...p, id_card_watermark_opacity: Number(e.target.value) }))}
+                        style={{ width: '100%' }} />
+                    </div>
+                    <button className="btn btn-primary btn-sm" style={{ marginBottom: 10 }} onClick={handleSaveIdCardDesign} disabled={saving}>
+                      {saving ? 'Saving...' : 'Save Enable/Opacity'}
+                    </button>
+                    <WatermarkUploader onSuccess={() => { setSuccess('Watermark saved!'); setBgVersion(v => v + 1); }} />
                   </div>
                 </div>
               </div>
@@ -688,7 +722,7 @@ function InfoRow({ label, value }) {
   );
 }
 
-function UploadBox({ label, icon, file, existingUrl, onChange }) {
+function UploadBox({ label, icon, file, existingUrl, onChange, onRemove }) {
   const preview = file ? URL.createObjectURL(file) : existingUrl;
   return (
     <div className="form-group">
@@ -704,6 +738,11 @@ function UploadBox({ label, icon, file, existingUrl, onChange }) {
         )}
       </div>
       <input type="file" id={`upload-${label}`} accept="image/*" style={{ display: 'none' }} onChange={e => onChange(e.target.files[0] || null)} />
+      {existingUrl && !file && onRemove && (
+        <button type="button" className="btn btn-outline btn-sm" style={{ marginTop: 6 }} onClick={onRemove}>
+          <i className="fas fa-trash"></i> Remove
+        </button>
+      )}
     </div>
   );
 }
@@ -912,6 +951,62 @@ function IdCardLivePreview({ formValues, refreshKey }) {
 // easy to miss.) A local thumbnail shows the instant the file is picked,
 // before the network request even finishes, so there's never ambiguity
 // about whether a file was received.
+function WatermarkUploader({ onSuccess }) {
+  const [localPreviewUrl, setLocalPreviewUrl] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [err, setErr] = useState('');
+
+  async function handleFileSelected(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setMsg(''); setErr('');
+    setLocalPreviewUrl(URL.createObjectURL(file));
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('watermark_image', file);
+    try {
+      await api.put('/schools/me/id-card-watermark', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setMsg('Watermark uploaded — remember to enable it above and save.');
+      if (onSuccess) onSuccess();
+    } catch (e2) {
+      setErr(e2.response?.data?.error || 'Upload failed — please try a JPG, PNG, or WEBP file under 3MB.');
+      setLocalPreviewUrl(null);
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  }
+
+  async function handleDelete() {
+    if (!window.confirm('Remove the watermark image?')) return;
+    try {
+      await api.delete('/schools/me/id-card-watermark');
+      setMsg('Watermark removed.');
+      setLocalPreviewUrl(null);
+      if (onSuccess) onSuccess();
+    } catch (e) { setErr(e.response?.data?.error || 'Delete failed'); }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {msg && <div style={{ background: '#ECFDF5', color: '#15803d', padding: 8, borderRadius: 6, fontSize: 12 }}>{msg}</div>}
+      {err && <div style={{ background: '#FEE2E2', color: '#b91c1c', padding: 8, borderRadius: 6, fontSize: 12 }}>{err}</div>}
+      {localPreviewUrl && (
+        <img src={localPreviewUrl} alt="Selected watermark" style={{ width: 120, height: 76, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)' }} />
+      )}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <input type="file" accept="image/*" onChange={handleFileSelected} disabled={uploading} style={{ fontSize: 12 }} />
+        {uploading && <i className="fas fa-spinner fa-spin" style={{ color: 'var(--primary)' }}></i>}
+        <button className="btn btn-sm btn-outline" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={handleDelete}>
+          <i className="fas fa-trash"></i> Remove
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function BgImageUploader({ onSuccess }) {
   const [localPreviewUrl, setLocalPreviewUrl] = useState(null);
   const [uploading, setUploading] = useState(false);

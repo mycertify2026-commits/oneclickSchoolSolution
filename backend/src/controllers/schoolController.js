@@ -321,6 +321,37 @@ async function deleteIdCardBg(req, res) {
   }
 }
 
+// DELETE /api/schools/me/:asset (schoolAdmin) — remove logo / signature /
+// stamp. These are single-slot fields on the school row itself (not shared,
+// referenced-by-id assets used by other records), and every certificate
+// already generated is a finished, static PDF with the image pixels baked
+// in — clearing the slot here only changes what NEW certificates use going
+// forward, so there is no "still referenced by another record" case to
+// guard against and no historical document is affected.
+const SCHOOL_ASSET_FIELDS = {
+  logo: { url: 'logo_url', data: 'logo_data' },
+  signature: { url: 'signature_url', data: 'signature_data' },
+  stamp: { url: 'stamp_url', data: 'stamp_data' },
+};
+
+async function deleteSchoolAsset(req, res) {
+  try {
+    const asset = String(req.params.asset || '').toLowerCase();
+    const fields = SCHOOL_ASSET_FIELDS[asset];
+    if (!fields) return res.status(400).json({ error: 'Invalid asset type' });
+    const [rows] = await pool.query(`SELECT ${fields.url} AS asset_path FROM schools WHERE id = ?`, [req.schoolId]);
+    if (rows[0]?.asset_path && fs.existsSync(rows[0].asset_path)) {
+      try { fs.unlinkSync(rows[0].asset_path); } catch (_) {}
+    }
+    await pool.query(`UPDATE schools SET ${fields.url} = NULL, ${fields.data} = NULL WHERE id = ?`, [req.schoolId]);
+    deleteSchoolPdfs(req.schoolId).catch(() => {});
+    res.json({ message: `${asset.charAt(0).toUpperCase() + asset.slice(1)} removed.` });
+  } catch (err) {
+    console.error('deleteSchoolAsset error:', err.message);
+    res.status(500).json({ error: 'Server error removing asset' });
+  }
+}
+
 // PUT /api/schools/me/id-card-watermark (schoolAdmin) — upload a watermark
 // image drawn faintly in the card's body area. Distinct from the panel-only
 // background image above: this is opt-in (id_card_watermark_enabled) and
@@ -641,4 +672,4 @@ async function resetAdminPassword(req, res) {
   }
 }
 
-module.exports = { listSchools, createSchool, getSchool, updateSchoolStatus, getMySchool, updateMySchool, listStudentsForSchool, updateSchool, deleteSchool, updateIdCardDesign, previewIdCard, uploadIdCardBg, deleteIdCardBg, uploadIdCardWatermark, deleteIdCardWatermark, uploadCertificateTemplate, deleteCertificateTemplate, exportSchools, resetAdminPassword, deleteSchoolPdfs };
+module.exports = { listSchools, createSchool, getSchool, updateSchoolStatus, getMySchool, updateMySchool, listStudentsForSchool, updateSchool, deleteSchool, updateIdCardDesign, previewIdCard, uploadIdCardBg, deleteIdCardBg, uploadIdCardWatermark, deleteIdCardWatermark, deleteSchoolAsset, uploadCertificateTemplate, deleteCertificateTemplate, exportSchools, resetAdminPassword, deleteSchoolPdfs };
