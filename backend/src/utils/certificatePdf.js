@@ -16,6 +16,32 @@ const BONAFIDE_FRAME_PATH = process.env.BONAFIDE_FRAME_PATH ||
 const LC_FRAME_PATH = process.env.LC_FRAME_PATH ||
   path.resolve(__dirname, '../../../attached_assets/ChatGPT_Image_Aug_16,_2026,_09_36_17_PM_1786938001048.png');
 
+// School Settings > Certificate Header/Footer stores raw contentEditable
+// HTML (bold/italic/underline + div/br line breaks from the browser) —
+// pdfkit can't render HTML, so this reduces it to plain text with the
+// original line breaks preserved. Inline emphasis (bold/italic/underline)
+// is intentionally not reproduced here: the field is short admin-entered
+// notes text, not a design surface, so plain text is the correct fidelity
+// for "make it configurable" without adding a full mini HTML-to-PDF layer.
+function stripHtmlToText(html) {
+  if (!html) return '';
+  return String(html)
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?(div|p)[^>]*>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0?39;/gi, "'")
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .join('\n')
+    .trim();
+}
+
 function safe(v, fallback = '') {
   return (v === null || v === undefined || v === '') ? fallback : String(v);
 }
@@ -205,7 +231,7 @@ function drawDataRow(doc, x, y, width, num, label, value) {
   doc.font('Helvetica-Bold').fontSize(12).fillColor(TEXT).text(':', x + 212, y, { width: 10 });
   fitSingleLineText(doc, displayValue, x + 226, y, width - 226, 12, TEXT, true, 8);
   doc.save().moveTo(x, y + 16.5).lineTo(x + width, y + 16.5).lineWidth(0.5).strokeColor('#e2e8f0').stroke().restore();
-  return y + 21;
+  return y + 20;
 }
 
 function drawPhotoPanel(doc, x, y, photoPath, w = 80, h = 96) {
@@ -442,6 +468,18 @@ async function generateLcPdf({
 
       let y = drawHeader(doc, school, safeLogoPath, 46, certIdBottom + 6);
 
+      // ── School-configured header text (School Settings > Certificate
+      // Header) — additive text below the school name/logo, empty by
+      // default so a school that never sets this renders identically to
+      // before this field existed.
+      const lcContentWidth = doc.page.width - 92;
+      const headerText = stripHtmlToText(school.cert_header).replace(/\n+/g, ' ');
+      if (headerText) {
+        doc.font('Helvetica').fontSize(8).fillColor(TEXT)
+          .text(headerText, 46, y, { width: lcContentWidth, align: 'center', lineBreak: false, ellipsis: true });
+        y += 12;
+      }
+
       // ── Original / Duplicate pill ──
       const typeLabel      = sentenceCase(lcType || 'Original');
       const typeLabelColor = typeLabel === 'DUPLICATE' ? '#dc2626' : '#1d4ed8';
@@ -503,6 +541,16 @@ async function generateLcPdf({
       rows.forEach((r, i) => {
         rowY = drawDataRow(doc, 46, rowY, contentWidth, i + 1, r[0], r[1]);
       });
+
+      // ── School-configured footer text (School Settings > Certificate
+      // Footer) — additive, empty by default. Sits above the signature
+      // block, exactly like the LC declaration note lower on the page.
+      const footerText = stripHtmlToText(school.cert_footer).replace(/\n+/g, ' ');
+      if (footerText) {
+        doc.font('Helvetica').fontSize(7.5).fillColor(TEXT)
+          .text(footerText, 46, rowY + 4, { width: contentWidth, align: 'center', lineBreak: false, ellipsis: true });
+        rowY += 14;
+      }
 
       // ── Footer: Check by (left) | Photo (centre) | HEAD MASTER (right) — one line ──
       const fw   = contentWidth;
@@ -882,6 +930,15 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
     .text(`U-DISE: ${safe(school.udise_code, '-')}   |   RECOG NO: ${safe(school.recog_no, '-')}`,
       textX, boardY + 53, { width: textW, align: 'center', lineBreak: false, ellipsis: true });
 
+  // School-configured header text (School Settings > Certificate Header) —
+  // additive, empty by default. Rendered as a single line in the existing
+  // gap above the ID row rather than reflowing this fixed-coordinate layout.
+  const bonafideHeaderText = stripHtmlToText(school.cert_header).replace(/\n+/g, ' ');
+  if (bonafideHeaderText) {
+    doc.fillColor(muted).font('Helvetica-Oblique').fontSize(7)
+      .text(bonafideHeaderText, textX, boardY + 65, { width: textW, align: 'center', lineBreak: false, ellipsis: true });
+  }
+
   // ── ID row: Gr. No. / Roll No. / SARAL ID / Aadhar No. ───────────────────
   const idRowY = 140;
   doc.save().moveTo(left, idRowY - 6).lineTo(right, idRowY - 6).lineWidth(0.6).strokeColor(GOLD).stroke().restore();
@@ -1014,6 +1071,15 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
   doc.fillColor(muted).font('Helvetica').fontSize(6)
     .text('This is a digitally-generated certificate. No physical signature is needed.',
       verX + 6, stripY + 23, { width: stripSeg - 12, align: 'center', lineGap: 1 });
+
+  // School-configured footer text (School Settings > Certificate Footer) —
+  // additive, empty by default. Single line in the gap above the signature
+  // row rather than reflowing this fixed-coordinate layout.
+  const bonafideFooterText = stripHtmlToText(school.cert_footer).replace(/\n+/g, ' ');
+  if (bonafideFooterText) {
+    doc.fillColor(muted).font('Helvetica-Oblique').fontSize(7)
+      .text(bonafideFooterText, left, 410, { width: contentW, align: 'center', lineBreak: false, ellipsis: true });
+  }
 
   // ── Signature row: Class Teacher | seal | Principal ──────────────────────
   const sigY = 430, lineY = sigY + 32;
