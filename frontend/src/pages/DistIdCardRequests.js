@@ -7,12 +7,37 @@ const BADGES = { pending:'badge-warning', approved:'badge-info', printing:'badge
 
 export default function DistIdCardRequests() {
   const [requests, setRequests] = useState([]);
+  const [downloadingId, setDownloadingId] = useState(null);
 
   const load = useCallback(() => {
     api.get('/id-cards/hard-copy/distributor').then(res => setRequests(res.data.requests)).catch(() => {});
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  async function handleDownload(id) {
+    setDownloadingId(id);
+    try {
+      const res = await api.get(`/id-cards/hard-copy/${id}/pdf`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `id-card-${id}.pdf`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Could not download this ID card yet.');
+    } finally {
+      setDownloadingId(null);
+    }
+  }
+
+  // Batches (multiple students requested together) share a batch_id — group
+  // the count so a Distributor can see "48 of 50 in this batch" at a glance.
+  const batchSizes = requests.reduce((acc, r) => {
+    if (r.batch_id) acc[r.batch_id] = (acc[r.batch_id] || 0) + 1;
+    return acc;
+  }, {});
 
   return (
     <Layout role="distributor">
@@ -24,18 +49,28 @@ export default function DistIdCardRequests() {
         <div className="table-responsive">
           <table className="data-table">
             <thead>
-              <tr><th>School</th><th>Student</th><th>Amount</th><th>Status</th><th>Request Date</th></tr>
+              <tr><th>School</th><th>Student</th><th>Batch</th><th>Amount</th><th>Status</th><th>Request Date</th><th>ID Card</th></tr>
             </thead>
             <tbody>
               {requests.length === 0 ? (
-                <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 24 }}>No hard copy requests from your schools.</td></tr>
+                <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 24 }}>No hard copy requests from your schools.</td></tr>
               ) : requests.map(r => (
                 <tr key={r.id}>
                   <td style={{ fontWeight: 600 }}>{r.school_name}</td>
                   <td>{r.student_name}</td>
+                  <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{r.batch_id ? `${batchSizes[r.batch_id]} card${batchSizes[r.batch_id] !== 1 ? 's' : ''}` : '—'}</td>
                   <td>₹{Number(r.amount).toLocaleString('en-IN')}</td>
                   <td><span className={`badge ${BADGES[r.status] || 'badge-warning'}`}>{LABELS[r.status] || r.status}</span></td>
                   <td style={{ fontSize: 12 }}>{new Date(r.created_at).toLocaleDateString('en-IN')}</td>
+                  <td>
+                    {r.pdf_path ? (
+                      <button className="btn-icon" title="Download ID Card" onClick={() => handleDownload(r.id)} disabled={downloadingId === r.id}>
+                        <i className="fas fa-download"></i>
+                      </button>
+                    ) : (
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>—</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

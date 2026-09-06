@@ -62,6 +62,16 @@ function parseFeatureIcons(raw) {
   }
 }
 
+// A stored standard is usually already ordinal ("9th"), so blindly
+// appending "th Standard" produced "9thth Standard" whenever the value
+// itself carried a suffix — only add the suffix when the value is a bare
+// number.
+function formatStandardLabel(std) {
+  if (!std) return '';
+  const s = String(std).trim();
+  return /[a-zA-Z]$/.test(s) ? `${s} Standard` : `${s}th Standard`;
+}
+
 function acadYear(y) {
   return `${y}-${String(y + 1).slice(-2)}`;
 }
@@ -83,7 +93,7 @@ async function generateIdCardPdf({ school, student, certificate, outputPath, pho
   signaturePath = safeSignaturePath;
   stampPath     = safeStampPath;
 
-  const qrBuffer = await QRCode.toBuffer(buildVerifyUrl(certificate.id), { width: 90, margin: 1 }).catch(() => null);
+  const qrBuffer = await QRCode.toBuffer(buildVerifyUrl(certificate.id), { width: 300, margin: 1 }).catch(() => null);
 
   let bgBuf = null;
   if (school.id_card_template_data && Buffer.isBuffer(school.id_card_template_data)) {
@@ -92,6 +102,17 @@ async function generateIdCardPdf({ school, student, certificate, outputPath, pho
   if (!bgBuf && school.id_card_bg_data && Buffer.isBuffer(school.id_card_bg_data) && school.id_card_bg_data.length > 0) {
     bgBuf = school.id_card_bg_data;
   }
+
+  // Watermark is a distinct, opt-in body-area effect (School Admin uploads
+  // and enables it separately) — never confused with the panel-only
+  // background image above, which is always-on whenever a template exists.
+  const watermarkEnabled = school.id_card_watermark_enabled === 1 || school.id_card_watermark_enabled === true;
+  const watermarkBuf = watermarkEnabled && Buffer.isBuffer(school.id_card_watermark_data) && school.id_card_watermark_data.length > 0
+    ? school.id_card_watermark_data
+    : null;
+  const watermarkOpacity = school.id_card_watermark_opacity !== undefined && school.id_card_watermark_opacity !== null
+    ? Math.min(1, Math.max(0, Number(school.id_card_watermark_opacity)))
+    : 0.1;
 
   const headerColor = parseColor(school.id_card_primary_color, NAVY);
   const accentColor = (() => {
@@ -131,7 +152,7 @@ async function generateIdCardPdf({ school, student, certificate, outputPath, pho
        const showFeatureStrip = school.id_card_show_feature_strip !== 0 && school.id_card_show_feature_strip !== false;
        const featureIcons = parseFeatureIcons(school.id_card_feature_icons);
 
-       const drawArgs = { W, H, MARGIN, headerColor, accentColor, school, student, certificate, photoPath, logoPath, signaturePath, stampPath, qrBuffer, bgBuf, bgOpacity, borderColor, showFeatureStrip, featureIcons, GOLD, ORANGE, NAVY, GREY, TEXT, WHITE };
+       const drawArgs = { W, H, MARGIN, headerColor, accentColor, school, student, certificate, photoPath, logoPath, signaturePath, stampPath, qrBuffer, bgBuf, bgOpacity, borderColor, showFeatureStrip, featureIcons, watermarkBuf, watermarkOpacity, GOLD, ORANGE, NAVY, GREY, TEXT, WHITE };
        if (isVertical) drawFrontVertical(doc, drawArgs);
        else drawFront(doc, drawArgs);
 
@@ -143,28 +164,39 @@ async function generateIdCardPdf({ school, student, certificate, outputPath, pho
 }
 
 // ── FRONT ────────────────────────────────────────────────────────────────────
-function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, student, certificate, photoPath, logoPath, signaturePath, stampPath, qrBuffer, bgBuf, bgOpacity, borderColor, showFeatureStrip, featureIcons, GOLD, ORANGE, NAVY, GREY, TEXT, WHITE }) {
+function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, student, certificate, photoPath, logoPath, signaturePath, stampPath, qrBuffer, bgBuf, bgOpacity, borderColor, showFeatureStrip, featureIcons, watermarkBuf, watermarkOpacity, GOLD, ORANGE, NAVY, GREY, TEXT, WHITE }) {
   const FTR_H = 24;
-  const UID_H = 14;
-  const UID_Y = H - FTR_H - UID_H;
   const CARD_TOP = 12;
   const RIGHT_X = 188;
+  // No separate Student UID strip — that band was removed (it duplicated the
+  // GR No. field and left no room for a real signature/address), so the
+  // panel and content area now run all the way down to the feature strip.
+  const CONTENT_BOTTOM = H - FTR_H;
 
   doc.rect(0, 0, W, H).fillColor(WHITE).fill();
+
+  if (watermarkBuf && watermarkOpacity > 0) {
+    try {
+      doc.save().opacity(watermarkOpacity);
+      const wmSize = Math.min(W, CONTENT_BOTTOM - CARD_TOP) * 0.9;
+      doc.image(watermarkBuf, (W - wmSize) / 2, CARD_TOP + (CONTENT_BOTTOM - CARD_TOP - wmSize) / 2, { width: wmSize, height: wmSize, fit: [wmSize, wmSize] });
+      doc.restore();
+    } catch (e) {}
+  }
 
   // Reference layout: a themed architectural panel (school's chosen Primary
   // Color) with a gold edge, occupying the right side of the card — this is
   // always the base design, so "Primary Color" always has visible effect.
   doc.save()
-    .moveTo(RIGHT_X, CARD_TOP).lineTo(W, CARD_TOP).lineTo(W, UID_Y)
-    .lineTo(RIGHT_X, UID_Y).lineTo(166, 88).closePath()
+    .moveTo(RIGHT_X, CARD_TOP).lineTo(W, CARD_TOP).lineTo(W, CONTENT_BOTTOM)
+    .lineTo(RIGHT_X, CONTENT_BOTTOM).lineTo(166, 88).closePath()
     .fillColor(headerColor).fill().restore();
   // Panel edge accent — gold by default, but honors the same Border Line
   // Color chosen in Settings so a school can eliminate the yellow/gold
   // entirely by picking their own color (or leave it for the original look).
-  doc.save().moveTo(RIGHT_X, CARD_TOP).lineTo(W, CARD_TOP).lineTo(W, UID_Y)
+  doc.save().moveTo(RIGHT_X, CARD_TOP).lineTo(W, CARD_TOP).lineTo(W, CONTENT_BOTTOM)
     .lineWidth(1.2).strokeColor(borderColor || GOLD).stroke().restore();
-  doc.save().moveTo(RIGHT_X, CARD_TOP).lineTo(166, 88).lineTo(188, 123)
+  doc.save().moveTo(RIGHT_X, CARD_TOP).lineTo(166, 88).lineTo(RIGHT_X, CONTENT_BOTTOM)
     .lineWidth(0.8).strokeColor(borderColor || GOLD).stroke().restore();
 
   // Subtle school-building watermark in the panel — only when no uploaded
@@ -191,15 +223,16 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
     try {
       doc.save();
       doc.opacity(bgOpacity);
-      doc.moveTo(RIGHT_X, CARD_TOP).lineTo(W, CARD_TOP).lineTo(W, UID_Y)
-        .lineTo(RIGHT_X, UID_Y).lineTo(166, 88).closePath().clip();
-      doc.image(bgBuf, 166, CARD_TOP, { width: W - 166, height: UID_Y - CARD_TOP });
+      doc.moveTo(RIGHT_X, CARD_TOP).lineTo(W, CARD_TOP).lineTo(W, CONTENT_BOTTOM)
+        .lineTo(RIGHT_X, CONTENT_BOTTOM).lineTo(166, 88).closePath().clip();
+      doc.image(bgBuf, 166, CARD_TOP, { width: W - 166, height: CONTENT_BOTTOM - CARD_TOP });
       doc.restore();
     } catch (e) {}
   }
 
-  // School logo and branding.
-  const logoX = 13, logoY = 19, logoSize = 30;
+  // School logo and branding. Logo and QR are kept the same size (32pt) so
+  // neither reads as more "official" than the other.
+  const logoX = 13, logoY = 19, logoSize = 32;
   if (canDraw(logoPath)) {
     try { doc.image(logoPath, logoX, logoY, { width: logoSize, height: logoSize }); } catch (e) {}
   }
@@ -227,8 +260,9 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
       .text(contactText, 66, 48, { width: 118, lineBreak: false });
   }
 
-  // Student photo at the same left position and size as the reference.
-  const PH_X = 16, PH_Y = 62, PH_W = 48, PH_H = 61;
+  // Student photo — slightly smaller than the original reference to make
+  // room for a real Principal Signature image lower on the card.
+  const PH_X = 16, PH_Y = 62, PH_W = 44, PH_H = 54;
   doc.save().roundedRect(PH_X, PH_Y, PH_W, PH_H, 2)
     .lineWidth(0.8).strokeColor(headerColor).stroke().restore();
   if (canDraw(photoPath)) {
@@ -248,10 +282,9 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
     ['Student Name', safe(student.full_name)],
     ['GR No.', safe(student.gr_number || student.register_number)],
     ['Date of Birth', fmtDate(student.dob)],
-    ['Blood Group', safe(student.blood_group)],
+    ["Father's Mobile", safe(student.parent_mobile)],
     ["Father's Name", safe(student.father_name)],
-    ['Valid Till', safe(student.id_card_valid_till || ((student.current_standard || student.admission_standard) ? `${student.current_standard || student.admission_standard}th Standard` : ''))],
-    ['Authorized by', safe(school.idcard_signature_label, 'Head Master')],
+    ['Valid Till', safe(student.id_card_valid_till || formatStandardLabel(student.current_standard || student.admission_standard))],
   ];
   fields.forEach(([label, value], index) => {
     const y = 65 + index * 9;
@@ -264,29 +297,29 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
       .text(valueText, VALUE_X, y, { width: fieldWidth, lineBreak: false });
   });
 
-  // Student UID strip, above the reference card's feature footer.
-  doc.rect(0, UID_Y, W, UID_H).fillColor(headerColor).fill();
-  const uid = safe(student.serial_id || certificate.serial_number || '');
-  const UID_LABEL_X = 9;
-  const UID_VALUE_X = 50;
-  const UID_VALUE_W = W - UID_VALUE_X - 8;
-  doc.font('Helvetica-Bold').fontSize(6.5).fillColor('#f6c744')
-    .text('Student UID :', UID_LABEL_X, UID_Y + 4, { lineBreak: false });
-  let uidFont = 6.5;
-  while (uidFont > 4.2) {
-    doc.font('Helvetica-Bold').fontSize(uidFont);
-    if (doc.widthOfString(uid) <= UID_VALUE_W) break;
-    uidFont -= 0.3;
+  // ── Address + Principal Signature — the space freed by dropping the old
+  // text-only "Authorized by" row and the Student UID strip. A real
+  // signature image now sits above the designation label instead of plain
+  // text standing in for it.
+  const sigBandY = 65 + fields.length * 9 + 2;
+  if (student.address) {
+    const addrW = 68;
+    const addrText = fitSingleLine(doc, `Address: ${student.address}`, addrW, 'Helvetica', 4.6);
+    doc.font('Helvetica').fontSize(4.6).fillColor(TEXT)
+      .text(addrText, FX, sigBandY + 3, { width: addrW, lineBreak: false });
   }
-  const uidText = fitSingleLine(doc, uid, UID_VALUE_W, 'Helvetica-Bold', uidFont);
-  doc.font('Helvetica-Bold').fontSize(uidFont).fillColor(WHITE)
-    .text(uidText, UID_VALUE_X, UID_Y + 4, {
-      width: UID_VALUE_W, lineBreak: false,
-    });
+  const sigW = 42, sigH = 11, sigX = FX + 74;
+  const sigLineY = sigBandY + sigH;
+  if (canDraw(signaturePath)) {
+    try { doc.image(signaturePath, sigX, sigBandY, { width: sigW, height: sigH, fit: [sigW, sigH] }); } catch (e) {}
+  }
+  doc.save().moveTo(sigX, sigLineY).lineTo(sigX + sigW, sigLineY).lineWidth(0.4).strokeColor('#9ca3af').stroke().restore();
+  doc.font('Helvetica').fontSize(4.2).fillColor(GREY)
+    .text(safe(school.idcard_signature_label, 'Principal'), sigX, sigLineY + 1, { width: sigW, align: 'center', lineBreak: false });
 
-  // The reference places the QR quiet zone over the UID strip. Draw it after
-  // the strip so the lower edge remains fully visible instead of being clipped.
-  const QR_SZ = 35, QR_X = 190, QR_Y = 96;
+  // QR code — now equal-sized to the logo and no longer needs to overlap
+  // a Student UID strip (removed above), so it sits cleanly in the panel.
+  const QR_SZ = 32, QR_X = RIGHT_X + (W - RIGHT_X - QR_SZ) / 2, QR_Y = 92;
   doc.save().roundedRect(QR_X - 3, QR_Y - 3, QR_SZ + 6, QR_SZ + 6, 2).fillColor(WHITE).fill().restore();
   if (qrBuffer) {
     try { doc.image(qrBuffer, QR_X, QR_Y, { width: QR_SZ, height: QR_SZ }); } catch (e) {}
@@ -299,7 +332,7 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   // remaining visible ones spread evenly across the full width, and no
   // other element on the card reflows (the card's standard size is
   // unaffected either way).
-  const featureY = UID_Y + UID_H;
+  const featureY = CONTENT_BOTTOM;
   doc.rect(0, featureY, W, FTR_H).fillColor(WHITE).fill();
   const features = showFeatureStrip ? featureIcons.filter(f => f.visible !== false) : [];
   const featureW = W / (features.length || 1);
@@ -331,13 +364,22 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
 // full-width label:value rows (more breathing room than the landscape
 // two-column layout), then the same UID strip and feature strip conventions
 // as the landscape design, just re-flowed for a narrower width.
-function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school, student, certificate, photoPath, logoPath, signaturePath, stampPath, qrBuffer, bgBuf, bgOpacity, borderColor, showFeatureStrip, featureIcons, GREY, TEXT, WHITE }) {
-  const FTR_H = 24, UID_H = 14;
-  const UID_Y = H - FTR_H - UID_H;
+function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school, student, certificate, photoPath, logoPath, signaturePath, stampPath, qrBuffer, bgBuf, bgOpacity, borderColor, showFeatureStrip, featureIcons, watermarkBuf, watermarkOpacity, GREY, TEXT, WHITE }) {
+  const FTR_H = 24;
+  const CONTENT_BOTTOM = H - FTR_H;
   const CARD_TOP = 8;
   const HDR_H = 50;
 
   doc.rect(0, 0, W, H).fillColor(WHITE).fill();
+
+  if (watermarkBuf && watermarkOpacity > 0) {
+    try {
+      doc.save().opacity(watermarkOpacity);
+      const wmSize = Math.min(W, CONTENT_BOTTOM - CARD_TOP - HDR_H) * 0.9;
+      doc.image(watermarkBuf, (W - wmSize) / 2, CARD_TOP + HDR_H + (CONTENT_BOTTOM - CARD_TOP - HDR_H - wmSize) / 2, { width: wmSize, height: wmSize, fit: [wmSize, wmSize] });
+      doc.restore();
+    } catch (e) {}
+  }
 
   // ── Header band: logo | school name (wraps to 2 lines) | QR ──────────────
   doc.save().rect(0, CARD_TOP, W, HDR_H).fillColor(headerColor).fill().restore();
@@ -370,7 +412,9 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   }
 
   // ── Student photo, centered ───────────────────────────────────────────────
-  const PH_W = 60, PH_H = 64, PH_X = (W - PH_W) / 2, PH_Y = CARD_TOP + HDR_H + 8;
+  // Slightly smaller than the original reference to make room for a real
+  // Principal Signature image lower on the card.
+  const PH_W = 54, PH_H = 58, PH_X = (W - PH_W) / 2, PH_Y = CARD_TOP + HDR_H + 8;
   doc.save().roundedRect(PH_X, PH_Y, PH_W, PH_H, 2).lineWidth(0.8).strokeColor(headerColor).stroke().restore();
   if (canDraw(photoPath)) {
     try { doc.image(photoPath, PH_X + 1, PH_Y + 1, { width: PH_W - 2, height: PH_H - 2 }); }
@@ -386,10 +430,9 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
     ['Student Name', safe(student.full_name)],
     ['GR No.', safe(student.gr_number || student.register_number)],
     ['Date of Birth', fmtDate(student.dob)],
-    ['Blood Group', safe(student.blood_group)],
+    ["Father's Mobile", safe(student.parent_mobile)],
     ["Father's Name", safe(student.father_name)],
-    ['Valid Till', safe(student.id_card_valid_till || ((student.current_standard || student.admission_standard) ? `${student.current_standard || student.admission_standard}th Standard` : ''))],
-    ['Authorized by', safe(school.idcard_signature_label, 'Head Master')],
+    ['Valid Till', safe(student.id_card_valid_till || formatStandardLabel(student.current_standard || student.admission_standard))],
   ];
   const rowY0 = PH_Y + PH_H + 8;
   fields.forEach(([label, value], index) => {
@@ -403,17 +446,28 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
       .text(valueText, VALUE_X, y, { width: fieldWidth, lineBreak: false });
   });
 
-  // ── Student UID strip ──────────────────────────────────────────────────────
-  doc.rect(0, UID_Y, W, UID_H).fillColor(headerColor).fill();
-  const uid = safe(student.serial_id || certificate.serial_number || '');
-  const uidLabel = 'Student UID : ';
-  doc.font('Helvetica-Bold').fontSize(6.5).fillColor('#f6c744').text(uidLabel, 8, UID_Y + 4, { lineBreak: false, continued: true });
-  const uidValueW = W - 8 - doc.widthOfString(uidLabel) - 8;
-  const uidText = fitSingleLine(doc, uid, uidValueW, 'Helvetica-Bold', 6.5);
-  doc.font('Helvetica-Bold').fillColor(WHITE).text(uidText, { lineBreak: false });
+  // ── Address + Principal Signature — the space freed by dropping the old
+  // text-only "Authorized by" row and the Student UID strip. A real
+  // signature image now sits above the designation label instead of plain
+  // text standing in for it.
+  const sigBandY = rowY0 + fields.length * 9 + 2;
+  if (student.address) {
+    const addrW = W - FX * 2;
+    const addrText = fitSingleLine(doc, `Address: ${student.address}`, addrW, 'Helvetica', 5.2);
+    doc.font('Helvetica').fontSize(5.2).fillColor(TEXT)
+      .text(addrText, FX, sigBandY, { width: addrW, lineBreak: false });
+  }
+  const sigW = 50, sigH = 11, sigX = (W - sigW) / 2, sigY = sigBandY + 10;
+  const sigLineY = sigY + sigH;
+  if (canDraw(signaturePath)) {
+    try { doc.image(signaturePath, sigX, sigY, { width: sigW, height: sigH, fit: [sigW, sigH] }); } catch (e) {}
+  }
+  doc.save().moveTo(sigX, sigLineY).lineTo(sigX + sigW, sigLineY).lineWidth(0.4).strokeColor('#9ca3af').stroke().restore();
+  doc.font('Helvetica').fontSize(4.8).fillColor(GREY)
+    .text(safe(school.idcard_signature_label, 'Principal'), sigX, sigLineY + 1, { width: sigW, align: 'center', lineBreak: false });
 
   // ── Feature strip ──────────────────────────────────────────────────────────
-  const featureY = UID_Y + UID_H;
+  const featureY = CONTENT_BOTTOM;
   doc.rect(0, featureY, W, FTR_H).fillColor(WHITE).fill();
   const features = showFeatureStrip ? featureIcons.filter(f => f.visible !== false) : [];
   const featureW = W / (features.length || 1);
@@ -484,10 +538,15 @@ function drawPhotoPlaceholder(doc, x, y, width, height, color) {
 function fitSingleLine(doc, value, maxWidth, font, fontSize) {
   const original = safe(value, '—');
   doc.font(font).fontSize(fontSize);
-  if (doc.widthOfString(original) <= maxWidth) return original;
+  // A 1pt safety margin: pdfkit's `lineBreak: false` render can still wrap
+  // a line whose measured widthOfString sits a hair under the exact box
+  // width (rounding differences between measurement and layout), so fit
+  // slightly tighter than the box to guarantee a single rendered line.
+  const safeWidth = maxWidth - 1;
+  if (doc.widthOfString(original) <= safeWidth) return original;
 
   let shortened = original;
-  while (shortened.length > 1 && doc.widthOfString(`${shortened}...`) > maxWidth) {
+  while (shortened.length > 1 && doc.widthOfString(`${shortened}...`) > safeWidth) {
     shortened = shortened.slice(0, -1);
   }
   return `${shortened}...`;

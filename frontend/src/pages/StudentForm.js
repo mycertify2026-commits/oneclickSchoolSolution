@@ -9,8 +9,35 @@ const BLANK = {
   dob: '', birth_village: '', birth_taluka: '', birth_district: '', birth_state: 'Maharashtra', birth_country: 'India',
   prev_school: '', prev_standard: '', admission_standard: '', admission_division: '', admission_date: '',
   current_standard: '', current_division: '',
-  roll_number: '', blood_group: '', parent_mobile: '', address: ''
+  roll_number: '', blood_group: '', parent_mobile: '', address: '',
+  apaar_id: '', student_id_no: '', pen_no: '', loc_no: ''
 };
+
+const SUB_CASTE_OPTIONS = [
+  ['', 'Select'], ['Open', 'Open'], ['OBC', 'OBC'], ['SC', 'SC'], ['ST', 'ST'], ['SBC', 'SBC'],
+  ['SEBC', 'SEBC'], ['VJ-A', 'VJ-A'], ['NT-B', 'NT-B'], ['NT-C', 'NT-C'], ['NT-D', 'NT-D']
+];
+
+function validateIdentifiers(form) {
+  const checks = [
+    { field: 'apaar_id', label: 'APAAR ID', pattern: /^\d{12}$/ },
+    { field: 'aadhaar', label: 'Aadhaar Number', pattern: /^\d{12}$/ },
+    { field: 'pen_no', label: 'PEN No.', pattern: /^\d{11}$/ },
+    { field: 'student_id_no', label: 'Student ID', maxLength: 20 },
+    { field: 'loc_no', label: 'LOC No.', maxLength: 20 },
+  ];
+  for (const check of checks) {
+    const value = form[check.field];
+    if (value === undefined || value === null || String(value).trim() === '') continue;
+    const str = String(value).trim();
+    if (check.pattern && !check.pattern.test(str)) {
+      const digits = check.pattern.source.match(/\{(\d+)\}/);
+      return `${check.label} must be exactly ${digits ? digits[1] : ''} digits`;
+    }
+    if (check.maxLength && str.length > check.maxLength) return `${check.label} must be at most ${check.maxLength} characters`;
+  }
+  return null;
+}
 
 export default function StudentForm() {
   const { id } = useParams();
@@ -117,6 +144,8 @@ export default function StudentForm() {
     e.preventDefault();
     setError('');
     if (!form.full_name.trim()) { setError('Student full name is required'); return; }
+    const idError = validateIdentifiers(form);
+    if (idError) { setError(idError); return; }
 
     setSaving(true);
     try {
@@ -222,6 +251,10 @@ export default function StudentForm() {
                 <Field label="Mother's Name" required value={form.mother_name} onChange={v => handleChange('mother_name', v)} placeholder="Mother's name" />
                 <Field label="Father's Name" value={form.father_name} onChange={v => handleChange('father_name', v)} placeholder="Father's name" />
                 <Field label="Aadhaar Number" value={form.aadhaar} onChange={v => handleChange('aadhaar', v)} placeholder="12-digit Aadhaar number" maxLength={12} />
+                <Field label="APAAR ID" value={form.apaar_id} onChange={v => handleChange('apaar_id', v)} placeholder="12-digit APAAR ID" maxLength={12} />
+                <Field label="Student ID" value={form.student_id_no} onChange={v => handleChange('student_id_no', v)} placeholder="Student ID" maxLength={20} />
+                <Field label="PEN No." value={form.pen_no} onChange={v => handleChange('pen_no', v)} placeholder="11-digit PEN number" maxLength={11} />
+                <Field label="LOC No." value={form.loc_no} onChange={v => handleChange('loc_no', v)} placeholder="LOC number" maxLength={20} />
               </div>
             </div>
           </div>
@@ -236,7 +269,7 @@ export default function StudentForm() {
             <Select label="Gender" required value={form.gender} onChange={v => handleChange('gender', v)} options={[['', 'Select'], ['Male', 'Male'], ['Female', 'Female']]} />
             <Field label="Religion" value={form.religion} onChange={v => handleChange('religion', v)} />
             <Field label="Caste" value={form.caste} onChange={v => handleChange('caste', v)} />
-            <Field label="Sub-caste" value={form.sub_caste} onChange={v => handleChange('sub_caste', v)} placeholder="Sub-caste" />
+            <Select label="Sub-caste" value={form.sub_caste} onChange={v => handleChange('sub_caste', v)} options={SUB_CASTE_OPTIONS} />
           </div>
         </div>
 

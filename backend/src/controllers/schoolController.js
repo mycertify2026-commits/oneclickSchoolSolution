@@ -17,7 +17,7 @@ const { toJpegPath } = require('../utils/imageConvert');
 // these fields directly (it builds /uploads/... URLs from the *_url
 // sibling columns instead), so stripping them is purely a payload-size
 // fix, not a behavior change.
-const SCHOOL_BLOB_FIELDS = ['logo_data', 'signature_data', 'stamp_data', 'bonafide_template_data', 'lc_template_data', 'id_card_template_data', 'id_card_bg_data'];
+const SCHOOL_BLOB_FIELDS = ['logo_data', 'signature_data', 'stamp_data', 'bonafide_template_data', 'lc_template_data', 'id_card_template_data', 'id_card_bg_data', 'id_card_watermark_data'];
 function stripBlobFields(schoolRow) {
   if (!schoolRow) return schoolRow;
   const clean = { ...schoolRow };
@@ -85,7 +85,7 @@ async function generateLoginId(conn) {
 async function createSchool(req, res) {
   const conn = await pool.getConnection();
   try {
-    const { name, adminName, adminEmail, adminMobile, udise_code, village, city, district, taluka, pin_code, phone, medium, board, distributorId, class_from, class_to } = req.body;
+    const { name, adminName, adminEmail, adminMobile, udise_code, village, city, district, taluka, pin_code, phone, medium, board, distributorId, class_from, class_to, school_section } = req.body;
     if (!name || !adminName || !adminEmail) {
       return res.status(400).json({ error: 'School name, admin name, and admin email are required' });
     }
@@ -105,9 +105,9 @@ async function createSchool(req, res) {
     const schoolId = uuidv4();
     const loginId = await generateLoginId(conn);
     await conn.query(
-      `INSERT INTO schools (id, admin_user_id, distributor_id, name, login_id, udise_code, village, city, district, taluka, pin_code, phone, email, medium, board, class_from, class_to, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
-      [schoolId, userId, distributorId || null, name, loginId, udise_code, village, city, district, taluka, pin_code, phone, adminEmail.toLowerCase().trim(), medium, board, class_from || null, class_to || null]
+      `INSERT INTO schools (id, admin_user_id, distributor_id, name, login_id, udise_code, village, city, district, taluka, pin_code, phone, email, medium, board, class_from, class_to, school_section, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+      [schoolId, userId, distributorId || null, name, loginId, udise_code, village, city, district, taluka, pin_code, phone, adminEmail.toLowerCase().trim(), medium, board, class_from || null, class_to || null, school_section || null]
     );
 
     await conn.query(`INSERT INTO wallets (id, school_id, balance) VALUES (?, ?, 0)`, [uuidv4(), schoolId]);
@@ -224,7 +224,7 @@ async function getMySchool(req, res) {
   }
 }
 
-const SCHOOL_EDITABLE_FIELDS = ['name', 'udise_code', 'village', 'city', 'district', 'taluka', 'pin_code', 'phone', 'email', 'medium', 'board', 'cert_header', 'cert_footer', 'principal_name', 'recog_no', 'class_from', 'class_to', 'lc_signature_label', 'bonafide_signature_label'];
+const SCHOOL_EDITABLE_FIELDS = ['name', 'udise_code', 'village', 'city', 'district', 'taluka', 'pin_code', 'phone', 'email', 'medium', 'board', 'cert_header', 'cert_footer', 'principal_name', 'recog_no', 'class_from', 'class_to', 'school_section', 'lc_signature_label', 'bonafide_signature_label'];
 
 // PUT /api/schools/me (schoolAdmin) - update profile + upload logo/signature/stamp + cert header/footer text
 async function updateMySchool(req, res) {
@@ -274,7 +274,7 @@ const ID_CARD_DESIGN_FIELDS = [
   'id_card_primary_color', 'id_card_school_name', 'id_card_subtitle', 'id_card_footer_text',
   'id_card_show_register_number', 'id_card_show_aadhaar', 'id_card_show_dob', 'id_card_show_address', 'id_card_show_emergency_contact',
   'id_card_border_color', 'id_card_bg_opacity', 'id_card_show_feature_strip', 'id_card_feature_icons',
-  'id_card_orientation', 'idcard_signature_label'
+  'id_card_orientation', 'idcard_signature_label', 'id_card_watermark_enabled', 'id_card_watermark_opacity'
 ];
 const VALID_ID_CARD_ORIENTATIONS = ['horizontal', 'vertical'];
 
@@ -318,6 +318,37 @@ async function deleteIdCardBg(req, res) {
   } catch (err) {
     console.error('deleteIdCardBg error:', err.message);
     res.status(500).json({ error: 'Server error removing background image' });
+  }
+}
+
+// PUT /api/schools/me/id-card-watermark (schoolAdmin) — upload a watermark
+// image drawn faintly in the card's body area. Distinct from the panel-only
+// background image above: this is opt-in (id_card_watermark_enabled) and
+// drawn behind the photo/text on the white side of the card, not just the
+// colored panel.
+async function uploadIdCardWatermark(req, res) {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Image file is required' });
+    const imgPath = await toJpegPath(req.file.path);
+    const imgData = fs.readFileSync(imgPath);
+    await pool.query('UPDATE schools SET id_card_watermark_url = ?, id_card_watermark_data = ? WHERE id = ?', [req.file.path, imgData, req.schoolId]);
+    deleteSchoolPdfs(req.schoolId, ['idcard']).catch(() => {});
+    res.json({ message: 'ID card watermark image saved.' });
+  } catch (err) {
+    console.error('uploadIdCardWatermark error:', err.message);
+    res.status(500).json({ error: 'Server error uploading watermark image' });
+  }
+}
+
+// DELETE /api/schools/me/id-card-watermark (schoolAdmin) — remove watermark image
+async function deleteIdCardWatermark(req, res) {
+  try {
+    await pool.query('UPDATE schools SET id_card_watermark_url = NULL, id_card_watermark_data = NULL, id_card_watermark_enabled = 0 WHERE id = ?', [req.schoolId]);
+    deleteSchoolPdfs(req.schoolId, ['idcard']).catch(() => {});
+    res.json({ message: 'ID card watermark image removed.' });
+  } catch (err) {
+    console.error('deleteIdCardWatermark error:', err.message);
+    res.status(500).json({ error: 'Server error removing watermark image' });
   }
 }
 
@@ -371,13 +402,16 @@ async function updateIdCardDesign(req, res) {
     const values = [];
     ID_CARD_DESIGN_FIELDS.forEach(field => {
       if (req.body[field] === undefined) return;
-      const isCheckbox = field.startsWith('id_card_show_');
+      const isCheckbox = field.startsWith('id_card_show_') || field === 'id_card_watermark_enabled';
       updates.push(`${field} = ?`);
       if (isCheckbox) {
         values.push(req.body[field] ? 1 : 0);
       } else if (field === 'id_card_bg_opacity') {
         const n = Number(req.body[field]);
         values.push(Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.15);
+      } else if (field === 'id_card_watermark_opacity') {
+        const n = Number(req.body[field]);
+        values.push(Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.1);
       } else if (field === 'id_card_feature_icons') {
         const normalized = normalizeFeatureIcons(req.body[field]);
         if (normalized === null) { updates.pop(); return; } // skip malformed value rather than corrupt the column
@@ -474,7 +508,8 @@ async function listStudentsForSchool(req, res) {
               aadhaar, religion, caste, sub_caste, nationality, mother_tongue, birth_village, birth_taluka,
               birth_district, birth_state, birth_country, admission_standard, admission_division,
               current_standard, current_division, admission_date, prev_school, prev_standard, roll_number,
-              blood_group, parent_mobile, address, photo_url, created_at, updated_at
+              blood_group, parent_mobile, address, photo_url, apaar_id, student_id_no, pen_no, loc_no,
+              created_at, updated_at
        FROM students WHERE school_id = ? ORDER BY full_name ASC`,
       [req.params.id]
     );
@@ -606,4 +641,4 @@ async function resetAdminPassword(req, res) {
   }
 }
 
-module.exports = { listSchools, createSchool, getSchool, updateSchoolStatus, getMySchool, updateMySchool, listStudentsForSchool, updateSchool, deleteSchool, updateIdCardDesign, previewIdCard, uploadIdCardBg, deleteIdCardBg, uploadCertificateTemplate, deleteCertificateTemplate, exportSchools, resetAdminPassword, deleteSchoolPdfs };
+module.exports = { listSchools, createSchool, getSchool, updateSchoolStatus, getMySchool, updateMySchool, listStudentsForSchool, updateSchool, deleteSchool, updateIdCardDesign, previewIdCard, uploadIdCardBg, deleteIdCardBg, uploadIdCardWatermark, deleteIdCardWatermark, uploadCertificateTemplate, deleteCertificateTemplate, exportSchools, resetAdminPassword, deleteSchoolPdfs };

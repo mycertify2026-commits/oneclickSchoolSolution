@@ -67,6 +67,11 @@ export default function VerifyCertificate() {
                 {result.certificate.dob && <DetailRow label="Date of Birth" value={result.certificate.dob} />}
                 {result.certificate.motherName && <DetailRow label="Mother's Name" value={result.certificate.motherName} />}
                 {result.certificate.caste && <DetailRow label="Caste" value={result.certificate.caste} />}
+                {result.certificate.subCaste && <DetailRow label="Sub-Caste" value={result.certificate.subCaste} />}
+                {result.certificate.apaarId && <DetailRow label="APAAR ID" value={result.certificate.apaarId} mono />}
+                {result.certificate.studentIdNo && <DetailRow label="Student ID" value={result.certificate.studentIdNo} mono />}
+                {result.certificate.penNo && <DetailRow label="PEN No." value={result.certificate.penNo} mono />}
+                {result.certificate.locNo && <DetailRow label="LOC No." value={result.certificate.locNo} mono />}
                 <DetailRow label="School" value={result.certificate.schoolName} />
                 <DetailRow label="Location" value={[result.certificate.schoolCity, result.certificate.schoolDistrict].filter(Boolean).join(', ') || '-'} />
                 <div style={{ marginTop: 18, marginBottom: 4, fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>

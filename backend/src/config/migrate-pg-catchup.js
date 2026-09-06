@@ -337,6 +337,33 @@ async function migrate() {
     await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS idcard_signature_label VARCHAR(50)`);
     console.log('  + schools.id_card_orientation / lc_signature_label / bonafide_signature_label / idcard_signature_label ensured');
 
+    console.log('\n17. students — APAAR ID / Student ID / PEN No. / LOC No.');
+    await client.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS apaar_id VARCHAR(12)`);
+    await client.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS student_id_no VARCHAR(20)`);
+    await client.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS pen_no VARCHAR(11)`);
+    await client.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS loc_no VARCHAR(20)`);
+    console.log('  + students.apaar_id / student_id_no / pen_no / loc_no ensured');
+
+    console.log('\n18. schools — school section + ID card watermark');
+    await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS school_section VARCHAR(30)`);
+    await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS id_card_watermark_url VARCHAR(500)`);
+    await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS id_card_watermark_data BYTEA`);
+    await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS id_card_watermark_opacity DECIMAL(3,2) NOT NULL DEFAULT 0.10`);
+    await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS id_card_watermark_enabled SMALLINT NOT NULL DEFAULT 0`);
+    console.log('  + schools.school_section / id_card_watermark_* ensured');
+
+    console.log('\n19. id_card_hard_copy_requests — batch grouping + generated PDF + receipt link');
+    await client.query(`ALTER TABLE id_card_hard_copy_requests ADD COLUMN IF NOT EXISTS batch_id VARCHAR(36)`);
+    await client.query(`ALTER TABLE id_card_hard_copy_requests ADD COLUMN IF NOT EXISTS certificate_id VARCHAR(36)`);
+    await client.query(`ALTER TABLE id_card_hard_copy_requests ADD COLUMN IF NOT EXISTS pdf_path VARCHAR(500)`);
+    await client.query(`ALTER TABLE id_card_hard_copy_requests ADD COLUMN IF NOT EXISTS receipt_id VARCHAR(36)`);
+    console.log('  + id_card_hard_copy_requests.batch_id / certificate_id / pdf_path / receipt_id ensured');
+
+    console.log('\n20. email_logs — retry tracking');
+    await client.query(`ALTER TABLE email_logs ADD COLUMN IF NOT EXISTS attempt_count INT NOT NULL DEFAULT 1`);
+    await client.query(`ALTER TABLE email_logs ADD COLUMN IF NOT EXISTS next_retry_at TIMESTAMP`);
+    console.log('  + email_logs.attempt_count / next_retry_at ensured');
+
     console.log('\nPostgreSQL catch-up migration completed successfully.');
   } catch (err) {
     console.error('Migration failed:', err.message);

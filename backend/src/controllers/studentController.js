@@ -25,7 +25,8 @@ async function listStudents(req, res) {
                         aadhaar, religion, caste, sub_caste, nationality, mother_tongue, birth_village, birth_taluka,
                         birth_district, birth_state, birth_country, admission_standard, admission_division,
                         current_standard, current_division, admission_date, prev_school, prev_standard, roll_number,
-                        blood_group, parent_mobile, address, photo_url, created_at, updated_at
+                        blood_group, parent_mobile, address, apaar_id, student_id_no, pen_no, loc_no,
+                        photo_url, created_at, updated_at
                  FROM students WHERE school_id = ?`;
     let countQuery = 'SELECT COUNT(*) as total FROM students WHERE school_id = ?';
     const params = [req.schoolId];
@@ -75,8 +76,33 @@ const STUDENT_FIELDS = [
   'birth_village', 'birth_taluka', 'birth_district', 'birth_state', 'birth_country',
   'admission_standard', 'admission_division', 'current_standard', 'current_division',
   'admission_date', 'prev_school', 'prev_standard',
-  'roll_number', 'blood_group', 'parent_mobile', 'address'
+  'roll_number', 'blood_group', 'parent_mobile', 'address',
+  'apaar_id', 'student_id_no', 'pen_no', 'loc_no'
 ];
+
+// Server-side validation for the student identifier fields — never trust
+// the frontend's maxLength/pattern alone, since these numbers (Aadhaar
+// especially) end up printed on official certificates. Empty/undefined is
+// always allowed (these fields are optional; a school may not have every
+// number for every student, especially older records — see backward
+// compatibility requirement).
+function validateStudentIdentifiers(body) {
+  const checks = [
+    { field: 'apaar_id', label: 'APAAR ID', pattern: /^\d{12}$/, message: 'APAAR ID must be exactly 12 digits' },
+    { field: 'aadhaar', label: 'Aadhaar Number', pattern: /^\d{12}$/, message: 'Aadhaar number must be exactly 12 digits' },
+    { field: 'pen_no', label: 'PEN No.', pattern: /^\d{11}$/, message: 'PEN No. must be exactly 11 digits' },
+    { field: 'student_id_no', label: 'Student ID', maxLength: 20 },
+    { field: 'loc_no', label: 'LOC No.', maxLength: 20 },
+  ];
+  for (const check of checks) {
+    const value = body[check.field];
+    if (value === undefined || value === null || String(value).trim() === '') continue;
+    const str = String(value).trim();
+    if (check.pattern && !check.pattern.test(str)) return check.message;
+    if (check.maxLength && str.length > check.maxLength) return `${check.label} must be at most ${check.maxLength} characters`;
+  }
+  return null;
+}
 
 function generateSaralId() {
   const year = new Date().getFullYear();
@@ -93,6 +119,9 @@ async function createStudent(req, res) {
         error: 'Student full name is required'
       });
     }
+
+    const idError = validateStudentIdentifiers(req.body);
+    if (idError) return res.status(400).json({ error: idError });
 
     // Auto-generate Saral ID if not supplied by the user
     if (!req.body.serial_id || String(req.body.serial_id).trim() === '') {
@@ -172,6 +201,9 @@ async function updateStudent(req, res) {
   try {
     const [existing] = await pool.query('SELECT * FROM students WHERE id = ? AND school_id = ?', [req.params.id, req.schoolId]);
     if (existing.length === 0) return res.status(404).json({ error: 'Student not found' });
+
+    const idError = validateStudentIdentifiers(req.body);
+    if (idError) return res.status(400).json({ error: idError });
 
     const updates = [];
     const values = [];

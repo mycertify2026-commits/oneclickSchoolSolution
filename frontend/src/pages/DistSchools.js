@@ -4,7 +4,11 @@ import { StatusBadge } from './DistDashboard';
 import GeoPhotoCapture from '../components/GeoPhotoCapture';
 import api from '../api/client';
 
-const BLANK = { name: '', adminName: '', adminEmail: '', adminMobile: '', udise_code: '', village: '', city: '', district: '', taluka: '', pin_code: '', phone: '', medium: '', board: '', class_from: '', class_to: '' };
+const BLANK = { name: '', adminName: '', adminEmail: '', adminMobile: '', udise_code: '', village: '', city: '', district: '', taluka: '', pin_code: '', phone: '', medium: '', board: '', class_from: '', class_to: '', school_section: '' };
+
+const LOWER_CLASS_OPTIONS = ['Nursery', 'Junior KG', 'Senior KG', '1st Standard'];
+const UPPER_CLASS_OPTIONS = ['4th Standard', '5th Standard', '6th Standard', '7th Standard', '8th Standard', '9th Standard', '10th Standard', '11th Standard', '12th Standard'];
+const SCHOOL_SECTION_OPTIONS = ['Primary', 'Upper Primary', 'Secondary', 'Higher Secondary', 'Secondary and Higher Secondary'];
 const TABS = [
   { key: '', label: 'All' }, { key: 'pending', label: 'Pending' }, { key: 'active', label: 'Approved' }, { key: 'rejected', label: 'Rejected' }
 ];
@@ -67,7 +71,7 @@ export default function DistSchools() {
       name: school.name || '', udise_code: school.udise_code || '', village: school.village || '',
       city: school.city || '', taluka: school.taluka || '', district: school.district || '',
       pin_code: school.pin_code || '', phone: school.phone || '', medium: school.medium || '', board: school.board || '',
-      class_from: school.class_from || '', class_to: school.class_to || ''
+      class_from: school.class_from || '', class_to: school.class_to || '', school_section: school.school_section || ''
     });
     setError('');
     setShowEditModal(true);
@@ -128,9 +132,28 @@ export default function DistSchools() {
               <Field label="PIN Code" value={form.pin_code} onChange={v => handleChange('pin_code', v)} />
               <Field label="Medium" value={form.medium} onChange={v => handleChange('medium', v)} />
             </div>
-            <div className="form-row form-row-2">
-              <Field label="Lower Class" value={form.class_from} onChange={v => handleChange('class_from', v)} placeholder="e.g. 1st" />
-              <Field label="Upper Class" value={form.class_to} onChange={v => handleChange('class_to', v)} placeholder="e.g. 10th" />
+            <div className="form-row form-row-3">
+              <div className="form-group">
+                <label className="form-label">Lower Class</label>
+                <select className="form-select" value={form.class_from} onChange={e => handleChange('class_from', e.target.value)}>
+                  <option value="">-- Select --</option>
+                  {LOWER_CLASS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Upper Class</label>
+                <select className="form-select" value={form.class_to} onChange={e => handleChange('class_to', e.target.value)}>
+                  <option value="">-- Select --</option>
+                  {UPPER_CLASS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">School Section</label>
+                <select className="form-select" value={form.school_section} onChange={e => handleChange('school_section', e.target.value)}>
+                  <option value="">-- Select --</option>
+                  {SCHOOL_SECTION_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
             </div>
           </div>
 
@@ -235,9 +258,28 @@ export default function DistSchools() {
                 <Field label="Medium" value={editForm.medium} onChange={v => setEditForm(p => ({ ...p, medium: v }))} />
                 <Field label="Board" value={editForm.board} onChange={v => setEditForm(p => ({ ...p, board: v }))} />
               </div>
-              <div className="form-row form-row-2">
-                <Field label="Lower Class" value={editForm.class_from} onChange={v => setEditForm(p => ({ ...p, class_from: v }))} placeholder="e.g. 1st" />
-                <Field label="Upper Class" value={editForm.class_to} onChange={v => setEditForm(p => ({ ...p, class_to: v }))} placeholder="e.g. 10th" />
+              <div className="form-row form-row-3">
+                <div className="form-group">
+                  <label className="form-label">Lower Class</label>
+                  <select className="form-select" value={editForm.class_from || ''} onChange={e => setEditForm(p => ({ ...p, class_from: e.target.value }))}>
+                    <option value="">-- Select --</option>
+                    {LOWER_CLASS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Upper Class</label>
+                  <select className="form-select" value={editForm.class_to || ''} onChange={e => setEditForm(p => ({ ...p, class_to: e.target.value }))}>
+                    <option value="">-- Select --</option>
+                    {UPPER_CLASS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">School Section</label>
+                  <select className="form-select" value={editForm.school_section || ''} onChange={e => setEditForm(p => ({ ...p, school_section: e.target.value }))}>
+                    <option value="">-- Select --</option>
+                    {SCHOOL_SECTION_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
               </div>
             </div>
             <div className="modal-footer">

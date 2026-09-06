@@ -41,6 +41,11 @@ export default function Certificates() {
   const [idCardCopyType, setIdCardCopyType] = useState('soft');
   const [idCardPricing, setIdCardPricing] = useState({ soft: 20, hard: 100 });
   const [hardCopyLoading, setHardCopyLoading] = useState(false);
+  const [hardCopyStudentIds, setHardCopyStudentIds] = useState([]);
+
+  function toggleHardCopyStudent(id) {
+    setHardCopyStudentIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
 
   // LC-specific fields
   const [lcType, setLcType] = useState('Original');
@@ -119,18 +124,15 @@ export default function Certificates() {
   }
 
   async function handleAddToCart() {
-    if (!selectedStudent) { setError('Select a student first'); return; }
-    if (selectedType === 'lc' && !lcDateOfLeaving) {
-      setError('Please enter the Date of Leaving for the LC'); return;
-    }
-    setError(''); setMessage('');
-    // Hard copy ID card goes direct, not via cart
+    // Hard copy ID card goes direct, not via cart, and supports many students in one request
     if (selectedType === 'idcard' && idCardCopyType === 'hard') {
+      if (hardCopyStudentIds.length === 0) { setError('Select at least one student'); return; }
+      setError(''); setMessage('');
       setHardCopyLoading(true);
       try {
-        await api.post('/id-cards/hard-copy', { studentId: selectedStudent });
-        setMessage('Hard copy ID card request submitted! Amount debited from wallet.');
-        setSelectedStudent('');
+        const { data } = await api.post('/id-cards/hard-copy', { studentIds: hardCopyStudentIds });
+        setMessage(data.message);
+        setHardCopyStudentIds([]);
         loadCart();
         loadRecent();
       } catch (e) {
@@ -138,6 +140,11 @@ export default function Certificates() {
       } finally { setHardCopyLoading(false); }
       return;
     }
+    if (!selectedStudent) { setError('Select a student first'); return; }
+    if (selectedType === 'lc' && !lcDateOfLeaving) {
+      setError('Please enter the Date of Leaving for the LC'); return;
+    }
+    setError(''); setMessage('');
     try {
       await api.post('/cart/items', {
         studentId: selectedStudent,
@@ -285,23 +292,50 @@ export default function Certificates() {
           )}
 
           {/* Student selector + common fields */}
-          <div className="form-grid">
-            <div className="form-group">
-              <label className="form-label">Select Student</label>
-              <select className="form-control" value={selectedStudent} onChange={e => { setSelectedStudent(e.target.value); setError(''); }}>
-                <option value="">-- Select --</option>
-                {students.map(s => (
-                  <option key={s.id} value={s.id}>{s.full_name} ({s.admission_standard}-{s.admission_division})</option>
-                ))}
-              </select>
-            </div>
-            {selectedType === 'bonafide' && (
-              <div className="form-group">
-                <label className="form-label">Purpose</label>
-                <input className="form-control" value={purpose} onChange={e => setPurpose(e.target.value)} placeholder="e.g. Passport application" />
+          {selectedType === 'idcard' && idCardCopyType === 'hard' ? (
+            <div className="form-group" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <label className="form-label" style={{ margin: 0 }}>Select Students ({hardCopyStudentIds.length} selected)</label>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button type="button" className="btn btn-sm btn-outline" onClick={() => setHardCopyStudentIds(students.map(s => s.id))}>Select All</button>
+                  <button type="button" className="btn btn-sm btn-outline" onClick={() => setHardCopyStudentIds([])}>Clear</button>
+                </div>
               </div>
-            )}
-          </div>
+              <div style={{ maxHeight: 260, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
+                {students.length === 0 ? (
+                  <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>No students found.</div>
+                ) : students.map(s => (
+                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: '1px solid var(--border)', cursor: 'pointer', fontSize: 13 }}>
+                    <input type="checkbox" checked={hardCopyStudentIds.includes(s.id)} onChange={() => toggleHardCopyStudent(s.id)} />
+                    {s.full_name} ({s.admission_standard}-{s.admission_division})
+                  </label>
+                ))}
+              </div>
+              {hardCopyStudentIds.length > 0 && (
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>
+                  Total: <strong style={{ color: 'var(--primary)' }}>₹{(idCardPricing.hard * hardCopyStudentIds.length).toLocaleString('en-IN')}</strong> for {hardCopyStudentIds.length} card{hardCopyStudentIds.length !== 1 ? 's' : ''}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="form-grid">
+              <div className="form-group">
+                <label className="form-label">Select Student</label>
+                <select className="form-control" value={selectedStudent} onChange={e => { setSelectedStudent(e.target.value); setError(''); }}>
+                  <option value="">-- Select --</option>
+                  {students.map(s => (
+                    <option key={s.id} value={s.id}>{s.full_name} ({s.admission_standard}-{s.admission_division})</option>
+                  ))}
+                </select>
+              </div>
+              {selectedType === 'bonafide' && (
+                <div className="form-group">
+                  <label className="form-label">Purpose</label>
+                  <input className="form-control" value={purpose} onChange={e => setPurpose(e.target.value)} placeholder="e.g. Passport application" />
+                </div>
+              )}
+            </div>
+          )}
 
           {/* LC-specific fields */}
           {selectedType === 'lc' && (
@@ -347,9 +381,13 @@ export default function Certificates() {
                 <i className="fas fa-eye" style={{ marginRight: 6 }}></i>Preview
               </button>
             )}
-            <button className="btn btn-primary" onClick={handleAddToCart} disabled={!selectedStudent || hardCopyLoading}>
+            <button
+              className="btn btn-primary"
+              onClick={handleAddToCart}
+              disabled={selectedType === 'idcard' && idCardCopyType === 'hard' ? (hardCopyStudentIds.length === 0 || hardCopyLoading) : !selectedStudent}
+            >
               {selectedType === 'idcard' && idCardCopyType === 'hard'
-                ? <><i className="fas fa-print" style={{ marginRight: 6 }}></i>{hardCopyLoading ? 'Submitting...' : `Request Hard Copy (₹${idCardPricing.hard})`}</>
+                ? <><i className="fas fa-print" style={{ marginRight: 6 }}></i>{hardCopyLoading ? 'Submitting...' : `Request Hard Copy${hardCopyStudentIds.length > 0 ? ` — ₹${(idCardPricing.hard * hardCopyStudentIds.length).toLocaleString('en-IN')}` : ''}`}</>
                 : <><i className="fas fa-cart-plus" style={{ marginRight: 6 }}></i>Add to Cart</>
               }
             </button>

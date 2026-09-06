@@ -22,4 +22,9 @@ router.get('/hard-copy/sd', authenticate, requireRole('superDistributor'), c.lis
 router.get('/hard-copy',        authenticate, requireRole('superAdmin'), c.listAllHardCopyRequests);
 router.put('/hard-copy/:id',    authenticate, requireRole('superAdmin'), c.updateHardCopyRequest);
 
+// Download the generated ID card PDF for one request — access-checked
+// per-role inside the handler (school owner / assigned distributor or
+// super distributor / super admin).
+router.get('/hard-copy/:id/pdf', authenticate, c.downloadHardCopyPdf);
+
 module.exports = router;

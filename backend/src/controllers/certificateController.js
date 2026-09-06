@@ -587,7 +587,8 @@ async function verifyCertificate(req, res) {
               s.full_name as student_name,
               COALESCE(s.current_standard, s.admission_standard) as admission_standard,
               COALESCE(s.current_division, s.admission_division) as admission_division,
-              s.dob, s.caste, s.mother_name,
+              s.dob, s.caste, s.sub_caste, s.mother_name,
+              s.apaar_id, s.student_id_no, s.pen_no, s.loc_no,
                sc.name as school_name, sc.city as school_city, sc.district as school_district,
                sc.taluka as school_taluka, sc.principal_name, sc.phone as school_phone,
                sc.email as school_email, sc.udise_code,
@@ -637,7 +638,12 @@ async function verifyCertificate(req, res) {
         division: cert.admission_division,
         dob: fmtDate(cert.dob),
         caste: cert.caste,
+        subCaste: cert.sub_caste,
         motherName: cert.mother_name,
+        apaarId: cert.apaar_id,
+        studentIdNo: cert.student_id_no,
+        penNo: cert.pen_no,
+        locNo: cert.loc_no,
         schoolName: cert.school_name,
         schoolCity: cert.school_city,
         schoolDistrict: cert.school_district,
@@ -922,9 +928,20 @@ async function adminApproveRequest(req, res) {
       [certId, certReq.id]
     );
   } catch (dbErr) {
-    console.error('adminApproveRequest DB write error:', dbErr.message);
-    // Debit and PDF already done — do not revert; log for manual reconciliation.
-    return res.status(500).json({ error: 'Certificate record save failed. Contact support — debit may have occurred.' });
+    console.error('adminApproveRequest DB write error, refunding + reverting:', dbErr.message);
+    // Same recovery as a PDF-generation failure (Step 4) — the wallet was
+    // already debited and a PDF may already be on disk, but no certificate
+    // row exists to show for it, so treat this exactly like that failure
+    // mode rather than leaving an unresolved debit with only a console.error
+    // for reconciliation.
+    try {
+      await creditWallet(certReq.school_id, certReq.price, 'approval_record_failed_refund', null,
+        `Refund: ${certReq.type} certificate record failed to save for ${student.full_name}`);
+    } catch (e) {
+      console.error('CRITICAL: refund after failed approval DB write also failed:', e.message);
+    }
+    await revertToPending();
+    return res.status(500).json({ error: 'Certificate record save failed. Wallet refunded. Request reverted to pending.' });
   }
 
   // ── Step 5b: Receipt (2x price) — isolated so a failure here never undoes

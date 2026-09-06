@@ -143,7 +143,7 @@ function drawDoubleBorder(doc, top = 16, bottom = null) {
   doc.restore();
 }
 
-function drawHeader(doc, school, logoPath, marginX = 46) {
+function drawHeader(doc, school, logoPath, marginX = 46, minTextY = 0) {
   const contentWidth = doc.page.width - marginX * 2;
   const top = 42;
 
@@ -154,7 +154,7 @@ function drawHeader(doc, school, logoPath, marginX = 46) {
     doc.save().circle(marginX + 31, top + 31, 29).lineWidth(1.3).strokeColor(NAVY).stroke().restore();
   }
 
-  let y = top + 74;
+  let y = Math.max(top + 74, minTextY);
 
   y = fitCenteredText(doc, 'Maharashtra state education board', marginX, y, contentWidth, 15, NAVY) + 3;
   y = fitCenteredText(doc, sentenceCase(school.name, 'School name'), marginX, y, contentWidth, 16, NAVY) + 4;
@@ -255,6 +255,81 @@ function drawFrameIfAvailable(doc, framePath, x, y, width, height) {
   }
 }
 
+// Renders a centered, word-wrapped paragraph where selected segments (the
+// actual DB-fetched values) render bold while the surrounding sentence stays
+// regular weight. pdfkit's `continued` text mode does not reflow correctly
+// when combined with `align: 'center'` across a multi-line wrap (segments
+// visibly overlap), so line-breaking and per-line centering are done here
+// manually, word by word.
+function splitIntoBoldWords(segments) {
+  const words = [];
+  segments.forEach(seg => {
+    seg.text.split(/\s+/).filter(Boolean).forEach(text => words.push({ text, bold: !!seg.bold }));
+  });
+  // A segment boundary landing right before punctuation (e.g. a bold value
+  // followed by the plain-text ". Mother's name is") tokenizes the "." as
+  // its own word, which would otherwise render with a phantom space before
+  // it. Glue standalone leading punctuation onto the previous word instead.
+  const merged = [];
+  words.forEach(w => {
+    if (/^[.,;:!?]+$/.test(w.text) && merged.length > 0) {
+      merged[merged.length - 1].text += w.text;
+    } else {
+      merged.push({ ...w });
+    }
+  });
+  return merged;
+}
+
+function wrapBoldWords(doc, words, fontSize, maxWidth) {
+  const spaceWidth = doc.fontSize(fontSize).font('Helvetica').widthOfString(' ');
+  const lines = [];
+  let current = [];
+  let currentWidth = 0;
+  words.forEach(w => {
+    const wWidth = doc.font(w.bold ? 'Helvetica-Bold' : 'Helvetica').widthOfString(w.text);
+    const candidateWidth = current.length === 0 ? wWidth : currentWidth + spaceWidth + wWidth;
+    if (candidateWidth > maxWidth && current.length > 0) {
+      lines.push({ words: current, width: currentWidth });
+      current = [w];
+      currentWidth = wWidth;
+    } else {
+      current.push(w);
+      currentWidth = candidateWidth;
+    }
+  });
+  if (current.length) lines.push({ words: current, width: currentWidth });
+  return lines;
+}
+
+// Shrinks fontSize (like every other shrink-to-fit block in this file) until
+// the wrapped paragraph fits maxHeight, then draws each line centered.
+function drawCenteredBoldParagraph(doc, x, y, width, maxHeight, segments, initialSize, color, lineGap = 2) {
+  const words = splitIntoBoldWords(segments);
+  let fontSize = initialSize;
+  let lines, lineHeight, totalHeight;
+  do {
+    lines = wrapBoldWords(doc, words, fontSize, width);
+    lineHeight = fontSize * 1.15 + lineGap;
+    totalHeight = lines.length * lineHeight - lineGap;
+    if (totalHeight <= maxHeight || fontSize <= 7) break;
+    fontSize -= 0.5;
+  } while (true);
+
+  const spaceWidth = doc.fontSize(fontSize).font('Helvetica').widthOfString(' ');
+  let curY = y;
+  lines.forEach(line => {
+    let curX = x + (width - line.width) / 2;
+    line.words.forEach(w => {
+      const font = w.bold ? 'Helvetica-Bold' : 'Helvetica';
+      doc.font(font).fillColor(color).fontSize(fontSize).text(w.text, curX, curY, { lineBreak: false });
+      curX += doc.widthOfString(w.text) + spaceWidth;
+    });
+    curY += lineHeight;
+  });
+  return curY;
+}
+
 // Footer for LC: three columns — Date/Place (left), Stamp (centre), HEAD MASTER (right).
 // Combined note (no-change + certified) in one line at very bottom.
 function drawLcFooter(doc, y, school, opts) {
@@ -348,30 +423,24 @@ async function generateLcPdf({
         drawDoubleBorder(doc);
       }
 
-      // ── Top row: Logo (left) | QR (centre) | Cert ID (right) ──
-      const boxW    = 130;
+      // ── Top row: Logo (left) | QR + Certificate No. stacked (right) ──
+      // QR sits directly above the Certificate Number box so both read as
+      // one verification unit instead of two separately-placed elements.
+      const boxW    = 110;
       const certIdX = doc.page.width - 46 - boxW;
-      // The QR block is 60pt tall while the certificate-number block is
-      // shorter. Offset the latter by half the difference so both blocks
-      // share the same vertical centre as the logo and QR.
       const metaTop = 42;
-      const qrSize = 60;
-      const certMetaHeight = 40;
-      const certIdY = metaTop + (qrSize - certMetaHeight) / 2;
-      drawIdBox(doc, certIdX, certIdY, 'CERTIFICATE NO.', certificate.serial_number, boxW);
+      const qrSize  = 46;
 
-      // QR horizontally centred on the certificate/content area itself —
-      // not between the logo and cert-ID box, which drifts off-centre
-      // whenever either block's width changes.
       if (qrBuffer) {
-        const contentWidth = doc.page.width - 92; // 46pt margin each side, matches drawHeader/drawLcFooter
-        const qrX = Math.round(46 + (contentWidth - qrSize) / 2);
+        const qrX = certIdX + (boxW - qrSize) / 2;
         try { doc.image(qrBuffer, qrX, metaTop, { width: qrSize, height: qrSize }); } catch (e) {}
         doc.font('Helvetica').fontSize(5).fillColor(GREY)
-          .text('Scan to verify', qrX, metaTop + qrSize + 2, { width: qrSize, align: 'center', lineBreak: false });
+          .text('Scan to verify', certIdX, metaTop + qrSize + 1, { width: boxW, align: 'center', lineBreak: false });
       }
+      const certIdY = metaTop + qrSize + 12;
+      const certIdBottom = drawIdBox(doc, certIdX, certIdY, 'CERTIFICATE NO.', certificate.serial_number, boxW);
 
-      let y = drawHeader(doc, school, safeLogoPath);
+      let y = drawHeader(doc, school, safeLogoPath, 46, certIdBottom + 6);
 
       // ── Original / Duplicate pill ──
       const typeLabel      = sentenceCase(lcType || 'Original');
@@ -393,7 +462,16 @@ async function generateLcPdf({
       doc.text(`Roll No.: ${sentenceCase(student.roll_number, '-')}`,   46 + idBarSeg,     y, { width: idBarSeg });
       doc.text(`G.R. No.: ${sentenceCase(student.register_number, '-')}`, 46 + 2 * idBarSeg, y, { width: idBarSeg });
       doc.text(`Saral ID: ${sentenceCase(student.serial_id, '-')}`,     46 + 3 * idBarSeg, y, { width: idBarSeg });
+      y += 15;
+
+      // ── APAAR ID / Student ID / PEN No. / LOC No. bar ──
+      doc.font('Helvetica-Bold').fontSize(9.5).fillColor(TEXT);
+      doc.text(`APAAR ID: ${sentenceCase(student.apaar_id, '-')}`,        46,               y, { width: idBarSeg });
+      doc.text(`Student ID: ${sentenceCase(student.student_id_no, '-')}`, 46 + idBarSeg,     y, { width: idBarSeg });
+      doc.text(`PEN No.: ${sentenceCase(student.pen_no, '-')}`,           46 + 2 * idBarSeg, y, { width: idBarSeg });
+      doc.text(`LOC No.: ${sentenceCase(student.loc_no, '-')}`,           46 + 3 * idBarSeg, y, { width: idBarSeg });
       y += 16;
+
       doc.font('Helvetica').fontSize(7.5).fillColor(GREY)
         .text(`Aadhar: ${student.aadhaar ? 'XXXX-XXXX-' + String(student.aadhaar).slice(-4) : '-'}`, 46, y, { width: contentWidth });
       y += 14;
@@ -416,7 +494,6 @@ async function generateLcPdf({
         ['Progress',                       'Good'],
         ['Conduct',                        'Good'],
         ['Date of Leaving',                leavingDate],
-        ['Date of admission (since when)', fmtDate(student.admission_date)],
         ['Reason for leaving',             safe(reasonForLeaving, '')],
         ['Class in which studying',        `${safe(student.current_standard || student.admission_standard)} standard (${safe(student.current_division || student.admission_division)})`],
         ['Remarks',                        safe(remarks, '')],
@@ -441,7 +518,7 @@ async function generateLcPdf({
         .text(`Place : ${sentenceCase(school.city || school.village || school.taluka)}`, 46, fy + 14);
 
       // Photo centred
-      const photoW  = 80, photoH = 90;
+      const photoW  = 80, photoH = 80;
       const photoX  = doc.page.width / 2 - photoW / 2;
       const photoY  = fy;
       drawPhotoPanel(doc, photoX, photoY, safePhotoPath, photoW, photoH);
@@ -465,12 +542,10 @@ async function generateLcPdf({
       // Header, and defaults to "Head master" only when unset.
       const lcSignatureLabel = safe(school.lc_signature_label, 'Head master');
       if (school.principal_name) {
-        doc.font('Helvetica-Bold').fontSize(8).fillColor(TEXT)
-          .text(`(${sentenceCase(school.principal_name)})`, C3, LINE_Y + 4, { width: C3W, align: 'center' });
-        doc.font('Helvetica-Bold').fontSize(9)
-          .text(lcSignatureLabel, C3, LINE_Y + 14, { width: C3W, align: 'center' });
+        doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT)
+          .text(`${lcSignatureLabel} (${sentenceCase(school.principal_name)})`, C3, LINE_Y + 4, { width: C3W, align: 'center' });
         doc.font('Helvetica').fontSize(7.5).fillColor(GREY)
-          .text(sentenceCase(school.name), C3, LINE_Y + 26, { width: C3W, align: 'center' });
+          .text(sentenceCase(school.name), C3, LINE_Y + 17, { width: C3W, align: 'center' });
       } else {
         doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT)
           .text(lcSignatureLabel, C3, LINE_Y + 5, { width: C3W, align: 'center' });
@@ -488,9 +563,9 @@ async function generateLcPdf({
       // school-uploaded border template (of realistic thickness) never
       // overlaps it, matching the ~46pt margin used everywhere else on
       // this certificate.
-      const noteY = doc.page.height - 70;
+      const noteY = doc.page.height - 45;
       doc.save().moveTo(46, noteY).lineTo(46 + fw, noteY).lineWidth(1.2).strokeColor(GOLD).stroke().restore();
-      doc.font('Helvetica-Oblique').fontSize(7).fillColor(GREY)
+      doc.font('Helvetica-Bold').fontSize(7.5).fillColor(TEXT)
         .text(
           'No change in any entry in this certificate shall be made except by the authority issuing it. ' +
           'Certified that the above information is true to the best of our knowledge as per school records.',
@@ -825,11 +900,27 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
     doc.font('Helvetica').fillColor(muted).text(value, { lineBreak: false, width: idSeg - 18 });
   });
 
+  // ── Second ID row: APAAR ID / Student ID / PEN No. / LOC No. ─────────────
+  const idRow2Y = idRowY + 15;
+  const idFields2 = [
+    ['APAAR ID', safe(student.apaar_id, '-')],
+    ['Student ID', safe(student.student_id_no, '-')],
+    ['PEN No.', safe(student.pen_no, '-')],
+    ['LOC No.', safe(student.loc_no, '-')],
+  ];
+  idFields2.forEach(([label, value], i) => {
+    const x = left + i * idSeg;
+    doc.circle(x + 6, idRow2Y + 4, 2.5).fillColor(GOLD).fill();
+    doc.fillColor(black).font('Helvetica-Bold').fontSize(7.5)
+      .text(`${label}: `, x + 14, idRow2Y, { continued: true, lineBreak: false });
+    doc.font('Helvetica').fillColor(muted).text(value, { lineBreak: false, width: idSeg - 18 });
+  });
+
   // ── "This is to certify that" + title banner ──────────────────────────────
   doc.fillColor(muted).font('Helvetica-Oblique').fontSize(9)
-    .text('This is to certify that', left, 162, { width: contentW, align: 'center', lineBreak: false });
+    .text('This is to certify that', left, 178, { width: contentW, align: 'center', lineBreak: false });
 
-  const bannerY = 176, bannerH = 22;
+  const bannerY = 192, bannerH = 22;
   doc.save().roundedRect(left, bannerY, contentW, bannerH, 5).fillColor(NAVY).fill()
     .lineWidth(1).strokeColor(GOLD).roundedRect(left, bannerY, contentW, bannerH, 5).stroke()
     .restore();
@@ -838,7 +929,7 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
 
   // ── Student name ───────────────────────────────────────────────────────
   doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(17)
-    .text(safe(student.full_name).toUpperCase(), left, 208, { width: contentW, align: 'center', lineBreak: false, ellipsis: true });
+    .text(safe(student.full_name).toUpperCase(), left, 224, { width: contentW, align: 'center', lineBreak: false, ellipsis: true });
 
   // ── Body paragraph (centered, shrink-to-fit above the footer strip) ──────
   const heShe = student.gender === 'Male' ? 'He' : student.gender === 'Female' ? 'She' : 'He/She';
@@ -851,22 +942,39 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
   const currentDivision = student.current_division || student.admission_division;
   const standardValue = safe(student.current_standard || student.admission_standard, '-') +
     (currentDivision ? ` Div. ${safe(currentDivision)}` : '');
+  const academicYearStr = safe(student.academic_year) || currentAcademicYear();
+  const motherNameUpper = safe(student.mother_name, '-').toUpperCase();
+  const casteStr = safe(student.caste, 'N/A');
+  const dobStr = fmtDate(student.dob);
+  const dobWordsStr = dobInWords(student.dob);
+  const birthPlaceStr = birthPlace || '-';
 
-  let para = `is / was a bonafide student of this School / College Studying in Std. ${standardValue} ` +
-    `during the year ${safe(student.academic_year) || currentAcademicYear()}. Mother's name is ${safe(student.mother_name, '-').toUpperCase()}. ` +
-    `${heShe} is ${safe(student.caste, 'N/A')} by Caste. ${hisHer} date of Birth according to our Register is ${fmtDate(student.dob)} ` +
-    `(in words ${dobInWords(student.dob)}). ${hisHer} place of Birth is ${birthPlace || '-'}. ${heShe} bears a good moral character.`;
-  if (purpose) para += ` This certificate is issued on the request for the purpose of: ${purpose}.`;
+  const paraSegments = [
+    { text: 'is / was a bonafide student of this School / College Studying in Std. ' },
+    { text: standardValue, bold: true },
+    { text: ' during the year ' },
+    { text: academicYearStr, bold: true },
+    { text: `. Mother's name is ` },
+    { text: motherNameUpper, bold: true },
+    { text: `. ${heShe} is ` },
+    { text: casteStr, bold: true },
+    { text: ` by Caste. ${hisHer} date of Birth according to our Register is ` },
+    { text: dobStr, bold: true },
+    { text: ` (in words ${dobWordsStr}). ${hisHer} place of Birth is ` },
+    { text: birthPlaceStr, bold: true },
+    { text: `. ${heShe} bears a good moral character.` },
+  ];
+  if (purpose) {
+    paraSegments.push({ text: ' This certificate is issued on the request for the purpose of: ' });
+    paraSegments.push({ text: purpose, bold: true });
+    paraSegments.push({ text: '.' });
+  }
 
-  const bodyY = 232;
+  const bodyY = 248;
   const photoResW = 66, photoResX = right - photoResW - 4;
   const bodyW = contentW - photoResW - 16;
-  const bodyBottom = 344;
-  let bodySize = 10.5;
-  doc.font('Helvetica');
-  while (bodySize > 7 && doc.fontSize(bodySize).heightOfString(para, { width: bodyW, align: 'center', lineGap: 2 }) > bodyBottom - bodyY) bodySize -= 0.5;
-  doc.fillColor(black).fontSize(bodySize)
-    .text(para, left, bodyY, { width: bodyW, align: 'center', lineGap: 2 });
+  const bodyBottom = 360;
+  drawCenteredBoldParagraph(doc, left, bodyY, bodyW, bodyBottom - bodyY, paraSegments, 10.5, black, 2);
 
   // ── Student photo + digitally-signed badge, right of the body text ───────
   const photoResH = 78, photoResY = bodyY;
@@ -885,7 +993,7 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
     .text('Digitally Signed', photoResX + 16, badgeY + 4, { width: photoResW - 18, lineBreak: false });
 
   // ── Footer strip: Date of Issue | Place | Verified ───────────────────────
-  const stripY = 354, stripH = 44, stripSeg = contentW / 3;
+  const stripY = 370, stripH = 44, stripSeg = contentW / 3;
   doc.save().moveTo(left, stripY - 8).lineTo(right, stripY - 8).lineWidth(0.6).strokeColor(GOLD).stroke().restore();
 
   doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(7.5)
@@ -908,7 +1016,7 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
       verX + 6, stripY + 23, { width: stripSeg - 12, align: 'center', lineGap: 1 });
 
   // ── Signature row: Class Teacher | seal | Principal ──────────────────────
-  const sigY = 414, lineY = sigY + 32;
+  const sigY = 430, lineY = sigY + 32;
   const sigColW = contentW / 3;
 
   if (canDraw(signaturePath)) {

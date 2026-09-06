@@ -7,8 +7,12 @@ import api from '../api/client';
 const BLANK = {
   name: '', adminName: '', adminEmail: '', adminMobile: '',
   udise_code: '', village: '', city: '', district: '', taluka: '',
-  pin_code: '', phone: '', medium: '', board: '', distributorId: '', class_from: '', class_to: ''
+  pin_code: '', phone: '', medium: '', board: '', distributorId: '', class_from: '', class_to: '', school_section: ''
 };
+
+const LOWER_CLASS_OPTIONS = ['Nursery', 'Junior KG', 'Senior KG', '1st Standard'];
+const UPPER_CLASS_OPTIONS = ['4th Standard', '5th Standard', '6th Standard', '7th Standard', '8th Standard', '9th Standard', '10th Standard', '11th Standard', '12th Standard'];
+const SCHOOL_SECTION_OPTIONS = ['Primary', 'Upper Primary', 'Secondary', 'Higher Secondary', 'Secondary and Higher Secondary'];
 
 export default function SdSchools() {
   const [schools, setSchools] = useState([]);
@@ -65,7 +69,7 @@ export default function SdSchools() {
 
   function openEdit(s) {
     setEditingSchool(s);
-    setEditForm({ name: s.name, udise_code: s.udise_code || '', city: s.city || '', district: s.district || '', taluka: s.taluka || '', pin_code: s.pin_code || '', phone: s.phone || '', medium: s.medium || '', board: s.board || '', class_from: s.class_from || '', class_to: s.class_to || '' });
+    setEditForm({ name: s.name, udise_code: s.udise_code || '', city: s.city || '', district: s.district || '', taluka: s.taluka || '', pin_code: s.pin_code || '', phone: s.phone || '', medium: s.medium || '', board: s.board || '', class_from: s.class_from || '', class_to: s.class_to || '', school_section: s.school_section || '' });
     setError('');
     setShowEditModal(true);
   }
@@ -163,9 +167,28 @@ export default function SdSchools() {
                 <F label="Phone" value={form.phone} onChange={v => hc('phone', v)} />
                 <F label="Medium" value={form.medium} onChange={v => hc('medium', v)} />
               </div>
-              <div className="form-row form-row-2">
-                <F label="Lower Class" value={form.class_from} onChange={v => hc('class_from', v)} placeholder="e.g. 1st" />
-                <F label="Upper Class" value={form.class_to} onChange={v => hc('class_to', v)} placeholder="e.g. 10th" />
+              <div className="form-row form-row-3">
+                <div className="form-group">
+                  <label className="form-label">Lower Class</label>
+                  <select className="form-control" value={form.class_from} onChange={e => hc('class_from', e.target.value)}>
+                    <option value="">-- Select --</option>
+                    {LOWER_CLASS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Upper Class</label>
+                  <select className="form-control" value={form.class_to} onChange={e => hc('class_to', e.target.value)}>
+                    <option value="">-- Select --</option>
+                    {UPPER_CLASS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">School Section</label>
+                  <select className="form-control" value={form.school_section} onChange={e => hc('school_section', e.target.value)}>
+                    <option value="">-- Select --</option>
+                    {SCHOOL_SECTION_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
               </div>
               <div className="form-row form-row-2">
                 <div className="form-group">
@@ -223,9 +246,28 @@ export default function SdSchools() {
                 <F label="Phone" value={editForm.phone} onChange={v => setEditForm(p => ({ ...p, phone: v }))} />
                 <F label="Medium" value={editForm.medium} onChange={v => setEditForm(p => ({ ...p, medium: v }))} />
               </div>
-              <div className="form-row form-row-2">
-                <F label="Lower Class" value={editForm.class_from} onChange={v => setEditForm(p => ({ ...p, class_from: v }))} placeholder="e.g. 1st" />
-                <F label="Upper Class" value={editForm.class_to} onChange={v => setEditForm(p => ({ ...p, class_to: v }))} placeholder="e.g. 10th" />
+              <div className="form-row form-row-3">
+                <div className="form-group">
+                  <label className="form-label">Lower Class</label>
+                  <select className="form-control" value={editForm.class_from || ''} onChange={e => setEditForm(p => ({ ...p, class_from: e.target.value }))}>
+                    <option value="">-- Select --</option>
+                    {LOWER_CLASS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Upper Class</label>
+                  <select className="form-control" value={editForm.class_to || ''} onChange={e => setEditForm(p => ({ ...p, class_to: e.target.value }))}>
+                    <option value="">-- Select --</option>
+                    {UPPER_CLASS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">School Section</label>
+                  <select className="form-control" value={editForm.school_section || ''} onChange={e => setEditForm(p => ({ ...p, school_section: e.target.value }))}>
+                    <option value="">-- Select --</option>
+                    {SCHOOL_SECTION_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
               </div>
             </div>
             <div className="modal-footer">

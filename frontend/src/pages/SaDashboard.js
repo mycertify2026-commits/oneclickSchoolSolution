@@ -13,22 +13,25 @@ export default function SaDashboard() {
   const [revenueTrend, setRevenueTrend] = useState([]);
   const [certByType, setCertByType] = useState([]);
   const [pendingWalletCount, setPendingWalletCount] = useState(0);
+  const [totalCommission, setTotalCommission] = useState(0);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const navigate = useNavigate();
 
   const load = useCallback(async () => {
     try {
-      const [schoolsRes, revenueRes, certRes, walletReqRes] = await Promise.all([
+      const [schoolsRes, revenueRes, certRes, walletReqRes, overviewRes] = await Promise.all([
         api.get('/schools'),
         api.get('/reports/revenue', { params: { months: 6 } }),
         api.get('/reports/certificates-by-type'),
-        api.get('/wallet/recharge-requests', { params: { status: 'pending' } })
+        api.get('/wallet/recharge-requests', { params: { status: 'pending' } }),
+        api.get('/reports/overview')
       ]);
       setSchools(schoolsRes.data.schools);
       setRevenueTrend(revenueRes.data.trend);
       setCertByType(certRes.data.breakdown);
       setPendingWalletCount(walletReqRes.data.requests.length);
+      setTotalCommission(Number(overviewRes.data.earnings?.superAdminTotal || 0));
     } finally {
       setLoading(false);
     }
@@ -112,6 +115,7 @@ export default function SaDashboard() {
         <StatCard icon="fa-clock" color="var(--warning)" bg="rgba(245,158,11,.1)" value={pendingSchools} label="Pending Approvals" />
         <StatCard icon="fa-wallet" color="#7c3aed" bg="rgba(124,58,237,.1)" value={`₹${totalWallet.toLocaleString('en-IN')}`} label="Combined Wallet Balance" />
         <StatCard icon="fa-receipt" color="#f97316" bg="rgba(249,115,22,.1)" value={pendingWalletCount} label="Pending Wallet Requests" onClick={() => navigate('/sa-wallet')} />
+        <StatCard icon="fa-hand-holding-dollar" color="#059669" bg="rgba(5,150,105,.1)" value={`₹${totalCommission.toLocaleString('en-IN')}`} label="Total Commission (Platform Share)" onClick={() => navigate('/sa-reports')} />
       </div>
 
       <div className="chart-grid">

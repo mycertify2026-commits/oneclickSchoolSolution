@@ -46,6 +46,36 @@ const SCHOOL_ID_CARD_AND_SIGNATURE_COLUMNS = [
   { name: 'idcard_signature_label', definition: 'VARCHAR(50)' },
 ];
 
+const STUDENT_ID_COLUMNS = [
+  { name: 'apaar_id', definition: 'VARCHAR(12)' },
+  { name: 'student_id_no', definition: 'VARCHAR(20)' },
+  { name: 'pen_no', definition: 'VARCHAR(11)' },
+  { name: 'loc_no', definition: 'VARCHAR(20)' },
+];
+
+const SCHOOL_SECTION_COLUMN = [
+  { name: 'school_section', definition: 'VARCHAR(30)' },
+];
+
+const SCHOOL_WATERMARK_COLUMNS = [
+  { name: 'id_card_watermark_url', definition: 'VARCHAR(500)' },
+  { name: 'id_card_watermark_data', definition: 'MEDIUMBLOB' },
+  { name: 'id_card_watermark_opacity', definition: 'DECIMAL(3,2) NOT NULL DEFAULT 0.10' },
+  { name: 'id_card_watermark_enabled', definition: 'SMALLINT NOT NULL DEFAULT 0' },
+];
+
+const HARD_COPY_BATCH_COLUMNS = [
+  { name: 'batch_id', definition: 'VARCHAR(36)' },
+  { name: 'certificate_id', definition: 'VARCHAR(36)' },
+  { name: 'pdf_path', definition: 'VARCHAR(500)' },
+  { name: 'receipt_id', definition: 'VARCHAR(36)' },
+];
+
+const EMAIL_LOG_RETRY_COLUMNS = [
+  { name: 'attempt_count', definition: 'INT NOT NULL DEFAULT 1' },
+  { name: 'next_retry_at', definition: 'DATETIME' },
+];
+
 async function migrate() {
   const connection = await mysql.createConnection({
     host: process.env.DB_HOST,
@@ -64,6 +94,16 @@ async function migrate() {
     await addMissingColumns(connection, dbName, 'schools', SCHOOL_CLASS_RANGE_COLUMNS);
     console.log('\nschools (ID card orientation + signature designation):');
     await addMissingColumns(connection, dbName, 'schools', SCHOOL_ID_CARD_AND_SIGNATURE_COLUMNS);
+    console.log('\nstudents (APAAR / Student ID / PEN / LOC):');
+    await addMissingColumns(connection, dbName, 'students', STUDENT_ID_COLUMNS);
+    console.log('\nschools (school section):');
+    await addMissingColumns(connection, dbName, 'schools', SCHOOL_SECTION_COLUMN);
+    console.log('\nschools (ID card watermark):');
+    await addMissingColumns(connection, dbName, 'schools', SCHOOL_WATERMARK_COLUMNS);
+    console.log('\nid_card_hard_copy_requests (batch grouping + generated PDF + receipt):');
+    await addMissingColumns(connection, dbName, 'id_card_hard_copy_requests', HARD_COPY_BATCH_COLUMNS);
+    console.log('\nemail_logs (retry tracking):');
+    await addMissingColumns(connection, dbName, 'email_logs', EMAIL_LOG_RETRY_COLUMNS);
     console.log('\nProfile-fields migration completed successfully.');
   } catch (err) {
     console.error('Profile-fields migration failed:', err.message);

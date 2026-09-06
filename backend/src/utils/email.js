@@ -30,17 +30,37 @@ if (emailTransportConfigured && process.env.NODE_ENV !== 'test') {
 
 // Single low-level send choke point — every named template function in this
 // file funnels through here, so this is the one place email_logs is written.
-async function logEmailAttempt({ to, sender, emailType, relatedUserId, relatedSchoolId, relatedCertificateId, status, error }) {
+async function logEmailAttempt({ to, sender, emailType, relatedUserId, relatedSchoolId, relatedCertificateId, status, error, attemptCount }) {
   try {
     await pool.query(
-      `INSERT INTO email_logs (recipient, sender, email_type, related_user_id, related_school_id, related_certificate_id, status, error_message)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [to, sender || null, emailType || null, relatedUserId || null, relatedSchoolId || null, relatedCertificateId || null, status, error || null]
+      `INSERT INTO email_logs (recipient, sender, email_type, related_user_id, related_school_id, related_certificate_id, status, error_message, attempt_count)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [to, sender || null, emailType || null, relatedUserId || null, relatedSchoolId || null, relatedCertificateId || null, status, error || null, attemptCount || 1]
     );
   } catch (logErr) {
     // Logging must never take down the actual email send/response path.
     console.error('Failed to write email_logs row:', logErr.message);
   }
+}
+
+const MAX_SEND_ATTEMPTS = 3;
+const RETRY_DELAYS_MS = [1000, 3000]; // delay before attempt 2 and attempt 3
+
+// Only retry errors that look transient (connection/timeout, or an SMTP 4xx
+// "try again later" response). A permanent rejection — bad credentials
+// (EAUTH), a malformed/rejected envelope, or an explicit 5xx from the
+// server — will fail identically on every retry, so retrying it would just
+// delay the caller for no benefit ("not endless retry for permanent
+// failures").
+function isRetryableSmtpError(err) {
+  const transientCodes = ['ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'ECONNRESET', 'EDNS', 'ECONNREFUSED'];
+  if (err.code && transientCodes.includes(err.code)) return true;
+  if (err.responseCode && err.responseCode >= 400 && err.responseCode < 500) return true;
+  return false;
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function sendMail({ to, subject, html, emailType, relatedUserId, relatedSchoolId, relatedCertificateId }) {
@@ -50,19 +70,28 @@ async function sendMail({ to, subject, html, emailType, relatedUserId, relatedSc
 
   if (!emailTransportConfigured) {
     const error = 'Email delivery is not configured. Set SMTP_HOST, SMTP_USER, and SMTP_PASSWORD (or SMTP_PASS).';
-    await logEmailAttempt({ to, sender: fromAddress, emailType: type, relatedUserId, relatedSchoolId, relatedCertificateId, status: 'FAILED', error });
+    await logEmailAttempt({ to, sender: fromAddress, emailType: type, relatedUserId, relatedSchoolId, relatedCertificateId, status: 'FAILED', error, attemptCount: 1 });
     return { success: false, error };
   }
 
-  try {
-    await transporter.sendMail({ from: `"${fromName}" <${fromAddress}>`, to, subject, html });
-    await logEmailAttempt({ to, sender: fromAddress, emailType: type, relatedUserId, relatedSchoolId, relatedCertificateId, status: 'SENT' });
-    return { success: true };
-  } catch (err) {
-    console.error('Email send failed:', err.message);
-    await logEmailAttempt({ to, sender: fromAddress, emailType: type, relatedUserId, relatedSchoolId, relatedCertificateId, status: 'FAILED', error: err.message });
-    return { success: false, error: err.message };
+  let lastError = null;
+  let attemptsMade = 0;
+  for (let attempt = 1; attempt <= MAX_SEND_ATTEMPTS; attempt += 1) {
+    attemptsMade = attempt;
+    try {
+      await transporter.sendMail({ from: `"${fromName}" <${fromAddress}>`, to, subject, html });
+      await logEmailAttempt({ to, sender: fromAddress, emailType: type, relatedUserId, relatedSchoolId, relatedCertificateId, status: 'SENT', attemptCount: attempt });
+      return { success: true };
+    } catch (err) {
+      lastError = err;
+      console.error(`Email send failed (attempt ${attempt}/${MAX_SEND_ATTEMPTS}):`, err.message);
+      const willRetry = attempt < MAX_SEND_ATTEMPTS && isRetryableSmtpError(err);
+      if (!willRetry) break;
+      await delay(RETRY_DELAYS_MS[attempt - 1] || 3000);
+    }
   }
+  await logEmailAttempt({ to, sender: fromAddress, emailType: type, relatedUserId, relatedSchoolId, relatedCertificateId, status: 'FAILED', error: lastError.message, attemptCount: attemptsMade });
+  return { success: false, error: lastError.message };
 }
 
 function wrapTemplate(title, bodyHtml) {

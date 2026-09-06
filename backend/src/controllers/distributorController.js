@@ -297,7 +297,7 @@ async function addSchool(req, res) {
     if (!distributorId) return res.status(404).json({ error: 'Distributor profile not found' });
 
     const { name, adminName, adminEmail, adminMobile, udise_code, village, city, district, taluka, pin_code, phone, medium, board,
-             class_from, class_to, insideLat, insideLng, outsideLat, outsideLng } = req.body;
+             class_from, class_to, school_section, insideLat, insideLng, outsideLat, outsideLng } = req.body;
     if (!name || !adminName || !adminEmail) {
       return res.status(400).json({ error: 'School name, admin name, and admin email are required' });
     }
@@ -327,11 +327,11 @@ async function addSchool(req, res) {
     const loginId = `SCH${String(countRows[0].count + 1).padStart(3, '0')}`;
 
     await conn.query(
-      `INSERT INTO schools (id, admin_user_id, distributor_id, name, login_id, udise_code, village, city, district, taluka, pin_code, phone, email, medium, board, class_from, class_to, status,
+      `INSERT INTO schools (id, admin_user_id, distributor_id, name, login_id, udise_code, village, city, district, taluka, pin_code, phone, email, medium, board, class_from, class_to, school_section, status,
               inside_photo_url, inside_photo_lat, inside_photo_lng, inside_photo_captured_at,
               outside_photo_url, outside_photo_lat, outside_photo_lng, outside_photo_captured_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, NOW(), ?, ?, ?, NOW())`,
-      [schoolId, userId, distributorId, name, loginId, udise_code, village, city, district, taluka, pin_code, phone, adminEmail.toLowerCase().trim(), medium, board, class_from || null, class_to || null,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, NOW(), ?, ?, ?, NOW())`,
+      [schoolId, userId, distributorId, name, loginId, udise_code, village, city, district, taluka, pin_code, phone, adminEmail.toLowerCase().trim(), medium, board, class_from || null, class_to || null, school_section || null,
        insidePhotoFile.path, insideLat, insideLng, outsidePhotoFile.path, outsideLat, outsideLng]
     );
 
@@ -378,7 +378,7 @@ async function getMySchools(req, res) {
   }
 }
 
-const DIST_SCHOOL_EDITABLE_FIELDS = ['name', 'udise_code', 'village', 'city', 'district', 'taluka', 'pin_code', 'phone', 'medium', 'board', 'class_from', 'class_to'];
+const DIST_SCHOOL_EDITABLE_FIELDS = ['name', 'udise_code', 'village', 'city', 'district', 'taluka', 'pin_code', 'phone', 'medium', 'board', 'class_from', 'class_to', 'school_section'];
 
 // PUT /api/distributors/me/schools/:id - a distributor may only edit a
 // school they submitted themselves, and only while it's still 'pending' -

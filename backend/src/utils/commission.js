@@ -41,9 +41,18 @@ async function recordCommission({ certificateId, certificateType, certificatePri
   const schoolShare = round2(price * Number(cfg.school_pct) / 100);
   const platformShare = round2(price - schoolShare); // avoids rounding leftovers vs price*platform_pct/100
 
-  const superAdminAmount = round2(platformShare * Number(cfg.super_admin_pct) / 100);
-  const superDistributorAmount = round2(platformShare * Number(cfg.super_distributor_pct) / 100);
-  const distributorAmount = round2(platformShare * Number(cfg.distributor_pct) / 100);
+  // A share computed for a tier that doesn't actually exist for this school
+  // (no distributor, or a distributor with no super distributor of its own)
+  // must never just vanish — every dashboard sums this table filtered by a
+  // non-null id, so money assigned to a null distributor_id/
+  // super_distributor_id was previously unattributable anywhere and made
+  // platform_total (which sums unconditionally) diverge from what any actual
+  // person's dashboard could ever show. Redirect anything that would land on
+  // a missing tier to Super Admin instead, so platform_share always equals
+  // super_admin_amount + super_distributor_amount + distributor_amount.
+  const superDistributorAmount = superDistributorId ? round2(platformShare * Number(cfg.super_distributor_pct) / 100) : 0;
+  const distributorAmount = distributorId ? round2(platformShare * Number(cfg.distributor_pct) / 100) : 0;
+  const superAdminAmount = round2(platformShare - superDistributorAmount - distributorAmount);
 
   try {
     await pool.query(

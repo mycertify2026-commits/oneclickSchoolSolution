@@ -4,7 +4,11 @@ import Layout from '../components/Layout';
 import { StatusBadge } from './SaDashboard';
 import api from '../api/client';
 
-const BLANK = { name: '', udise_code: '', city: '', taluka: '', district: '', phone: '', email: '', pin_code: '', medium: 'Marathi', board: 'Maharashtra SSC', distributorId: '', adminName: '', adminMobile: '', adminEmail: '', class_from: '', class_to: '' };
+const BLANK = { name: '', udise_code: '', city: '', taluka: '', district: '', phone: '', email: '', pin_code: '', medium: 'Marathi', board: 'Maharashtra SSC', distributorId: '', adminName: '', adminMobile: '', adminEmail: '', class_from: '', class_to: '', school_section: '' };
+
+const LOWER_CLASS_OPTIONS = ['Nursery', 'Junior KG', 'Senior KG', '1st Standard'];
+const UPPER_CLASS_OPTIONS = ['4th Standard', '5th Standard', '6th Standard', '7th Standard', '8th Standard', '9th Standard', '10th Standard', '11th Standard', '12th Standard'];
+const SCHOOL_SECTION_OPTIONS = ['Primary', 'Upper Primary', 'Secondary', 'Higher Secondary', 'Secondary and Higher Secondary'];
 
 // Long school names get cut to the first word in the list view (hover/title
 // shows the rest); the full name is always shown on the school's own detail
@@ -14,7 +18,7 @@ function shortName(name) {
   const words = String(name).trim().split(/\s+/);
   return (words.length > 1 || name.length > 20) ? words[0] + '…' : name;
 }
-const EDIT_FIELDS = ['name', 'udise_code', 'village', 'city', 'taluka', 'district', 'pin_code', 'phone', 'email', 'medium', 'board', 'class_from', 'class_to'];
+const EDIT_FIELDS = ['name', 'udise_code', 'village', 'city', 'taluka', 'district', 'pin_code', 'phone', 'email', 'medium', 'board', 'class_from', 'class_to', 'school_section'];
 
 export default function SaSchools() {
   const [schools, setSchools] = useState([]);
@@ -262,9 +266,28 @@ export default function SaSchools() {
                     </select>
                   </div>
                 </div>
-                <div className="form-row form-row-2">
-                  <Field label="Lower Class" value={form.class_from} onChange={v => handleChange('class_from', v)} placeholder="e.g. 1st" />
-                  <Field label="Upper Class" value={form.class_to} onChange={v => handleChange('class_to', v)} placeholder="e.g. 10th" />
+                <div className="form-row form-row-3">
+                  <div className="form-group">
+                    <label className="form-label">Lower Class</label>
+                    <select className="form-select" value={form.class_from} onChange={e => handleChange('class_from', e.target.value)}>
+                      <option value="">-- Select --</option>
+                      {LOWER_CLASS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Upper Class</label>
+                    <select className="form-select" value={form.class_to} onChange={e => handleChange('class_to', e.target.value)}>
+                      <option value="">-- Select --</option>
+                      {UPPER_CLASS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">School Section</label>
+                    <select className="form-select" value={form.school_section} onChange={e => handleChange('school_section', e.target.value)}>
+                      <option value="">-- Select --</option>
+                      {SCHOOL_SECTION_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </div>
                 </div>
               </div>
               <div className="form-section">
@@ -313,9 +336,28 @@ export default function SaSchools() {
                 <Field label="Medium" value={editForm.medium} onChange={v => handleEditChange('medium', v)} />
                 <Field label="Board" value={editForm.board} onChange={v => handleEditChange('board', v)} />
               </div>
-              <div className="form-row form-row-2">
-                <Field label="Lower Class" value={editForm.class_from} onChange={v => handleEditChange('class_from', v)} placeholder="e.g. 1st" />
-                <Field label="Upper Class" value={editForm.class_to} onChange={v => handleEditChange('class_to', v)} placeholder="e.g. 10th" />
+              <div className="form-row form-row-3">
+                <div className="form-group">
+                  <label className="form-label">Lower Class</label>
+                  <select className="form-select" value={editForm.class_from || ''} onChange={e => handleEditChange('class_from', e.target.value)}>
+                    <option value="">-- Select --</option>
+                    {LOWER_CLASS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Upper Class</label>
+                  <select className="form-select" value={editForm.class_to || ''} onChange={e => handleEditChange('class_to', e.target.value)}>
+                    <option value="">-- Select --</option>
+                    {UPPER_CLASS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">School Section</label>
+                  <select className="form-select" value={editForm.school_section || ''} onChange={e => handleEditChange('school_section', e.target.value)}>
+                    <option value="">-- Select --</option>
+                    {SCHOOL_SECTION_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
               </div>
             </div>
             <div className="modal-footer">
