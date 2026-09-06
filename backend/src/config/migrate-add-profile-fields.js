@@ -76,6 +76,15 @@ const EMAIL_LOG_RETRY_COLUMNS = [
   { name: 'next_retry_at', definition: 'DATETIME' },
 ];
 
+// The certificate header text ("Sanstha Name" above, then the board name)
+// was hardcoded as "Maharashtra State Education Board" in the PDF renderer.
+// Both are now per-school, editable fields — empty/default means every
+// certificate renders exactly as it did before this feature existed.
+const SCHOOL_BOARD_IDENTITY_COLUMNS = [
+  { name: 'sanstha_name', definition: 'VARCHAR(200)' },
+  { name: 'board_name', definition: "VARCHAR(200) NOT NULL DEFAULT 'Maharashtra State Education Board'" },
+];
+
 async function migrate() {
   const connection = await mysql.createConnection({
     host: process.env.DB_HOST,
@@ -104,6 +113,8 @@ async function migrate() {
     await addMissingColumns(connection, dbName, 'id_card_hard_copy_requests', HARD_COPY_BATCH_COLUMNS);
     console.log('\nemail_logs (retry tracking):');
     await addMissingColumns(connection, dbName, 'email_logs', EMAIL_LOG_RETRY_COLUMNS);
+    console.log('\nschools (Sanstha name + editable board name):');
+    await addMissingColumns(connection, dbName, 'schools', SCHOOL_BOARD_IDENTITY_COLUMNS);
     console.log('\nProfile-fields migration completed successfully.');
   } catch (err) {
     console.error('Profile-fields migration failed:', err.message);

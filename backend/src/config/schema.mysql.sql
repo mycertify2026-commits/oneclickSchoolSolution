@@ -410,6 +410,8 @@ CREATE TABLE `schools` (
   `id_card_watermark_data` MEDIUMBLOB,
   `id_card_watermark_opacity` DECIMAL(3,2) NOT NULL DEFAULT 0.10,
   `id_card_watermark_enabled` SMALLINT NOT NULL DEFAULT 0,
+  `sanstha_name` VARCHAR(200),
+  `board_name` VARCHAR(200) NOT NULL DEFAULT 'Maharashtra State Education Board',
   PRIMARY KEY (`id`),
   FOREIGN KEY (`admin_user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL,
   FOREIGN KEY (`distributor_id`) REFERENCES `distributors`(`id`) ON DELETE SET NULL,

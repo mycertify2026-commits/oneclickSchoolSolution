@@ -364,6 +364,11 @@ async function migrate() {
     await client.query(`ALTER TABLE email_logs ADD COLUMN IF NOT EXISTS next_retry_at TIMESTAMP`);
     console.log('  + email_logs.attempt_count / next_retry_at ensured');
 
+    console.log('\n21. schools — Sanstha name + editable board name (was hardcoded "Maharashtra State Education Board")');
+    await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS sanstha_name VARCHAR(200)`);
+    await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS board_name VARCHAR(200) NOT NULL DEFAULT 'Maharashtra State Education Board'`);
+    console.log('  + schools.sanstha_name / board_name ensured');
+
     console.log('\nPostgreSQL catch-up migration completed successfully.');
   } catch (err) {
     console.error('Migration failed:', err.message);

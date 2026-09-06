@@ -13,7 +13,7 @@ function normaliseColor(val) {
   return m ? m[0] : val;
 }
 
-const BLANK = { name: '', udise_code: '', village: '', city: '', district: '', taluka: '', pin_code: '', phone: '', email: '', medium: '', board: '', principal_name: '', recog_no: '', lc_signature_label: '', bonafide_signature_label: '' };
+const BLANK = { name: '', udise_code: '', village: '', city: '', district: '', taluka: '', pin_code: '', phone: '', email: '', medium: '', board: '', principal_name: '', recog_no: '', lc_signature_label: '', bonafide_signature_label: '', sanstha_name: '', board_name: '' };
 const SIGNATURE_DESIGNATION_PRESETS = ['Principal', 'Mukhyadhyapak', 'Headmaster'];
 const ID_CARD_PRESET_COLORS = [
   '#1a6fd4','#1557b0','#059669','#047857','#7c3aed','#5b21b6',
@@ -366,6 +366,24 @@ export default function SchoolSettings() {
                   />
                 </div>
                 <button className="btn btn-primary" style={{ marginTop: 4 }} onClick={handleSaveInfo} disabled={saving}>{saving ? 'Saving...' : 'Save Designations'}</button>
+              </div>
+
+              <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+                <h4 style={{ marginBottom: 4 }}>Sanstha &amp; Board Name</h4>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
+                  Shown at the top of every LC, Bonafide and ID Card, above the school name. Sanstha Name (the managing trust) is optional and appears in small text; Board Name replaces the default "Maharashtra State Education Board" line.
+                </p>
+                <div className="form-grid-2">
+                  <div className="form-group">
+                    <label className="form-label">Sanstha Name (optional)</label>
+                    <input className="form-control" value={form.sanstha_name} onChange={e => handleChange('sanstha_name', e.target.value)} placeholder="e.g. Shree ABC Shikshan Sanstha" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Board Name</label>
+                    <input className="form-control" value={form.board_name} onChange={e => handleChange('board_name', e.target.value)} placeholder="Maharashtra State Education Board" />
+                  </div>
+                </div>
+                <button className="btn btn-primary" style={{ marginTop: 4 }} onClick={handleSaveInfo} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
               </div>
 
               <div className="card" style={{ padding: 20 }}>

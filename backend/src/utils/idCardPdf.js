@@ -236,12 +236,22 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   if (canDraw(logoPath)) {
     try { doc.image(logoPath, logoX, logoY, { width: logoSize, height: logoSize }); } catch (e) {}
   }
+  // Sanstha name (optional, School Settings > Certificate Header) is a tiny
+  // line above the school name — shifts everything below it down by a fixed
+  // amount only when set, so a school that never uses it sees no layout
+  // change at all.
+  const idSanshaOffset = school.sanstha_name ? 7 : 0;
+  if (school.sanstha_name) {
+    const sanstha = fitSingleLine(doc, safe(school.sanstha_name).toUpperCase(), 118, 'Helvetica-Bold', 5);
+    doc.font('Helvetica-Bold').fontSize(5).fillColor(GREY)
+      .text(sanstha, 66, 19, { width: 118, lineBreak: false });
+  }
   const schoolName = safe(school.id_card_school_name || school.name, 'School name');
   const schoolFont = 9.2;
   const schoolNameLines = splitSchoolName(doc, schoolName.toUpperCase(), 117, 'Helvetica-Bold', schoolFont);
   schoolNameLines.forEach((line, index) => {
     doc.font('Helvetica-Bold').fontSize(schoolFont).fillColor(headerColor)
-      .text(line, 66, 19 + index * 9.2, { width: 117, lineBreak: false });
+      .text(line, 66, 19 + idSanshaOffset + index * 9.2, { width: 117, lineBreak: false });
   });
   const defaultSubtitle = school.recog_no ? `CBSE Affiliation No. ${school.recog_no}` : '';
   const configuredSubtitle = safe(school.id_card_subtitle);
@@ -251,13 +261,13 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   if (subtitleValue) {
     const subtitle = fitSingleLine(doc, subtitleValue, 118, 'Helvetica', 5.2);
     doc.font('Helvetica').fontSize(5.2).fillColor(TEXT)
-      .text(subtitle, 66, 39, { width: 118, lineBreak: false });
+      .text(subtitle, 66, 39 + idSanshaOffset, { width: 118, lineBreak: false });
   }
   const contact = [school.website, school.phone || school.email].filter(Boolean).join('  |  ');
   if (contact) {
     const contactText = fitSingleLine(doc, contact, 118, 'Helvetica', 4.8);
     doc.font('Helvetica').fontSize(4.8).fillColor(TEXT)
-      .text(contactText, 66, 48, { width: 118, lineBreak: false });
+      .text(contactText, 66, 48 + idSanshaOffset, { width: 118, lineBreak: false });
   }
 
   // Student photo — slightly smaller than the original reference to make

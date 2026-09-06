@@ -124,20 +124,33 @@ export default function Certificates() {
   }
 
   async function handleAddToCart() {
-    // Hard copy ID card goes direct, not via cart, and supports many students in one request
+    // Hard copy ID card goes through the same cart -> OTP -> submit flow as
+    // every other certificate type, just with copyType:'hard' per item, so
+    // one submission can cover many students and the school sees one
+    // consistent checkout experience regardless of copy type.
     if (selectedType === 'idcard' && idCardCopyType === 'hard') {
       if (hardCopyStudentIds.length === 0) { setError('Select at least one student'); return; }
       setError(''); setMessage('');
       setHardCopyLoading(true);
-      try {
-        const { data } = await api.post('/id-cards/hard-copy', { studentIds: hardCopyStudentIds });
-        setMessage(data.message);
+      let added = 0;
+      const failures = [];
+      for (const studentId of hardCopyStudentIds) {
+        try {
+          await api.post('/cart/items', { studentId, type: 'idcard', copyType: 'hard' });
+          added += 1;
+        } catch (e) {
+          const student = students.find(s => s.id === studentId);
+          failures.push(`${student?.full_name || studentId}: ${e.response?.data?.message || 'failed'}`);
+        }
+      }
+      setHardCopyLoading(false);
+      if (added > 0) {
+        setCartNotice({ message: `${added} hard copy ID card${added !== 1 ? 's' : ''} added to cart`, itemCount: cart.items.length + added });
         setHardCopyStudentIds([]);
-        loadCart();
-        loadRecent();
-      } catch (e) {
-        setError(e.response?.data?.error || 'Failed to request hard copy');
-      } finally { setHardCopyLoading(false); }
+        await loadCart();
+        setTab('cart');
+      }
+      if (failures.length) setError(`Some students could not be added: ${failures.join('; ')}`);
       return;
     }
     if (!selectedStudent) { setError('Select a student first'); return; }
@@ -285,7 +298,7 @@ export default function Certificates() {
               {idCardCopyType === 'hard' && (
                 <div style={{ width: '100%', fontSize: 12, color: '#64748b', marginTop: 4 }}>
                   <i className="fas fa-info-circle" style={{ marginRight: 4 }}></i>
-                  Hard copy requests are processed and dispatched by your distributor. Amount is debited from your wallet immediately.
+                  Hard copy requests go into your cart just like other certificates — add students, then Submit All to confirm with OTP. Once confirmed, they're processed and dispatched by your distributor.
                 </div>
               )}
             </div>
@@ -387,7 +400,7 @@ export default function Certificates() {
               disabled={selectedType === 'idcard' && idCardCopyType === 'hard' ? (hardCopyStudentIds.length === 0 || hardCopyLoading) : !selectedStudent}
             >
               {selectedType === 'idcard' && idCardCopyType === 'hard'
-                ? <><i className="fas fa-print" style={{ marginRight: 6 }}></i>{hardCopyLoading ? 'Submitting...' : `Request Hard Copy${hardCopyStudentIds.length > 0 ? ` — ₹${(idCardPricing.hard * hardCopyStudentIds.length).toLocaleString('en-IN')}` : ''}`}</>
+                ? <><i className="fas fa-cart-plus" style={{ marginRight: 6 }}></i>{hardCopyLoading ? 'Adding...' : `Add ${hardCopyStudentIds.length > 0 ? `${hardCopyStudentIds.length} ` : ''}Hard ${hardCopyStudentIds.length === 1 ? 'Copy' : 'Copies'} to Cart${hardCopyStudentIds.length > 0 ? ` — ₹${(idCardPricing.hard * hardCopyStudentIds.length).toLocaleString('en-IN')}` : ''}`}</>
                 : <><i className="fas fa-cart-plus" style={{ marginRight: 6 }}></i>Add to Cart</>
               }
             </button>
@@ -405,7 +418,12 @@ export default function Certificates() {
               ) : cart.items.map(item => (
                 <tr key={item.id}>
                   <td style={{ fontWeight: 600 }}>{item.student_name}</td>
-                  <td><span className="badge badge-primary">{item.type?.toUpperCase()}</span></td>
+                  <td>
+                    <span className="badge badge-primary">{item.type?.toUpperCase()}</span>
+                    {item.type === 'idcard' && item.certificate_variant === 'hard' && (
+                      <span className="badge badge-warning" style={{ marginLeft: 6 }}>HARD COPY</span>
+                    )}
+                  </td>
                   <td>₹{item.price}</td>
                   <td>
                     <button className="btn btn-sm btn-danger" onClick={() => removeItem(item.id)}>
@@ -445,7 +463,7 @@ export default function Certificates() {
           <h3 style={{ marginBottom: 12 }}>Submission Result</h3>
           {resultView.map((r, i) => (
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-              <span>{r.studentName || ''} — <span className="badge badge-primary">{r.type?.toUpperCase()}</span></span>
+              <span>{r.studentName || ''} — <span className="badge badge-primary">{r.type?.toUpperCase()}</span>{r.variant === 'hard' && <span className="badge badge-warning" style={{ marginLeft: 6 }}>HARD COPY</span>}</span>
               {r.status === 'generated' ? (
                 <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <span className="badge badge-success">Generated</span>

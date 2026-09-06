@@ -8,7 +8,7 @@ const { authenticate, requireRole } = require('../middleware/auth');
 const { attachSchool } = require('../middleware/attachSchool');
 const { uploadBranding, uploadTemplate } = require('../middleware/upload');
 const { handleValidationErrors } = require('../middleware/validate');
-const { sanitizeBody } = require('../middleware/sanitize');
+const { sanitizeBody, sanitizeBodyExcept } = require('../middleware/sanitize');
 
 const createSchoolValidation = [
   body('name').notEmpty().withMessage('School name is required').isLength({ max: 200 }),
@@ -20,7 +20,7 @@ router.get('/me', authenticate, requireRole('schoolAdmin'), attachSchool, school
 router.put(
   '/me', authenticate, requireRole('schoolAdmin'), attachSchool,
   uploadBranding.fields([{ name: 'logo', maxCount: 1 }, { name: 'signature', maxCount: 1 }, { name: 'stamp', maxCount: 1 }]),
-  sanitizeBody,
+  sanitizeBodyExcept(['cert_header', 'cert_footer']),
   schoolController.updateMySchool
 );
 router.put('/me/id-card-design', authenticate, requireRole('schoolAdmin'), attachSchool, sanitizeBody, schoolController.updateIdCardDesign);

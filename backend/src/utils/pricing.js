@@ -23,4 +23,13 @@ async function getPriceForType(type) {
   return rows.length ? Number(rows[0].price) : FALLBACK_PRICES[type];
 }
 
-module.exports = { VALID_TYPES, FALLBACK_PRICES, isValidType, getPriceForType };
+// Hard copy has its own, higher price row in the same id_card_pricing table
+// (copy_type='hard') — used when an ID card cart item is the physical/hard
+// copy variant rather than the default soft (PDF-only) copy.
+async function getIdCardPrice(copyType) {
+  const type = copyType === 'hard' ? 'hard' : 'soft';
+  const [rows] = await pool.query('SELECT price FROM id_card_pricing WHERE copy_type = ?', [type]);
+  return rows.length ? Number(rows[0].price) : (type === 'hard' ? 100 : FALLBACK_PRICES.idcard);
+}
+
+module.exports = { VALID_TYPES, FALLBACK_PRICES, isValidType, getPriceForType, getIdCardPrice };

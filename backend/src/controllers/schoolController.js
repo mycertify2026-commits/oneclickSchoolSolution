@@ -224,7 +224,7 @@ async function getMySchool(req, res) {
   }
 }
 
-const SCHOOL_EDITABLE_FIELDS = ['name', 'udise_code', 'village', 'city', 'district', 'taluka', 'pin_code', 'phone', 'email', 'medium', 'board', 'cert_header', 'cert_footer', 'principal_name', 'recog_no', 'class_from', 'class_to', 'school_section', 'lc_signature_label', 'bonafide_signature_label'];
+const SCHOOL_EDITABLE_FIELDS = ['name', 'udise_code', 'village', 'city', 'district', 'taluka', 'pin_code', 'phone', 'email', 'medium', 'board', 'cert_header', 'cert_footer', 'principal_name', 'recog_no', 'class_from', 'class_to', 'school_section', 'lc_signature_label', 'bonafide_signature_label', 'sanstha_name', 'board_name'];
 
 // PUT /api/schools/me (schoolAdmin) - update profile + upload logo/signature/stamp + cert header/footer text
 async function updateMySchool(req, res) {

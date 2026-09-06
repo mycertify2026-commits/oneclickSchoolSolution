@@ -11,7 +11,7 @@ const { sendCartOtpEmail, sendCartInsufficientBalanceEmail, sendCertificateGener
 const { logAudit } = require('../utils/audit');
 const { UPLOAD_ROOT } = require('../middleware/upload');
 const { restoreIfMissing } = require('../utils/fileStore');
-const { isValidType, getPriceForType } = require('../utils/pricing');
+const { isValidType, getPriceForType, getIdCardPrice } = require('../utils/pricing');
 
 const OTP_EXPIRY_MIN = parseInt(process.env.OTP_EXPIRY_MINUTES || '10', 10);
 const OTP_MAX_ATTEMPTS = parseInt(process.env.OTP_MAX_ATTEMPTS || '5', 10);
@@ -23,7 +23,10 @@ async function getSchool(req) {
   return rows[0];
 }
 
-async function priceFor(type) {
+async function priceFor(type, copyType) {
+  if (type === 'idcard' && copyType === 'hard') {
+    return { price: await getIdCardPrice('hard'), gst: 0 };
+  }
   const price = await getPriceForType(type);
   return { price, gst: 0 };
 }
@@ -142,16 +145,25 @@ exports.listCart = async (req, res) => {
 exports.addToCart = async (req, res) => {
   try {
     const school = await getSchool(req);
-    const { studentId, type, purpose } = req.body;
+    const { studentId, type, purpose, copyType } = req.body;
     if (!studentId || !type || !isValidType(type)) return res.status(400).json({ message: 'Invalid student or certificate type' });
 
-    const [existing] = await pool.query(
-      "SELECT id FROM cart_items WHERE school_id=? AND student_id=? AND type=? AND status='in_cart'",
-      [school.id, studentId, type]
-    );
+    // ID Card is the only type with a soft/hard distinction — reuses the
+    // certificate_variant column (LC uses the same column for original/
+    // duplicate; the two types never collide since a row is always exactly
+    // one `type`). A school can have one soft AND one hard request in the
+    // cart at once for the same student, just never two of the same variant.
+    const isHardCopy = type === 'idcard' && copyType === 'hard';
+    const dupQuery = type === 'idcard'
+      ? "SELECT id FROM cart_items WHERE school_id=? AND student_id=? AND type=? AND certificate_variant=? AND status='in_cart'"
+      : "SELECT id FROM cart_items WHERE school_id=? AND student_id=? AND type=? AND status='in_cart'";
+    const dupParams = type === 'idcard'
+      ? [school.id, studentId, type, isHardCopy ? 'hard' : 'soft']
+      : [school.id, studentId, type];
+    const [existing] = await pool.query(dupQuery, dupParams);
     if (existing.length) return res.status(400).json({ message: 'This certificate type is already in the cart for this student' });
 
-    const { price, gst } = await priceFor(type);
+    const { price, gst } = await priceFor(type, copyType);
     const id = uuid();
     const lc = type === 'lc' ? parseLcPurpose(purpose) : null;
 
@@ -160,7 +172,7 @@ exports.addToCart = async (req, res) => {
     // Original, every one after that is Duplicate. A cart item that never
     // reaches 'certificates' (removed, failed generation, cancelled) cannot
     // consume the Original slot, because this only looks at issued rows.
-    // Bonafide/ID Card keep their existing (unrestricted) behaviour.
+    // Bonafide keeps its existing (unrestricted) behaviour.
     let variant = 'original';
     if (type === 'lc') {
       const [existingOriginal] = await pool.query(
@@ -168,6 +180,8 @@ exports.addToCart = async (req, res) => {
         [school.id, studentId]
       );
       variant = existingOriginal.length ? 'duplicate' : 'original';
+    } else if (type === 'idcard') {
+      variant = isHardCopy ? 'hard' : 'soft';
     }
 
     await pool.query(
@@ -357,6 +371,16 @@ exports.verifyOtp = async (req, res) => {
 
     const [generatedByRows] = await pool.query('SELECT name, email FROM users WHERE id=?', [req.user.id]);
     const generatedByName = generatedByRows[0]?.name || 'School Admin';
+
+    // Resolved once for the whole batch — only needed if the cart contains
+    // at least one hard-copy ID card item, but cheap enough to always fetch.
+    const [[hierarchyRow]] = await pool.query(
+      `SELECT sc.distributor_id, COALESCE(sc.super_distributor_id, d.super_distributor_id) AS super_distributor_id
+       FROM schools sc LEFT JOIN distributors d ON d.id = sc.distributor_id WHERE sc.id = ?`,
+      [school.id]
+    );
+    const distributorIdForHardCopy = hierarchyRow?.distributor_id || null;
+    const superDistributorIdForHardCopy = hierarchyRow?.super_distributor_id || null;
     // Always the School Admin's live login email — never the separate
     // (and sometimes stale/blank) schools.email column — so certificate
     // and low-balance emails reach whoever can actually log in as this school.
@@ -459,7 +483,27 @@ exports.verifyOtp = async (req, res) => {
           console.error('Commission recording failed for certificate', certId, commissionErr.message);
         }
 
-        results.push({ cartItemId: item.id, studentName: student.full_name, type: item.type, status: 'generated', certificateId: certId, serial, receiptId });
+        // Hard-copy ID card items additionally get a physical-fulfillment
+        // tracking row, grouped under this cart submission's wallet
+        // transaction so every hard-copy item submitted together shows up
+        // to the Distributor as one batch — same batch semantics as the
+        // dedicated /id-cards/hard-copy endpoint, just reached via the cart
+        // now so soft and hard copies share one add-to-cart/OTP flow.
+        if (item.type === 'idcard' && item.certificate_variant === 'hard') {
+          try {
+            await pool.query(
+              `INSERT INTO id_card_hard_copy_requests
+               (id, school_id, student_id, distributor_id, super_distributor_id, amount, wallet_transaction_id, status, batch_id, certificate_id, pdf_path, receipt_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
+              [uuid(), school.id, student.id, distributorIdForHardCopy, superDistributorIdForHardCopy,
+               item.price, txId, txId, certId, `/${subdir}/${serial}.pdf`, receiptId]
+            );
+          } catch (hardCopyErr) {
+            console.error('Hard-copy request row failed for certificate', certId, hardCopyErr.message);
+          }
+        }
+
+        results.push({ cartItemId: item.id, studentName: student.full_name, type: item.type, variant: item.certificate_variant, status: 'generated', certificateId: certId, serial, receiptId });
       } catch (genErr) {
         console.error('Cart cert generation failed for item', item.id, genErr.message);
         await pool.query("UPDATE cart_items SET status='failed' WHERE id=?", [item.id]);

@@ -182,7 +182,13 @@ function drawHeader(doc, school, logoPath, marginX = 46, minTextY = 0) {
 
   let y = Math.max(top + 74, minTextY);
 
-  y = fitCenteredText(doc, 'Maharashtra state education board', marginX, y, contentWidth, 15, NAVY) + 3;
+  // Sanstha (trust) name and the board name are both school-configurable
+  // (School Settings > Certificate Header) — "Maharashtra State Education
+  // Board" is only the column's default value, not a hardcoded string here.
+  if (school.sanstha_name) {
+    y = fitCenteredText(doc, safe(school.sanstha_name), marginX, y, contentWidth, 10, GREY, false) + 1;
+  }
+  y = fitCenteredText(doc, safe(school.board_name, 'Maharashtra State Education Board'), marginX, y, contentWidth, 15, NAVY) + 3;
   y = fitCenteredText(doc, sentenceCase(school.name, 'School name'), marginX, y, contentWidth, 16, NAVY) + 4;
 
   doc.font('Helvetica').fontSize(9).fillColor(TEXT)
@@ -452,10 +458,11 @@ async function generateLcPdf({
       // ── Top row: Logo (left) | QR + Certificate No. stacked (right) ──
       // QR sits directly above the Certificate Number box so both read as
       // one verification unit instead of two separately-placed elements.
+      // QR is the same size as the school logo (62pt) on request.
       const boxW    = 110;
       const certIdX = doc.page.width - 46 - boxW;
       const metaTop = 42;
-      const qrSize  = 46;
+      const qrSize  = 62;
 
       if (qrBuffer) {
         const qrX = certIdX + (boxW - qrSize) / 2;
@@ -463,7 +470,7 @@ async function generateLcPdf({
         doc.font('Helvetica').fontSize(5).fillColor(GREY)
           .text('Scan to verify', certIdX, metaTop + qrSize + 1, { width: boxW, align: 'center', lineBreak: false });
       }
-      const certIdY = metaTop + qrSize + 12;
+      const certIdY = metaTop + qrSize + 6;
       const certIdBottom = drawIdBox(doc, certIdX, certIdY, 'CERTIFICATE NO.', certificate.serial_number, boxW);
 
       let y = drawHeader(doc, school, safeLogoPath, 46, certIdBottom + 6);
@@ -492,22 +499,29 @@ async function generateLcPdf({
 
       y = drawTitleBanner(doc, y, 'School leaving certificate');
 
-      // ── U-DISE / Roll No. / G.R. No. / Saral ID bar ──
+      // ── U-DISE / Roll No. / G.R. No. / Saral ID / Class bar ──
+      // fitSingleLineText (shrink-then-ellipsis) is used instead of a plain
+      // .text() call with {lineBreak:false, ellipsis:true} — pdfkit's own
+      // ellipsis handling turned out to still wrap to a second line once a
+      // value was genuinely wider than its column (confirmed by generating
+      // a real PDF with long Saral/GR values), so every cell needs the same
+      // shrink-first guard already proven reliable in drawDataRow below.
       const contentWidth = doc.page.width - 92;
       const idBarSeg = contentWidth / 4;
-      doc.font('Helvetica-Bold').fontSize(9.5).fillColor(TEXT);
-      doc.text(`U-DISE: ${sentenceCase(school.udise_code, '-')}`,       46,               y, { width: idBarSeg });
-      doc.text(`Roll No.: ${sentenceCase(student.roll_number, '-')}`,   46 + idBarSeg,     y, { width: idBarSeg });
-      doc.text(`G.R. No.: ${sentenceCase(student.register_number, '-')}`, 46 + 2 * idBarSeg, y, { width: idBarSeg });
-      doc.text(`Saral ID: ${sentenceCase(student.serial_id, '-')}`,     46 + 3 * idBarSeg, y, { width: idBarSeg });
+      const idBarSeg5 = contentWidth / 5;
+      const lcClassValue = `${safe(student.current_standard || student.admission_standard, '-')} (${safe(student.current_division || student.admission_division, '-')})`;
+      fitSingleLineText(doc, `U-DISE: ${sentenceCase(school.udise_code, '-')}`,       46,                 y, idBarSeg5 - 4, 9.5, TEXT, true, 6);
+      fitSingleLineText(doc, `Roll No.: ${sentenceCase(student.roll_number, '-')}`,   46 + idBarSeg5,     y, idBarSeg5 - 4, 9.5, TEXT, true, 6);
+      fitSingleLineText(doc, `G.R. No.: ${sentenceCase(student.register_number, '-')}`, 46 + 2 * idBarSeg5, y, idBarSeg5 - 4, 9.5, TEXT, true, 6);
+      fitSingleLineText(doc, `Saral ID: ${sentenceCase(student.serial_id, '-')}`,     46 + 3 * idBarSeg5, y, idBarSeg5 - 4, 9.5, TEXT, true, 6);
+      fitSingleLineText(doc, `Class: ${sentenceCase(lcClassValue, '-')}`,             46 + 4 * idBarSeg5, y, idBarSeg5 - 4, 9.5, TEXT, true, 6);
       y += 15;
 
       // ── APAAR ID / Student ID / PEN No. / LOC No. bar ──
-      doc.font('Helvetica-Bold').fontSize(9.5).fillColor(TEXT);
-      doc.text(`APAAR ID: ${sentenceCase(student.apaar_id, '-')}`,        46,               y, { width: idBarSeg });
-      doc.text(`Student ID: ${sentenceCase(student.student_id_no, '-')}`, 46 + idBarSeg,     y, { width: idBarSeg });
-      doc.text(`PEN No.: ${sentenceCase(student.pen_no, '-')}`,           46 + 2 * idBarSeg, y, { width: idBarSeg });
-      doc.text(`LOC No.: ${sentenceCase(student.loc_no, '-')}`,           46 + 3 * idBarSeg, y, { width: idBarSeg });
+      fitSingleLineText(doc, `APAAR ID: ${sentenceCase(student.apaar_id, '-')}`,        46,               y, idBarSeg - 4, 9.5, TEXT, true, 6);
+      fitSingleLineText(doc, `Student ID: ${sentenceCase(student.student_id_no, '-')}`, 46 + idBarSeg,     y, idBarSeg - 4, 9.5, TEXT, true, 6);
+      fitSingleLineText(doc, `PEN No.: ${sentenceCase(student.pen_no, '-')}`,           46 + 2 * idBarSeg, y, idBarSeg - 4, 9.5, TEXT, true, 6);
+      fitSingleLineText(doc, `LOC No.: ${sentenceCase(student.loc_no, '-')}`,           46 + 3 * idBarSeg, y, idBarSeg - 4, 9.5, TEXT, true, 6);
       y += 16;
 
       doc.font('Helvetica').fontSize(7.5).fillColor(GREY)
@@ -554,10 +568,10 @@ async function generateLcPdf({
 
       // ── Footer: Check by (left) | Photo (centre) | HEAD MASTER (right) — one line ──
       const fw   = contentWidth;
-      let fy     = rowY + 10;
+      let fy     = rowY + 6;
 
       doc.save().dash(2, { space: 2 }).moveTo(46, fy).lineTo(46 + fw, fy).strokeColor('#cbd5e1').stroke().undash().restore();
-      fy += 10;
+      fy += 8;
 
       // Date / Place at top-left of footer block
       doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT)
@@ -566,7 +580,7 @@ async function generateLcPdf({
         .text(`Place : ${sentenceCase(school.city || school.village || school.taluka)}`, 46, fy + 14);
 
       // Photo centred
-      const photoW  = 80, photoH = 80;
+      const photoW  = 74, photoH = 64;
       const photoX  = doc.page.width / 2 - photoW / 2;
       const photoY  = fy;
       drawPhotoPanel(doc, photoX, photoY, safePhotoPath, photoW, photoH);
@@ -916,9 +930,16 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
 
   const textX = logoCx + logoSz / 2 + 16;
   const textW = idBoxX - 16 - textX;
-  const boardY = 38;
+  // Sanstha name is a small, optional line above the board name — pushes
+  // everything below it down by the same fixed amount so it never overlaps.
+  const sanshaOffset = school.sanstha_name ? 11 : 0;
+  const boardY = 38 + sanshaOffset;
+  if (school.sanstha_name) {
+    doc.fillColor(muted).font('Helvetica-Bold').fontSize(8)
+      .text(safe(school.sanstha_name).toUpperCase(), textX, 38, { width: textW, align: 'center', lineBreak: false, ellipsis: true });
+  }
   doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(13)
-    .text('MAHARASHTRA STATE EDUCATION BOARD', textX, boardY, { width: textW, align: 'center', lineBreak: false, ellipsis: true });
+    .text(safe(school.board_name, 'Maharashtra State Education Board').toUpperCase(), textX, boardY, { width: textW, align: 'center', lineBreak: false, ellipsis: true });
   drawFlourish(doc, textX + 2, boardY + 6, 8, false);
   drawFlourish(doc, textX + textW - 2, boardY + 6, 8, true);
   doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(17)
@@ -973,20 +994,18 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
     doc.font('Helvetica').fillColor(muted).text(value, { lineBreak: false, width: idSeg - 18 });
   });
 
-  // ── "This is to certify that" + title banner ──────────────────────────────
-  doc.fillColor(muted).font('Helvetica-Oblique').fontSize(9)
-    .text('This is to certify that', left, 178, { width: contentW, align: 'center', lineBreak: false });
-
-  const bannerY = 192, bannerH = 22;
+  // ── Title banner ───────────────────────────────────────────────────────
+  // The "This is to certify that" intro line and the standalone student-name
+  // heading both moved into the paragraph itself (per request: the opening
+  // statement should read as the first words of the description, with the
+  // name bold inline, not as separate elements above it) — freeing this
+  // space for the banner to sit right after the ID rows.
+  const bannerY = 175, bannerH = 22;
   doc.save().roundedRect(left, bannerY, contentW, bannerH, 5).fillColor(NAVY).fill()
     .lineWidth(1).strokeColor(GOLD).roundedRect(left, bannerY, contentW, bannerH, 5).stroke()
     .restore();
   doc.fillColor('#fff').font('Helvetica-Bold').fontSize(14)
     .text('BONAFIDE CERTIFICATE', left, bannerY + 6, { width: contentW, align: 'center', lineBreak: false });
-
-  // ── Student name ───────────────────────────────────────────────────────
-  doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(17)
-    .text(safe(student.full_name).toUpperCase(), left, 224, { width: contentW, align: 'center', lineBreak: false, ellipsis: true });
 
   // ── Body paragraph (centered, shrink-to-fit above the footer strip) ──────
   const heShe = student.gender === 'Male' ? 'He' : student.gender === 'Female' ? 'She' : 'He/She';
@@ -1007,7 +1026,9 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
   const birthPlaceStr = birthPlace || '-';
 
   const paraSegments = [
-    { text: 'is / was a bonafide student of this School / College Studying in Std. ' },
+    { text: 'This is to certify that ' },
+    { text: safe(student.full_name).toUpperCase(), bold: true },
+    { text: ' is / was a bonafide student of this School / College Studying in Std. ' },
     { text: standardValue, bold: true },
     { text: ' during the year ' },
     { text: academicYearStr, bold: true },
@@ -1027,7 +1048,7 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
     paraSegments.push({ text: '.' });
   }
 
-  const bodyY = 248;
+  const bodyY = 212;
   const photoResW = 66, photoResX = right - photoResW - 4;
   const bodyW = contentW - photoResW - 16;
   const bodyBottom = 360;
