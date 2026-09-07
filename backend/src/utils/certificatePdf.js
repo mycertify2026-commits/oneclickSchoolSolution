@@ -169,34 +169,27 @@ function drawDoubleBorder(doc, top = 16, bottom = null) {
   doc.restore();
 }
 
-function drawHeader(doc, school, logoPath, marginX = 46, minTextY = 0) {
-  const contentWidth = doc.page.width - marginX * 2;
-  const top = 42;
-
-  if (canDraw(logoPath)) {
-    try { doc.image(logoPath, marginX, top, { width: 62, height: 62 }); }
-    catch (e) { console.error('[PDF] logo draw failed:', e.message); }
-  } else {
-    doc.save().circle(marginX + 31, top + 31, 29).lineWidth(1.3).strokeColor(NAVY).stroke().restore();
-  }
-
-  let y = Math.max(top + 74, minTextY);
+// Board/school identity text sits in the column BETWEEN the logo and the
+// QR/Certificate-No. stack — same row, not a separate row below them — so
+// text is passed its own textX/textW rather than the full page width.
+function drawHeader(doc, school, textX, textW, startY) {
+  let y = startY;
 
   // Sanstha (trust) name and the board name are both school-configurable
   // (School Settings > Certificate Header) — "Maharashtra State Education
   // Board" is only the column's default value, not a hardcoded string here.
   if (school.sanstha_name) {
-    y = fitCenteredText(doc, safe(school.sanstha_name), marginX, y, contentWidth, 10, GREY, false) + 1;
+    y = fitCenteredText(doc, safe(school.sanstha_name), textX, y, textW, 10, GREY, false) + 1;
   }
-  y = fitCenteredText(doc, safe(school.board_name, 'Maharashtra State Education Board'), marginX, y, contentWidth, 15, NAVY) + 3;
-  y = fitCenteredText(doc, sentenceCase(school.name, 'School name'), marginX, y, contentWidth, 16, NAVY) + 4;
+  y = fitCenteredText(doc, safe(school.board_name, 'Maharashtra State Education Board'), textX, y, textW, 15, NAVY) + 3;
+  y = fitCenteredText(doc, sentenceCase(school.name, 'School name'), textX, y, textW, 16, NAVY) + 4;
 
   doc.font('Helvetica').fontSize(9).fillColor(TEXT)
-    .text(`Taluka: ${safe(school.taluka)}, District: ${safe(school.district)}`, marginX, y, { width: contentWidth, align: 'center' });
+    .text(`Taluka: ${safe(school.taluka)}, District: ${safe(school.district)}`, textX, y, { width: textW, align: 'center' });
   y += 13;
 
   doc.font('Helvetica').fontSize(8.5).fillColor(GREY)
-    .text(`U-DISE: ${safe(school.udise_code)}   |   RECOG NO: ${safe(school.recog_no)}`, marginX, y, { width: contentWidth, align: 'center' });
+    .text(`U-DISE: ${safe(school.udise_code)}   |   RECOG NO: ${safe(school.recog_no)}`, textX, y, { width: textW, align: 'center' });
   y += 15;
 
   return y;
@@ -427,7 +420,8 @@ async function generateLcPdf({
   dateOfLeaving,
   sinceWhen,
   reasonForLeaving,
-  remarks
+  remarks,
+  classInWhichStudying,
 }) {
   const [safeLogoPath, safeSignaturePath, safePhotoPath, safeStampPath] = await Promise.all([
     toPdfSafe(logoPath),
@@ -455,14 +449,23 @@ async function generateLcPdf({
         drawDoubleBorder(doc);
       }
 
-      // ── Top row: Logo (left) | QR + Certificate No. stacked (right) ──
-      // QR sits directly above the Certificate Number box so both read as
-      // one verification unit instead of two separately-placed elements.
-      // QR is the same size as the school logo (62pt) on request.
-      const boxW    = 110;
-      const certIdX = doc.page.width - 46 - boxW;
-      const metaTop = 42;
-      const qrSize  = 62;
+      // ── Top row, all in one line: Logo (left) | Board/School name (centre) |
+      // QR + Certificate No. stacked (right) ── QR sits directly above the
+      // Certificate Number box so both read as one verification unit, and is
+      // the same size as the school logo (62pt) on request.
+      const boxW     = 110;
+      const certIdX  = doc.page.width - 46 - boxW;
+      const metaTop  = 42;
+      const qrSize   = 62;
+      const logoSize = 62;
+      const logoX    = 46;
+
+      if (canDraw(safeLogoPath)) {
+        try { doc.image(safeLogoPath, logoX, metaTop, { width: logoSize, height: logoSize }); }
+        catch (e) { console.error('[PDF] logo draw failed:', e.message); }
+      } else {
+        doc.save().circle(logoX + logoSize / 2, metaTop + logoSize / 2, logoSize / 2 - 2).lineWidth(1.3).strokeColor(NAVY).stroke().restore();
+      }
 
       if (qrBuffer) {
         const qrX = certIdX + (boxW - qrSize) / 2;
@@ -473,7 +476,10 @@ async function generateLcPdf({
       const certIdY = metaTop + qrSize + 6;
       const certIdBottom = drawIdBox(doc, certIdX, certIdY, 'CERTIFICATE NO.', certificate.serial_number, boxW);
 
-      let y = drawHeader(doc, school, safeLogoPath, 46, certIdBottom + 6);
+      const textX = logoX + logoSize + 14;
+      const textW = certIdX - 14 - textX;
+      let y = drawHeader(doc, school, textX, textW, metaTop);
+      y = Math.max(y, certIdBottom + 8, metaTop + logoSize + 8);
 
       // ── School-configured header text (School Settings > Certificate
       // Header) — additive text below the school name/logo, empty by
@@ -499,7 +505,7 @@ async function generateLcPdf({
 
       y = drawTitleBanner(doc, y, 'School leaving certificate');
 
-      // ── U-DISE / Roll No. / G.R. No. / Saral ID / Class bar ──
+      // ── U-DISE / Roll No. / G.R. No. / Saral ID bar ──
       // fitSingleLineText (shrink-then-ellipsis) is used instead of a plain
       // .text() call with {lineBreak:false, ellipsis:true} — pdfkit's own
       // ellipsis handling turned out to still wrap to a second line once a
@@ -508,13 +514,10 @@ async function generateLcPdf({
       // shrink-first guard already proven reliable in drawDataRow below.
       const contentWidth = doc.page.width - 92;
       const idBarSeg = contentWidth / 4;
-      const idBarSeg5 = contentWidth / 5;
-      const lcClassValue = `${safe(student.current_standard || student.admission_standard, '-')} (${safe(student.current_division || student.admission_division, '-')})`;
-      fitSingleLineText(doc, `U-DISE: ${sentenceCase(school.udise_code, '-')}`,       46,                 y, idBarSeg5 - 4, 9.5, TEXT, true, 6);
-      fitSingleLineText(doc, `Roll No.: ${sentenceCase(student.roll_number, '-')}`,   46 + idBarSeg5,     y, idBarSeg5 - 4, 9.5, TEXT, true, 6);
-      fitSingleLineText(doc, `G.R. No.: ${sentenceCase(student.register_number, '-')}`, 46 + 2 * idBarSeg5, y, idBarSeg5 - 4, 9.5, TEXT, true, 6);
-      fitSingleLineText(doc, `Saral ID: ${sentenceCase(student.serial_id, '-')}`,     46 + 3 * idBarSeg5, y, idBarSeg5 - 4, 9.5, TEXT, true, 6);
-      fitSingleLineText(doc, `Class: ${sentenceCase(lcClassValue, '-')}`,             46 + 4 * idBarSeg5, y, idBarSeg5 - 4, 9.5, TEXT, true, 6);
+      fitSingleLineText(doc, `U-DISE: ${sentenceCase(school.udise_code, '-')}`,       46,               y, idBarSeg - 4, 9.5, TEXT, true, 6);
+      fitSingleLineText(doc, `Roll No.: ${sentenceCase(student.roll_number, '-')}`,   46 + idBarSeg,     y, idBarSeg - 4, 9.5, TEXT, true, 6);
+      fitSingleLineText(doc, `G.R. No.: ${sentenceCase(student.register_number, '-')}`, 46 + 2 * idBarSeg, y, idBarSeg - 4, 9.5, TEXT, true, 6);
+      fitSingleLineText(doc, `Saral ID: ${sentenceCase(student.serial_id, '-')}`,     46 + 3 * idBarSeg, y, idBarSeg - 4, 9.5, TEXT, true, 6);
       y += 15;
 
       // ── APAAR ID / Student ID / PEN No. / LOC No. bar ──
@@ -547,7 +550,7 @@ async function generateLcPdf({
         ['Conduct',                        'Good'],
         ['Date of Leaving',                leavingDate],
         ['Reason for leaving',             safe(reasonForLeaving, '')],
-        ['Class in which studying',        `${safe(student.current_standard || student.admission_standard)} standard (${safe(student.current_division || student.admission_division)})`],
+        ['Class in which studying',        classInWhichStudying || `${safe(student.current_standard || student.admission_standard)} standard (${safe(student.current_division || student.admission_division)})`],
         ['Remarks',                        safe(remarks, '')],
       ];
 

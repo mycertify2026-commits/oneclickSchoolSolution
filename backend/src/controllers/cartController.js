@@ -47,7 +47,10 @@ exports.getPrices = async (req, res) => {
 };
 
 // Frontend sends LC details as a JSON string in `purpose`
-// ({lcType, dateOfLeaving, reasonForLeaving, remarks}). Parse safely.
+// ({lcType, dateOfLeaving, reasonForLeaving, remarks, classInWhichStudying}).
+// Parse safely. classInWhichStudying is the Head Master's manual entry —
+// when blank, generateLcPdf falls back to the student's own current/
+// admission standard, same as before this field existed.
 function parseLcPurpose(purpose) {
   try {
     const p = JSON.parse(purpose || '{}');
@@ -56,9 +59,10 @@ function parseLcPurpose(purpose) {
       dateOfLeaving:    p.dateOfLeaving || null,
       reasonForLeaving: p.reasonForLeaving || null,
       remarks:          p.remarks || null,
+      classInWhichStudying: p.classInWhichStudying || null,
     };
   } catch (e) {
-    return { lcType: 'Original', dateOfLeaving: null, reasonForLeaving: null, remarks: null };
+    return { lcType: 'Original', dateOfLeaving: null, reasonForLeaving: null, remarks: null, classInWhichStudying: null };
   }
 }
 
@@ -412,6 +416,7 @@ exports.verifyOtp = async (req, res) => {
             dateOfLeaving:    item.leaving_date || lc.dateOfLeaving,
             reasonForLeaving: item.leaving_reason || lc.reasonForLeaving,
             remarks:          item.leaving_remark || lc.remarks,
+            classInWhichStudying: lc.classInWhichStudying,
           });
         } else if (item.type === 'bonafide') {
           await renderCertificatePdf({ type: 'bonafide', school, student, certificate, outputPath, photoPath, logoPath, purpose: item.purpose, signaturePath, stampPath });

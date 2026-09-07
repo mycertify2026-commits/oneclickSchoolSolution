@@ -312,7 +312,7 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   // signature image now sits above the designation label instead of plain
   // text standing in for it.
   const sigBandY = 65 + fields.length * 9 + 2;
-  if (student.address) {
+  if (school.id_card_show_address && student.address) {
     const addrW = 68;
     const addrText = fitSingleLine(doc, `Address: ${student.address}`, addrW, 'Helvetica', 4.6);
     doc.font('Helvetica').fontSize(4.6).fillColor(TEXT)
@@ -461,7 +461,7 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   // signature image now sits above the designation label instead of plain
   // text standing in for it.
   const sigBandY = rowY0 + fields.length * 9 + 2;
-  if (student.address) {
+  if (school.id_card_show_address && student.address) {
     const addrW = W - FX * 2;
     const addrText = fitSingleLine(doc, `Address: ${student.address}`, addrW, 'Helvetica', 5.2);
     doc.font('Helvetica').fontSize(5.2).fillColor(TEXT)

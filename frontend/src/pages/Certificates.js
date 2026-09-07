@@ -53,6 +53,7 @@ export default function Certificates() {
   const [lcReason, setLcReason] = useState('Passed');
   const [lcReasonOther, setLcReasonOther] = useState('');
   const [lcRemarks, setLcRemarks] = useState('');
+  const [lcClassInWhichStudying, setLcClassInWhichStudying] = useState('');
 
   // Merge live idcard prices into TYPES
   const TYPES = BASE_TYPES.map(t => t.key === 'idcard' ? { ...t, price: idCardPricing.soft } : t);
@@ -66,6 +67,7 @@ export default function Certificates() {
         dateOfLeaving: lcDateOfLeaving,
         reasonForLeaving: lcReason === 'Other' ? (lcReasonOther || 'Other') : lcReason,
         remarks: lcRemarks,
+        classInWhichStudying: lcClassInWhichStudying,
       });
     }
     return purpose;
@@ -380,6 +382,10 @@ export default function Certificates() {
                     <input className="form-control" value={lcReasonOther} onChange={e => setLcReasonOther(e.target.value)} placeholder="Enter reason manually" />
                   </div>
                 )}
+                <div className="form-group">
+                  <label className="form-label">Class in which Studying</label>
+                  <input className="form-control" value={lcClassInWhichStudying} onChange={e => setLcClassInWhichStudying(e.target.value)} placeholder="e.g. 9th Standard (B)" />
+                </div>
                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                   <label className="form-label">Remarks</label>
                   <input className="form-control" value={lcRemarks} onChange={e => setLcRemarks(e.target.value)} placeholder="e.g. No dues" />
