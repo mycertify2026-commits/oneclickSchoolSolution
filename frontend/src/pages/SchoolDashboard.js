@@ -63,19 +63,35 @@ export default function SchoolDashboard() {
   const [students, setStudents] = useState([]);
   const [certificates, setCertificates] = useState([]);
   const [balance, setBalance] = useState(null);
+  const [loadError, setLoadError] = useState('');
   const navigate = useNavigate();
 
+  // Promise.all with no catch at all meant one failing request threw an
+  // unhandled rejection and silently left every stat at its empty initial
+  // value with no indication anything had gone wrong. allSettled lets each
+  // successful response populate its own card regardless of the others,
+  // and a visible banner replaces the previous silent failure.
   const load = useCallback(async () => {
-    const [schoolRes, studentsRes, certsRes, balRes] = await Promise.all([
+    setLoadError('');
+    const [schoolRes, studentsRes, certsRes, balRes] = await Promise.allSettled([
       api.get('/schools/me'),
       api.get('/students'),
       api.get('/certificates'),
       api.get('/wallet/balance'),
     ]);
-    setSchool(schoolRes.data.school);
-    setStudents(studentsRes.data.students);
-    setCertificates(certsRes.data.certificates);
-    setBalance(balRes.data.balance);
+    const failed = [];
+    if (schoolRes.status === 'fulfilled') setSchool(schoolRes.value.data.school);
+    else failed.push('school profile');
+    if (studentsRes.status === 'fulfilled') setStudents(studentsRes.value.data.students);
+    else failed.push('students');
+    if (certsRes.status === 'fulfilled') setCertificates(certsRes.value.data.certificates);
+    else failed.push('certificates');
+    if (balRes.status === 'fulfilled') setBalance(balRes.value.data.balance);
+    else failed.push('wallet balance');
+    if (failed.length) {
+      console.error('Dashboard load failures:', { schoolRes, studentsRes, certsRes, balRes });
+      setLoadError(`Some dashboard data failed to load (${failed.join(', ')}) — figures shown may be incomplete. Try refreshing; if it persists, contact support.`);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -115,6 +131,13 @@ export default function SchoolDashboard() {
 
   return (
     <Layout role="schoolAdmin">
+
+      {loadError && (
+        <div style={{ background: '#FEF3C7', color: '#92400E', padding: 12, borderRadius: 8, fontSize: 13, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <span><i className="fas fa-triangle-exclamation" style={{ marginRight: 8 }}></i>{loadError}</span>
+          <button className="btn btn-sm btn-outline" onClick={load}>Retry</button>
+        </div>
+      )}
 
       {/* ── School header ─────────────────────────────────────────── */}
       <div className="school-header-preview" style={{ marginBottom: 28 }}>

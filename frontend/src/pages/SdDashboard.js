@@ -10,14 +10,25 @@ ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip,
 export default function SdDashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const navigate = useNavigate();
 
-  useEffect(() => {
+  // A swallowed .catch(() => {}) meant a failed request silently left every
+  // stat at 0 with no indication anything had gone wrong — surface it
+  // instead, with a retry.
+  function load() {
+    setLoading(true);
+    setLoadError('');
     api.get('/super-distributors/me/dashboard')
       .then(res => setData(res.data))
-      .catch(() => {})
+      .catch(err => {
+        console.error('SD dashboard load failed:', err);
+        setLoadError('Dashboard data failed to load — figures shown may be incomplete. Try refreshing; if it persists, contact support.');
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }
+
+  useEffect(() => { load(); }, []);
 
   if (loading) return <Layout role="superDistributor"><div className="page-content">Loading...</div></Layout>;
 
@@ -39,6 +50,13 @@ export default function SdDashboard() {
           <button className="btn btn-primary" onClick={() => navigate('/sd-schools')}><i className="fas fa-plus"></i> Add School</button>
         </div>
       </div>
+
+      {loadError && (
+        <div style={{ background: '#FEF3C7', color: '#92400E', padding: 12, borderRadius: 8, fontSize: 13, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <span><i className="fas fa-triangle-exclamation" style={{ marginRight: 8 }}></i>{loadError}</span>
+          <button className="btn btn-sm btn-outline" onClick={load}>Retry</button>
+        </div>
+      )}
 
       <div className="stat-grid">
         <StatCard icon="fa-users" color="var(--primary)" bg="rgba(26,111,212,.1)" value={data?.totalDistributors ?? 0} label="Total Distributors" />

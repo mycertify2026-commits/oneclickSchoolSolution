@@ -8,21 +8,34 @@ export default function DistDashboard() {
   const [schools, setSchools] = useState([]);
   const [commission, setCommission] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const navigate = useNavigate();
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const [profileRes, schoolsRes, commissionRes] = await Promise.all([
-          api.get('/distributors/me'), api.get('/distributors/me/schools'), api.get('/distributors/me/commission')
-        ]);
-        setProfile(profileRes.data.distributor);
-        setSchools(schoolsRes.data.schools);
-        setCommission(commissionRes.data);
-      } finally { setLoading(false); }
+  // Promise.all meant one failing request silently left every stat at its
+  // empty initial value with no indication anything had gone wrong.
+  // allSettled lets each successful response populate its own card
+  // regardless of the others, and a visible banner replaces the previous
+  // silent failure.
+  async function load() {
+    setLoadError('');
+    const [profileRes, schoolsRes, commissionRes] = await Promise.allSettled([
+      api.get('/distributors/me'), api.get('/distributors/me/schools'), api.get('/distributors/me/commission')
+    ]);
+    const failed = [];
+    if (profileRes.status === 'fulfilled') setProfile(profileRes.value.data.distributor);
+    else failed.push('profile');
+    if (schoolsRes.status === 'fulfilled') setSchools(schoolsRes.value.data.schools);
+    else failed.push('schools');
+    if (commissionRes.status === 'fulfilled') setCommission(commissionRes.value.data);
+    else failed.push('commission');
+    if (failed.length) {
+      console.error('Dashboard load failures:', { profileRes, schoolsRes, commissionRes });
+      setLoadError(`Some dashboard data failed to load (${failed.join(', ')}) — figures shown may be incomplete. Try refreshing; if it persists, contact support.`);
     }
-    load();
-  }, []);
+    setLoading(false);
+  }
+
+  useEffect(() => { load(); }, []);
 
   if (loading) return <Layout role="distributor"><div className="page-content">Loading...</div></Layout>;
 
@@ -38,6 +51,13 @@ export default function DistDashboard() {
           <button className="btn btn-primary" onClick={() => navigate('/dist-schools')}><i className="fas fa-plus"></i> Add School</button>
         </div>
       </div>
+
+      {loadError && (
+        <div style={{ background: '#FEF3C7', color: '#92400E', padding: 12, borderRadius: 8, fontSize: 13, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <span><i className="fas fa-triangle-exclamation" style={{ marginRight: 8 }}></i>{loadError}</span>
+          <button className="btn btn-sm btn-outline" onClick={load}>Retry</button>
+        </div>
+      )}
 
       <div className="stat-grid">
         <StatCard icon="fa-school" color="var(--primary)" bg="rgba(26,111,212,.1)" value={schools.length} label="Total Schools" />

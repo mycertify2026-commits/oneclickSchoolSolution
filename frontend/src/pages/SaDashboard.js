@@ -16,25 +16,40 @@ export default function SaDashboard() {
   const [totalCommission, setTotalCommission] = useState(0);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const navigate = useNavigate();
 
+  // Promise.all meant one failing request (e.g. a report endpoint erroring
+  // right after a deploy, before migrations finish) silently left every
+  // stat — including Total Schools — at its empty initial value with no
+  // indication anything had gone wrong. allSettled lets each successful
+  // response populate its own card regardless of the others, and a visible
+  // banner replaces the previous silent failure.
   const load = useCallback(async () => {
-    try {
-      const [schoolsRes, revenueRes, certRes, walletReqRes, overviewRes] = await Promise.all([
-        api.get('/schools'),
-        api.get('/reports/revenue', { params: { months: 6 } }),
-        api.get('/reports/certificates-by-type'),
-        api.get('/wallet/recharge-requests', { params: { status: 'pending' } }),
-        api.get('/reports/overview')
-      ]);
-      setSchools(schoolsRes.data.schools);
-      setRevenueTrend(revenueRes.data.trend);
-      setCertByType(certRes.data.breakdown);
-      setPendingWalletCount(walletReqRes.data.requests.length);
-      setTotalCommission(Number(overviewRes.data.earnings?.superAdminTotal || 0));
-    } finally {
-      setLoading(false);
+    setLoadError('');
+    const [schoolsRes, revenueRes, certRes, walletReqRes, overviewRes] = await Promise.allSettled([
+      api.get('/schools'),
+      api.get('/reports/revenue', { params: { months: 6 } }),
+      api.get('/reports/certificates-by-type'),
+      api.get('/wallet/recharge-requests', { params: { status: 'pending' } }),
+      api.get('/reports/overview')
+    ]);
+    const failed = [];
+    if (schoolsRes.status === 'fulfilled') setSchools(schoolsRes.value.data.schools);
+    else failed.push('schools');
+    if (revenueRes.status === 'fulfilled') setRevenueTrend(revenueRes.value.data.trend);
+    else failed.push('revenue trend');
+    if (certRes.status === 'fulfilled') setCertByType(certRes.value.data.breakdown);
+    else failed.push('certificate breakdown');
+    if (walletReqRes.status === 'fulfilled') setPendingWalletCount(walletReqRes.value.data.requests.length);
+    else failed.push('wallet requests');
+    if (overviewRes.status === 'fulfilled') setTotalCommission(Number(overviewRes.value.data.earnings?.superAdminTotal || 0));
+    else failed.push('commission overview');
+    if (failed.length) {
+      console.error('Dashboard load failures:', { schoolsRes, revenueRes, certRes, walletReqRes, overviewRes });
+      setLoadError(`Some dashboard data failed to load (${failed.join(', ')}) — figures shown may be incomplete. Try refreshing; if it persists, contact support.`);
     }
+    setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -108,6 +123,13 @@ export default function SaDashboard() {
           <button className="btn btn-primary" onClick={() => navigate('/sa-schools')}><i className="fas fa-plus"></i> Add School</button>
         </div>
       </div>
+
+      {loadError && (
+        <div style={{ background: '#FEF3C7', color: '#92400E', padding: 12, borderRadius: 8, fontSize: 13, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <span><i className="fas fa-triangle-exclamation" style={{ marginRight: 8 }}></i>{loadError}</span>
+          <button className="btn btn-sm btn-outline" onClick={load}>Retry</button>
+        </div>
+      )}
 
       <div className="stat-grid">
         <StatCard icon="fa-school" color="var(--primary)" bg="rgba(26,111,212,.1)" value={totalSchools} label="Total Schools" />
