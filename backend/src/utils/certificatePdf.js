@@ -188,8 +188,10 @@ function drawHeader(doc, school, textX, textW, startY) {
     .text(`Taluka: ${safe(school.taluka)}, District: ${safe(school.district)}`, textX, y, { width: textW, align: 'center' });
   y += 13;
 
+  // U-DISE dropped here — it's redundant with the ID info bar just below
+  // this header, which already shows it. RECOG NO stands alone, centered.
   doc.font('Helvetica').fontSize(8.5).fillColor(GREY)
-    .text(`U-DISE: ${safe(school.udise_code)}   |   RECOG NO: ${safe(school.recog_no)}`, textX, y, { width: textW, align: 'center' });
+    .text(`RECOG NO: ${safe(school.recog_no)}`, textX, y, { width: textW, align: 'center' });
   y += 15;
 
   return y;
@@ -453,8 +455,12 @@ async function generateLcPdf({
       // QR + Certificate No. stacked (right) ── QR sits directly above the
       // Certificate Number box so both read as one verification unit, and is
       // the same size as the school logo (62pt) on request.
-      const boxW     = 110;
-      const certIdX  = doc.page.width - 46 - boxW;
+      // A wider right-hand margin (52pt vs the usual 46pt content margin)
+      // keeps the QR/Certificate-No. column clear of a school's uploaded
+      // border frame artwork, whose actual printed border thickness this
+      // code can't know in advance — found overlapping in a real render.
+      const boxW     = 100;
+      const certIdX  = doc.page.width - 52 - boxW;
       const metaTop  = 42;
       const qrSize   = 62;
       const logoSize = 62;
@@ -476,9 +482,15 @@ async function generateLcPdf({
       const certIdY = metaTop + qrSize + 6;
       const certIdBottom = drawIdBox(doc, certIdX, certIdY, 'CERTIFICATE NO.', certificate.serial_number, boxW);
 
+      // The QR+Certificate-No. column (logo-matched QR size, stacked above
+      // the number box) is inherently taller than the identity text block
+      // next to it — starting the text flush at the top left a noticeable
+      // dead gap below it before the next section. Nudging the text block
+      // down distributes that whitespace evenly above and below instead.
       const textX = logoX + logoSize + 14;
       const textW = certIdX - 14 - textX;
-      let y = drawHeader(doc, school, textX, textW, metaTop);
+      const textTopOffset = school.sanstha_name ? 17 : 22;
+      let y = drawHeader(doc, school, textX, textW, metaTop + textTopOffset);
       y = Math.max(y, certIdBottom + 8, metaTop + logoSize + 8);
 
       // ── School-configured header text (School Settings > Certificate
@@ -965,7 +977,6 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
 
   // ── ID row: Gr. No. / Roll No. / SARAL ID / Aadhar No. ───────────────────
   const idRowY = 140;
-  doc.save().moveTo(left, idRowY - 6).lineTo(right, idRowY - 6).lineWidth(0.6).strokeColor(GOLD).stroke().restore();
   const idFields = [
     ['Gr. No.', safe(student.register_number, '-')],
     ['Roll No.', safe(student.roll_number, '-')],
