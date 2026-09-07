@@ -1,4 +1,4 @@
-const { pool, monthExpr } = require('../config/db');
+const { pool, monthExpr, isTodayExpr, isThisMonthExpr } = require('../config/db');
 
 // Date N months before now (portable across PG/MySQL — computed in JS)
 function monthsAgo(n) {
@@ -31,8 +31,8 @@ async function getOverview(req, res) {
     const [[earnings]] = await pool.query(
       `SELECT COALESCE(SUM(platform_share),0) as platform_total,
               COALESCE(SUM(super_admin_amount),0) as super_admin_total,
-              COALESCE(SUM(CASE WHEN DATE(created_at)=CURDATE() THEN super_admin_amount ELSE 0 END),0) as super_admin_today,
-              COALESCE(SUM(CASE WHEN YEAR(created_at)=YEAR(CURDATE()) AND MONTH(created_at)=MONTH(CURDATE()) THEN super_admin_amount ELSE 0 END),0) as super_admin_month,
+              COALESCE(SUM(CASE WHEN ${isTodayExpr('created_at')} THEN super_admin_amount ELSE 0 END),0) as super_admin_today,
+              COALESCE(SUM(CASE WHEN ${isThisMonthExpr('created_at')} THEN super_admin_amount ELSE 0 END),0) as super_admin_month,
               COUNT(*) as total_transactions
        FROM commission_ledger WHERE status='confirmed'`
     );

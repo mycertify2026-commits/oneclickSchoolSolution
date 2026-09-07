@@ -8,6 +8,27 @@ function monthExpr(col) {
   return isMysql ? `DATE_FORMAT(${col}, '%Y-%m')` : `TO_CHAR(${col}, 'YYYY-MM')`;
 }
 
+// SQL expression for "today minus N months", portable across both databases
+// (MySQL's DATE_SUB(CURDATE(), INTERVAL n MONTH) has no direct Postgres
+// equivalent — Postgres needs CURRENT_DATE - INTERVAL 'n months').
+function monthsAgoExpr(n) {
+  return isMysql ? `DATE_SUB(CURDATE(), INTERVAL ${n} MONTH)` : `CURRENT_DATE - INTERVAL '${n} months'`;
+}
+
+// Boolean SQL condition for "col falls on today" / "col falls in the
+// current month" — MySQL's DATE()/YEAR()/MONTH()/CURDATE() functions don't
+// exist in Postgres, which needs ::date casts, EXTRACT, or date_trunc
+// instead. Used everywhere a dashboard splits a ledger sum into
+// today/this-month/all-time buckets.
+function isTodayExpr(col) {
+  return isMysql ? `DATE(${col}) = CURDATE()` : `${col}::date = CURRENT_DATE`;
+}
+function isThisMonthExpr(col) {
+  return isMysql
+    ? `YEAR(${col}) = YEAR(CURDATE()) AND MONTH(${col}) = MONTH(CURDATE())`
+    : `DATE_TRUNC('month', ${col}) = DATE_TRUNC('month', CURRENT_DATE)`;
+}
+
 let wrappedPool;
 let testConnection;
 
@@ -117,4 +138,4 @@ if (isMysql) {
   };
 }
 
-module.exports = { pool: wrappedPool, testConnection, isMysql, monthExpr };
+module.exports = { pool: wrappedPool, testConnection, isMysql, monthExpr, monthsAgoExpr, isTodayExpr, isThisMonthExpr };

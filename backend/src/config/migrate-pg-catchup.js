@@ -8,6 +8,14 @@
 // (which itself was already correct for some of them — e.g. wallet_requests,
 // the idcard-design columns, soft-delete — those are left untouched here).
 // Idempotent: IF NOT EXISTS on every statement, safe to re-run.
+//
+// Each numbered section runs in its own try/catch: an unexpected failure in
+// one section (a table already shaped differently than expected, a
+// transient connection blip, etc.) is logged and the script moves on to the
+// rest instead of aborting the whole run — a single bad section used to
+// mean every later section (including several genuinely load-bearing ones,
+// like certificate_templates and certificates.deleted_at) silently never
+// ran at all.
 const { Client } = require('pg');
 require('dotenv').config();
 
@@ -23,13 +31,24 @@ async function migrate() {
   await client.connect();
   console.log('Connected to PostgreSQL database.');
 
-  try {
-    console.log('\n1. students — current class columns');
+  let failures = 0;
+  async function step(num, title, fn) {
+    console.log(`\n${num}. ${title}`);
+    try {
+      await fn();
+    } catch (err) {
+      failures += 1;
+      console.error(`  ✗ Section ${num} failed: ${err.message}`);
+    }
+  }
+
+  await step(1, 'students — current class columns', async () => {
     await client.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS current_standard VARCHAR(20)`);
     await client.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS current_division VARCHAR(10)`);
     console.log('  + current_standard / current_division ensured');
+  });
 
-    console.log('\n2. schools — id-card bg opacity / feature strip / geo photos');
+  await step(2, 'schools — id-card bg opacity / feature strip / geo photos', async () => {
     const schoolCols = [
       ['id_card_bg_opacity', "DECIMAL(3,2) NOT NULL DEFAULT 0.15"],
       ['id_card_border_color', 'VARCHAR(20)'],
@@ -48,8 +67,9 @@ async function migrate() {
       await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS ${name} ${def}`);
     }
     console.log(`  + ${schoolCols.length} schools columns ensured`);
+  });
 
-    console.log('\n3. cart_items table');
+  await step(3, 'cart_items table', async () => {
     await client.query(`
       CREATE TABLE IF NOT EXISTS cart_items (
         id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::VARCHAR,
@@ -75,8 +95,9 @@ async function migrate() {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_cart_school_status ON cart_items (school_id, status)`);
     console.log('  + cart_items ensured');
+  });
 
-    console.log('\n4. id_card_hard_copy_requests table');
+  await step(4, 'id_card_hard_copy_requests table', async () => {
     await client.query(`
       CREATE TABLE IF NOT EXISTS id_card_hard_copy_requests (
         id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::VARCHAR,
@@ -95,8 +116,9 @@ async function migrate() {
       );
     `);
     console.log('  + id_card_hard_copy_requests ensured');
+  });
 
-    console.log('\n5. id_card_pricing table (+ seed)');
+  await step(5, 'id_card_pricing table (+ seed)', async () => {
     await client.query(`
       CREATE TABLE IF NOT EXISTS id_card_pricing (
         id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::VARCHAR,
@@ -115,8 +137,9 @@ async function migrate() {
     } else {
       console.log('  - id_card_pricing rows already present, skipping seed');
     }
+  });
 
-    console.log('\n6. email_logs table');
+  await step(6, 'email_logs table', async () => {
     await client.query(`
       CREATE TABLE IF NOT EXISTS email_logs (
         id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::VARCHAR,
@@ -134,8 +157,9 @@ async function migrate() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_email_logs_recipient ON email_logs (recipient)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_email_logs_type ON email_logs (email_type)`);
     console.log('  + email_logs ensured');
+  });
 
-    console.log('\n7. otp_verifications table');
+  await step(7, 'otp_verifications table', async () => {
     await client.query(`
       CREATE TABLE IF NOT EXISTS otp_verifications (
         id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::VARCHAR,
@@ -152,8 +176,9 @@ async function migrate() {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_otp_user_purpose ON otp_verifications (user_id, purpose, used)`);
     console.log('  + otp_verifications ensured');
+  });
 
-    console.log('\n8. certificate_pricing table (+ seed)');
+  await step(8, 'certificate_pricing table (+ seed)', async () => {
     await client.query(`
       CREATE TABLE IF NOT EXISTS certificate_pricing (
         type VARCHAR(20) PRIMARY KEY,
@@ -169,8 +194,9 @@ async function migrate() {
     } else {
       console.log('  - certificate_pricing rows already present, skipping seed');
     }
+  });
 
-    console.log('\n9. receipts table');
+  await step(9, 'receipts table', async () => {
     await client.query(`
       CREATE TABLE IF NOT EXISTS receipts (
         id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::VARCHAR,
@@ -192,8 +218,9 @@ async function migrate() {
       );
     `);
     console.log('  + receipts ensured');
+  });
 
-    console.log('\n10. commission_config table (+ seed default row)');
+  await step(10, 'commission_config table (+ seed default row)', async () => {
     await client.query(`
       CREATE TABLE IF NOT EXISTS commission_config (
         id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::VARCHAR,
@@ -216,8 +243,9 @@ async function migrate() {
     } else {
       console.log('  - commission_config row already present, skipping seed');
     }
+  });
 
-    console.log('\n11. commission_ledger table');
+  await step(11, 'commission_ledger table', async () => {
     await client.query(`
       CREATE TABLE IF NOT EXISTS commission_ledger (
         id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::VARCHAR,
@@ -249,12 +277,14 @@ async function migrate() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ledger_super_distributor ON commission_ledger (super_distributor_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ledger_created ON commission_ledger (created_at)`);
     console.log('  + commission_ledger ensured');
+  });
 
-    console.log('\n12. certificates — soft-delete column');
+  await step(12, 'certificates — soft-delete column', async () => {
     await client.query(`ALTER TABLE certificates ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP NULL DEFAULT NULL`);
     console.log('  + certificates.deleted_at ensured');
+  });
 
-    console.log('\n13. certificate_templates + template_fields tables');
+  await step(13, 'certificate_templates + template_fields tables', async () => {
     await client.query(`
       CREATE TABLE IF NOT EXISTS certificate_templates (
         id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::VARCHAR,
@@ -311,8 +341,9 @@ async function migrate() {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_template_fields_template ON template_fields (template_id)`);
     console.log('  + certificate_templates / template_fields ensured');
+  });
 
-    console.log('\n14. distributors — PAN + payout bank details (shared table: also covers Super Distributor profiles)');
+  await step(14, 'distributors — PAN + payout bank details (shared table: also covers Super Distributor profiles)', async () => {
     const distributorPayoutCols = [
       ['pan_number', 'VARCHAR(20)'],
       ['bank_account_holder', 'VARCHAR(150)'],
@@ -324,58 +355,70 @@ async function migrate() {
       await client.query(`ALTER TABLE distributors ADD COLUMN IF NOT EXISTS ${name} ${def}`);
     }
     console.log(`  + ${distributorPayoutCols.length} distributors columns ensured`);
+  });
 
-    console.log('\n15. schools — class range (which standards the school covers)');
+  await step(15, 'schools — class range (which standards the school covers)', async () => {
     await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS class_from VARCHAR(20)`);
     await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS class_to VARCHAR(20)`);
     console.log('  + schools.class_from / class_to ensured');
+  });
 
-    console.log('\n16. schools — ID card orientation + per-document signature designation');
+  await step(16, 'schools — ID card orientation + per-document signature designation', async () => {
     await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS id_card_orientation VARCHAR(10) NOT NULL DEFAULT 'horizontal'`);
     await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS lc_signature_label VARCHAR(50)`);
     await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS bonafide_signature_label VARCHAR(50)`);
     await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS idcard_signature_label VARCHAR(50)`);
     console.log('  + schools.id_card_orientation / lc_signature_label / bonafide_signature_label / idcard_signature_label ensured');
+  });
 
-    console.log('\n17. students — APAAR ID / Student ID / PEN No. / LOC No.');
+  await step(17, 'students — APAAR ID / Student ID / PEN No. / LOC No.', async () => {
     await client.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS apaar_id VARCHAR(12)`);
     await client.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS student_id_no VARCHAR(20)`);
     await client.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS pen_no VARCHAR(11)`);
     await client.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS loc_no VARCHAR(20)`);
     console.log('  + students.apaar_id / student_id_no / pen_no / loc_no ensured');
+  });
 
-    console.log('\n18. schools — school section + ID card watermark');
+  await step(18, 'schools — school section + ID card watermark', async () => {
     await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS school_section VARCHAR(30)`);
     await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS id_card_watermark_url VARCHAR(500)`);
     await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS id_card_watermark_data BYTEA`);
     await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS id_card_watermark_opacity DECIMAL(3,2) NOT NULL DEFAULT 0.10`);
     await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS id_card_watermark_enabled SMALLINT NOT NULL DEFAULT 0`);
     console.log('  + schools.school_section / id_card_watermark_* ensured');
+  });
 
-    console.log('\n19. id_card_hard_copy_requests — batch grouping + generated PDF + receipt link');
+  await step(19, 'id_card_hard_copy_requests — batch grouping + generated PDF + receipt link', async () => {
     await client.query(`ALTER TABLE id_card_hard_copy_requests ADD COLUMN IF NOT EXISTS batch_id VARCHAR(36)`);
     await client.query(`ALTER TABLE id_card_hard_copy_requests ADD COLUMN IF NOT EXISTS certificate_id VARCHAR(36)`);
     await client.query(`ALTER TABLE id_card_hard_copy_requests ADD COLUMN IF NOT EXISTS pdf_path VARCHAR(500)`);
     await client.query(`ALTER TABLE id_card_hard_copy_requests ADD COLUMN IF NOT EXISTS receipt_id VARCHAR(36)`);
     console.log('  + id_card_hard_copy_requests.batch_id / certificate_id / pdf_path / receipt_id ensured');
+  });
 
-    console.log('\n20. email_logs — retry tracking');
+  await step(20, 'email_logs — retry tracking', async () => {
     await client.query(`ALTER TABLE email_logs ADD COLUMN IF NOT EXISTS attempt_count INT NOT NULL DEFAULT 1`);
     await client.query(`ALTER TABLE email_logs ADD COLUMN IF NOT EXISTS next_retry_at TIMESTAMP`);
     console.log('  + email_logs.attempt_count / next_retry_at ensured');
+  });
 
-    console.log('\n21. schools — Sanstha name + editable board name (was hardcoded "Maharashtra State Education Board")');
+  await step(21, 'schools — Sanstha name + editable board name (was hardcoded "Maharashtra State Education Board")', async () => {
     await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS sanstha_name VARCHAR(200)`);
     await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS board_name VARCHAR(200) NOT NULL DEFAULT 'Maharashtra State Education Board'`);
     console.log('  + schools.sanstha_name / board_name ensured');
+  });
 
-    console.log('\nPostgreSQL catch-up migration completed successfully.');
-  } catch (err) {
-    console.error('Migration failed:', err.message);
+  await client.end();
+
+  if (failures > 0) {
+    console.error(`\nPostgreSQL catch-up migration finished with ${failures} failed section(s) — see ✗ lines above. Every other section still applied.`);
     process.exitCode = 1;
-  } finally {
-    await client.end();
+  } else {
+    console.log('\nPostgreSQL catch-up migration completed successfully — all 21 sections applied.');
   }
 }
 
-migrate();
+migrate().catch(err => {
+  console.error('Migration script crashed before completing:', err.message);
+  process.exitCode = 1;
+});

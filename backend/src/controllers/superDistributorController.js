@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
-const { pool } = require('../config/db');
+const { pool, monthExpr, monthsAgoExpr, isTodayExpr, isThisMonthExpr } = require('../config/db');
 const { createAndSendPasswordToken } = require('./authController');
 const { createNotification } = require('./notificationController');
 const { logAudit } = require('../utils/audit');
@@ -354,8 +354,8 @@ async function getDashboard(req, res) {
     // super_distributor_id directly, so no school/distributor join is needed.
     const [[earnings]] = await pool.query(
       `SELECT COALESCE(SUM(super_distributor_amount),0) as total,
-              COALESCE(SUM(CASE WHEN DATE(created_at)=CURDATE() THEN super_distributor_amount ELSE 0 END),0) as today,
-              COALESCE(SUM(CASE WHEN YEAR(created_at)=YEAR(CURDATE()) AND MONTH(created_at)=MONTH(CURDATE()) THEN super_distributor_amount ELSE 0 END),0) as this_month,
+              COALESCE(SUM(CASE WHEN ${isTodayExpr('created_at')} THEN super_distributor_amount ELSE 0 END),0) as today,
+              COALESCE(SUM(CASE WHEN ${isThisMonthExpr('created_at')} THEN super_distributor_amount ELSE 0 END),0) as this_month,
               COUNT(*) as total_certificates
        FROM commission_ledger WHERE super_distributor_id = ? AND status='confirmed'`,
       [sdId]
@@ -384,13 +384,13 @@ async function getDashboard(req, res) {
     );
     const flatRate = sdProfile ? Number(sdProfile.commission_rate) || 0 : 0;
     const [flatByMonth] = await pool.query(
-      `SELECT DATE_FORMAT(c.created_at, '%Y-%m') as month, COALESCE(SUM(c.price),0) as certTotal, COUNT(*) as count
+      `SELECT ${monthExpr('c.created_at')} as month, COALESCE(SUM(c.price),0) as certTotal, COUNT(*) as count
        FROM certificates c
        JOIN schools s ON s.id = c.school_id
        LEFT JOIN distributors d ON d.id = s.distributor_id
        WHERE s.deleted_at IS NULL
          AND (s.super_distributor_id = ? OR d.super_distributor_id = ?)
-         AND c.created_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+         AND c.created_at >= ${monthsAgoExpr(6)}
        GROUP BY month ORDER BY month ASC`,
       [sdId, sdId]
     );

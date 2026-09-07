@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
-const { pool } = require('../config/db');
+const { pool, isMysql, isTodayExpr, isThisMonthExpr } = require('../config/db');
 const { debitWallet, creditWallet } = require('./walletController');
 const { genSerial, fmtDate } = require('../utils/certificatePdf');
 const { renderCertificatePdf } = require('../utils/certificateRenderDispatch');
@@ -66,11 +66,14 @@ async function updateAllPricing(req, res) {
     for (const [type, value] of [['lc', lc], ['bonafide', bonafide]]) {
       if (value === undefined) continue;
       if (isNaN(value) || Number(value) < 0) return res.status(400).json({ error: `Invalid price for ${type}` });
-      await pool.query(
-        `INSERT INTO certificate_pricing (type, price, updated_by) VALUES (?, ?, ?)
-         ON DUPLICATE KEY UPDATE price = VALUES(price), updated_by = VALUES(updated_by), updated_at = NOW()`,
-        [type, value, req.user.id]
-      );
+      // MySQL's ON DUPLICATE KEY UPDATE has no direct Postgres equivalent
+      // (Postgres needs ON CONFLICT ... DO UPDATE) — branch the upsert syntax.
+      const upsertSql = isMysql
+        ? `INSERT INTO certificate_pricing (type, price, updated_by) VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE price = VALUES(price), updated_by = VALUES(updated_by), updated_at = NOW()`
+        : `INSERT INTO certificate_pricing (type, price, updated_by) VALUES (?, ?, ?)
+           ON CONFLICT (type) DO UPDATE SET price = EXCLUDED.price, updated_by = EXCLUDED.updated_by, updated_at = NOW()`;
+      await pool.query(upsertSql, [type, value, req.user.id]);
     }
     if (idcard !== undefined) {
       if (isNaN(idcard) || Number(idcard) < 0) return res.status(400).json({ error: 'Invalid price for idcard' });
@@ -240,8 +243,8 @@ async function getMyEarnings(req, res) {
   try {
     const [[totals]] = await pool.query(
       `SELECT COALESCE(SUM(school_share),0) as total,
-              COALESCE(SUM(CASE WHEN DATE(created_at)=CURDATE() THEN school_share ELSE 0 END),0) as today,
-              COALESCE(SUM(CASE WHEN YEAR(created_at)=YEAR(CURDATE()) AND MONTH(created_at)=MONTH(CURDATE()) THEN school_share ELSE 0 END),0) as this_month,
+              COALESCE(SUM(CASE WHEN ${isTodayExpr('created_at')} THEN school_share ELSE 0 END),0) as today,
+              COALESCE(SUM(CASE WHEN ${isThisMonthExpr('created_at')} THEN school_share ELSE 0 END),0) as this_month,
               COUNT(*) as total_certificates
        FROM commission_ledger WHERE school_id = ? AND status = 'confirmed'`,
       [req.schoolId]

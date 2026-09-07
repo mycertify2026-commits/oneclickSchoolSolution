@@ -3,6 +3,7 @@
 // recording that split permanently once a certificate is successfully
 // issued. The backend is the only place this math happens — the frontend
 // must never be trusted to compute or submit any of these amounts.
+const { v4: uuidv4 } = require('uuid');
 const { pool } = require('../config/db');
 
 async function getActiveConfig() {
@@ -61,14 +62,17 @@ async function recordCommission({ certificateId, certificateType, certificatePri
         certificate_price, school_pct, school_share, platform_pct, platform_share,
         super_admin_pct, super_admin_amount, super_distributor_pct, super_distributor_amount,
         distributor_pct, distributor_amount, status)
-       VALUES (UUID(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed')`,
-      [certificateId, school.id, distributorId, superDistributorId, certificateType,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed')`,
+      [uuidv4(), certificateId, school.id, distributorId, superDistributorId, certificateType,
        price, cfg.school_pct, schoolShare, cfg.platform_pct, platformShare,
        cfg.super_admin_pct, superAdminAmount, cfg.super_distributor_pct, superDistributorAmount,
        cfg.distributor_pct, distributorAmount]
     );
   } catch (e) {
-    if (e.code === 'ER_DUP_ENTRY') return; // already recorded for this certificate — not an error
+    // MySQL's duplicate-key code is 'ER_DUP_ENTRY'; Postgres's is '23505'
+    // (unique_violation). Either means this certificate was already
+    // recorded — not an error.
+    if (e.code === 'ER_DUP_ENTRY' || e.code === '23505') return;
     throw e;
   }
 }
