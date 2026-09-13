@@ -312,7 +312,14 @@ function parseImportDate(raw) {
   if (raw === null || raw === undefined || raw === '') return { value: null, error: null };
   if (raw instanceof Date) {
     if (isNaN(raw.getTime())) return { value: null, error: 'is not a valid date' };
-    return { value: `${raw.getFullYear()}-${pad2(raw.getMonth() + 1)}-${pad2(raw.getDate())}`, error: null };
+    // xlsx's serial-number-to-Date conversion has a known floating-point
+    // rounding drift (confirmed: converting back the exact serial for a
+    // clean midnight date can land several hours into the neighboring day),
+    // which silently shifted the imported date by a day depending on the
+    // server's timezone. Snapping to the nearest UTC day boundary before
+    // reading the calendar fields cancels that drift out.
+    const snapped = new Date(Math.round(raw.getTime() / 86400000) * 86400000);
+    return { value: `${snapped.getUTCFullYear()}-${pad2(snapped.getUTCMonth() + 1)}-${pad2(snapped.getUTCDate())}`, error: null };
   }
   const str = String(raw).trim();
   if (!str) return { value: null, error: null };
