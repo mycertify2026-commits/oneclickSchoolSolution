@@ -47,6 +47,7 @@ import SchoolCampRequests from './pages/SchoolCampRequests';
 import DistCampRequests from './pages/DistCampRequests';
 import DistIdCardRequests from './pages/DistIdCardRequests';
 import SaCampRequests from './pages/SaCampRequests';
+import SaEmailLogs from './pages/SaEmailLogs';
 import SaIdCardRequests from './pages/SaIdCardRequests';
 
 export default function App() {
@@ -114,6 +115,7 @@ export default function App() {
 
             {/* Super Admin — Camps & ID Cards */}
             <Route path="/sa-camp-requests" element={<ProtectedRoute role="superAdmin"><SaCampRequests /></ProtectedRoute>} />
+            <Route path="/sa-email-logs" element={<ProtectedRoute role="superAdmin"><SaEmailLogs /></ProtectedRoute>} />
             <Route path="/sa-id-card-requests" element={<ProtectedRoute role="superAdmin"><SaIdCardRequests /></ProtectedRoute>} />
 
             <Route path="*" element={<Navigate to="/" replace />} />

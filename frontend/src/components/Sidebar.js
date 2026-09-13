@@ -24,9 +24,10 @@ const NAV_CONFIG = {
         { to: '/sa-id-card-requests',  icon: 'fa-id-card',     label: 'ID Card Requests' }
       ]},
       { label: 'SYSTEM', items: [
-        { to: '/sa-settings', icon: 'fa-cog',       labelKey: 'settings', label: 'Settings' },
-        { to: '/sa-reports',  icon: 'fa-chart-bar', labelKey: 'reports',  label: 'Reports' },
-        { to: '/sa-wallet',   icon: 'fa-wallet',    labelKey: 'wallet',   label: 'Wallet' }
+        { to: '/sa-settings',    icon: 'fa-cog',       labelKey: 'settings', label: 'Settings' },
+        { to: '/sa-reports',     icon: 'fa-chart-bar', labelKey: 'reports',  label: 'Reports' },
+        { to: '/sa-wallet',      icon: 'fa-wallet',    labelKey: 'wallet',   label: 'Wallet' },
+        { to: '/sa-email-logs',  icon: 'fa-envelope',  label: 'Email Logs' }
       ]}
     ]
   },
