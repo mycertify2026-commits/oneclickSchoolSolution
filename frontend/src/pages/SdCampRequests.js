@@ -13,9 +13,10 @@ const STATUS_MAP = {
 
 export default function SdCampRequests() {
   const [requests, setRequests] = useState([]);
+  const [distributors, setDistributors] = useState([]);
   const [filter, setFilter] = useState('');
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ attender_name: '', attender_email: '', attender_phone: '', status: '', notes: '' });
+  const [form, setForm] = useState({ distributor_id: '', attender_name: '', attender_email: '', attender_phone: '', status: '', notes: '' });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -24,18 +25,34 @@ export default function SdCampRequests() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    api.get('/super-distributors/me/distributors').then(res => setDistributors(res.data.distributors || [])).catch(() => {});
+  }, []);
 
   function openEdit(r) {
     setEditing(r);
-    setForm({ attender_name: r.attender_name || '', attender_email: r.attender_email || '', attender_phone: r.attender_phone || '', status: r.status, notes: r.notes || '' });
+    setForm({ distributor_id: r.distributor_id || '', attender_name: r.attender_name || '', attender_email: r.attender_email || '', attender_phone: r.attender_phone || '', status: r.status, notes: r.notes || '' });
     setError('');
+  }
+
+  // Assigning a distributor makes them the camp attender by default — pull
+  // their own contact details in immediately so the SD doesn't retype them.
+  function handleAssignDistributor(distributorId) {
+    const dist = distributors.find(d => d.id === distributorId);
+    setForm(p => ({
+      ...p,
+      distributor_id: distributorId,
+      attender_name: dist ? dist.name : p.attender_name,
+      attender_email: dist ? dist.email : p.attender_email,
+      attender_phone: dist ? dist.mobile : p.attender_phone,
+    }));
   }
 
   async function handleSave() {
     setError('');
     setSaving(true);
     try {
-      await api.put(`/camp-requests/sd/${editing.id}`, form);
+      await api.put(`/camp-requests/sd/${editing.id}`, { ...form, distributor_id: form.distributor_id || null });
       setEditing(null);
       load();
     } catch (err) {
@@ -103,6 +120,18 @@ export default function SdCampRequests() {
               {error && <div style={{ background: '#FEE2E2', color: 'var(--danger)', padding: 10, borderRadius: 8, fontSize: 13, marginBottom: 14 }}>{error}</div>}
               <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13 }}>
                 <strong>{editing.camp_name}</strong> — {editing.school_name}
+              </div>
+              <div className="form-group">
+                <label className="form-label">Assign Distributor</label>
+                <select className="form-select" value={form.distributor_id} onChange={e => handleAssignDistributor(e.target.value)}>
+                  <option value="">-- Not Assigned --</option>
+                  {distributors.map(d => (
+                    <option key={d.id} value={d.id}>{d.name}{d.area_of_operation ? ` (${d.area_of_operation})` : d.city ? ` (${d.city})` : ''}</option>
+                  ))}
+                </select>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>
+                  Assigning a distributor lets them see and serve this camp, and fills the Camp Attender fields below with their contact details automatically.
+                </p>
               </div>
               <div className="form-row form-row-3">
                 <F label="Attender Name" value={form.attender_name} onChange={v => setForm(p => ({ ...p, attender_name: v }))} />

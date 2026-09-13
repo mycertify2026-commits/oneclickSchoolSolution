@@ -243,10 +243,32 @@ async function updateSdCampRequest(req, res) {
     );
     if (!rows.length) return res.status(404).json({ error: 'Camp request not found' });
 
-    const { attender_name, attender_email, attender_phone, status, notes } = req.body;
+    let { attender_name, attender_email, attender_phone, status, notes, distributor_id } = req.body;
     const allowedStatuses = ['under_review'];
     const updates = ['updated_at = NOW()'];
     const values = [];
+
+    if (distributor_id !== undefined) {
+      if (distributor_id) {
+        // Only a distributor in this SD's own team can be assigned.
+        const [distRows] = await pool.query(
+          `SELECT u.name, u.email, u.mobile FROM distributors d
+           JOIN users u ON u.id = d.user_id
+           WHERE d.id = ? AND d.super_distributor_id = ? AND d.deleted_at IS NULL`,
+          [distributor_id, sdId]
+        );
+        if (!distRows.length) return res.status(400).json({ error: 'Distributor not found in your team' });
+        updates.push('distributor_id = ?'); values.push(distributor_id);
+        // The assigned distributor is the one who will go serve the camp —
+        // default the attender fields to their own contact details unless
+        // the caller explicitly sent different values in this same request.
+        if (attender_name === undefined) attender_name = distRows[0].name;
+        if (attender_email === undefined) attender_email = distRows[0].email;
+        if (attender_phone === undefined) attender_phone = distRows[0].mobile;
+      } else {
+        updates.push('distributor_id = ?'); values.push(null);
+      }
+    }
 
     if (attender_name !== undefined) { updates.push('attender_name = ?'); values.push(attender_name); }
     if (attender_email !== undefined) { updates.push('attender_email = ?'); values.push(attender_email); }
