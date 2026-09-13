@@ -79,6 +79,46 @@ async function sendCampConfirmationEmail(campReq) {
   }
 }
 
+// Fires the moment a camp request's attender fields go from unset to set —
+// whether that happened because a Super Distributor assigned a distributor
+// (attender auto-filled from that distributor's profile) or because an
+// already-assigned distributor opened the request for the first time (same
+// auto-fill, from their own profile). The school should not have to wait
+// for final Super Admin confirmation to know who has been allocated.
+async function notifyCampAttenderAssigned(campReq) {
+  try {
+    const [schoolRows] = await pool.query(
+      `SELECT s.name as school_name, u.id as admin_user_id, u.email as admin_email, u.name as admin_name
+       FROM schools s JOIN users u ON u.id = s.admin_user_id WHERE s.id = ?`,
+      [campReq.school_id]
+    );
+    if (!schoolRows.length) return;
+    const { school_name, admin_user_id, admin_email, admin_name } = schoolRows[0];
+
+    const text = `Camp attender allocated for "${campReq.camp_name}": ${campReq.attender_name}${campReq.attender_phone ? ` (${campReq.attender_phone})` : ''}.`;
+    await createNotification(admin_user_id, text);
+
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:8px">
+        <h2 style="color:#1A6FD4">📋 Camp Attender Allocated — ${campReq.camp_name}</h2>
+        <p>Hi ${admin_name},</p>
+        <p>A camp attender has been allocated for your camp request at <strong>${school_name}</strong>.</p>
+        <table style="width:100%;border-collapse:collapse;margin:16px 0">
+          <tr><td style="padding:8px 0;color:#64748b;width:140px">Camp Name</td><td style="padding:8px 0;font-weight:600">${campReq.camp_name}</td></tr>
+          <tr><td style="padding:8px 0;color:#64748b">Camp Attender</td><td style="padding:8px 0;font-weight:600">${campReq.attender_name || '—'}</td></tr>
+          <tr><td style="padding:8px 0;color:#64748b">Attender Email</td><td style="padding:8px 0">${campReq.attender_email || '—'}</td></tr>
+          <tr><td style="padding:8px 0;color:#64748b">Attender Phone</td><td style="padding:8px 0">${campReq.attender_phone || '—'}</td></tr>
+        </table>
+        <p style="color:#94a3b8;font-size:12px;margin-top:24px;border-top:1px solid #e2e8f0;padding-top:16px">
+          One Click School Solutions — automated notification
+        </p>
+      </div>`;
+    await sendMail({ to: admin_email, subject: `Camp Attender Allocated: ${campReq.camp_name}`, html });
+  } catch (e) {
+    console.error('[Camp] attender-assigned notify failed:', e.message);
+  }
+}
+
 // ── SCHOOL ADMIN ────────────────────────────────────────────────────────────
 
 async function listMyCampRequests(req, res) {
@@ -92,14 +132,9 @@ async function listMyCampRequests(req, res) {
        ORDER BY cr.created_at DESC`,
       [req.schoolId]
     );
-    // Only reveal attender info if confirmed
-    const safe = rows.map(r => ({
-      ...r,
-      attender_name:  r.status === 'confirmed' ? r.attender_name  : null,
-      attender_email: r.status === 'confirmed' ? r.attender_email : null,
-      attender_phone: r.status === 'confirmed' ? r.attender_phone : null,
-    }));
-    res.json({ campRequests: safe });
+    // Attender info (who has been allocated) is shown as soon as it's known —
+    // the school no longer has to wait for final Super Admin confirmation.
+    res.json({ campRequests: rows });
   } catch (err) {
     console.error('listMyCampRequests error:', err.message);
     res.status(500).json({ error: 'Server error' });
@@ -180,15 +215,26 @@ async function updateDistributorCampRequest(req, res) {
 
     const [rows] = await pool.query('SELECT * FROM camp_requests WHERE id = ? AND distributor_id = ?', [req.params.id, distId]);
     if (!rows.length) return res.status(404).json({ error: 'Camp request not found' });
+    const before = rows[0];
 
-    const { attender_name, attender_email, attender_phone, status, notes } = req.body;
+    const { status, notes } = req.body;
     const allowedStatuses = ['under_review'];
     const updates = ['updated_at = NOW()'];
     const values = [];
 
-    if (attender_name !== undefined) { updates.push('attender_name = ?'); values.push(attender_name); }
-    if (attender_email !== undefined) { updates.push('attender_email = ?'); values.push(attender_email); }
-    if (attender_phone !== undefined) { updates.push('attender_phone = ?'); values.push(attender_phone); }
+    // Attender contact details always mirror the assigned distributor's own
+    // account — auto-fetched here, never accepted from the client, so the
+    // distributor can't enter someone else's or incorrect contact info.
+    // Only fills in once; a later update doesn't overwrite an SD's edits.
+    if (!before.attender_name) {
+      const [userRows] = await pool.query('SELECT name, email, mobile FROM users WHERE id = ?', [distUserId]);
+      if (userRows.length) {
+        updates.push('attender_name = ?'); values.push(userRows[0].name);
+        updates.push('attender_email = ?'); values.push(userRows[0].email);
+        updates.push('attender_phone = ?'); values.push(userRows[0].mobile);
+      }
+    }
+
     if (notes !== undefined) { updates.push('notes = ?'); values.push(notes); }
     if (status !== undefined && allowedStatuses.includes(status)) { updates.push('status = ?'); values.push(status); }
 
@@ -196,7 +242,11 @@ async function updateDistributorCampRequest(req, res) {
     await pool.query(`UPDATE camp_requests SET ${updates.join(', ')} WHERE id = ?`, values);
 
     const [updated] = await pool.query('SELECT * FROM camp_requests WHERE id = ?', [req.params.id]);
-    res.json({ campRequest: updated[0] });
+    const campReq = updated[0];
+    if (!before.attender_name && campReq.attender_name) {
+      await notifyCampAttenderAssigned(campReq);
+    }
+    res.json({ campRequest: campReq });
   } catch (err) {
     console.error('updateDistributorCampRequest error:', err.message);
     res.status(500).json({ error: 'Server error' });
@@ -242,6 +292,7 @@ async function updateSdCampRequest(req, res) {
       [req.params.id, sdId, sdId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Camp request not found' });
+    const before = rows[0];
 
     let { attender_name, attender_email, attender_phone, status, notes, distributor_id } = req.body;
     const allowedStatuses = ['under_review'];
@@ -280,7 +331,11 @@ async function updateSdCampRequest(req, res) {
     await pool.query(`UPDATE camp_requests SET ${updates.join(', ')} WHERE id = ?`, values);
 
     const [updated] = await pool.query('SELECT * FROM camp_requests WHERE id = ?', [req.params.id]);
-    res.json({ campRequest: updated[0] });
+    const campReq = updated[0];
+    if (!before.attender_name && campReq.attender_name) {
+      await notifyCampAttenderAssigned(campReq);
+    }
+    res.json({ campRequest: campReq });
   } catch (err) {
     console.error('updateSdCampRequest error:', err.message);
     res.status(500).json({ error: 'Server error' });

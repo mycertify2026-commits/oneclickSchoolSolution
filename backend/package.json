@@ -24,6 +24,7 @@
     "migrate:wallet-system": "node src/config/migrate-wallet-system.js",
     "migrate:pg-catchup": "node src/config/migrate-pg-catchup.js",
     "migrate:add-profile-fields": "node src/config/migrate-add-profile-fields.js",
+    "backfill:commission-ledger": "node src/config/backfill-commission-ledger.js",
     "seed": "node src/config/seed.js",
     "seed:demo": "node src/config/seed-demo.js",
     "test": "jest --runInBand"

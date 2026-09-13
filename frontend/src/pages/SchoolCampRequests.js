@@ -125,9 +125,9 @@ export default function SchoolCampRequests() {
                       <td>{r.end_date ? new Date(r.end_date).toLocaleDateString('en-IN') : '—'}</td>
                       <td><span className={`badge ${badgeCls}`}>{label}</span></td>
                       <td>
-                        {r.status === 'confirmed'
-                          ? <span style={{ fontWeight: 600 }}>{r.attender_name || '—'}</span>
-                          : <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>—</span>}
+                        {r.attender_name
+                          ? <span style={{ fontWeight: 600 }}>{r.attender_name}</span>
+                          : <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>Not allocated yet</span>}
                       </td>
                       <td>
                         <button className="btn-icon" title="Details" onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}>
@@ -143,7 +143,7 @@ export default function SchoolCampRequests() {
                     {expandedId === r.id && (
                       <tr key={`${r.id}-detail`}>
                         <td colSpan={7} style={{ background: '#f8fafc', padding: 16 }}>
-                          {r.status === 'confirmed' && (
+                          {r.attender_name && (
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 12 }}>
                               <Info label="Attender Name"  value={r.attender_name} />
                               <Info label="Attender Email" value={r.attender_email} />

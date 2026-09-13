@@ -14,7 +14,7 @@ const STATUS_MAP = {
 export default function DistCampRequests() {
   const [requests, setRequests] = useState([]);
   const [editing, setEditing] = useState(null); // the request being edited
-  const [form, setForm] = useState({ attender_name: '', attender_email: '', attender_phone: '', status: '', notes: '' });
+  const [form, setForm] = useState({ status: '', notes: '' });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -26,7 +26,7 @@ export default function DistCampRequests() {
 
   function openEdit(r) {
     setEditing(r);
-    setForm({ attender_name: r.attender_name || '', attender_email: r.attender_email || '', attender_phone: r.attender_phone || '', status: r.status, notes: r.notes || '' });
+    setForm({ status: r.status, notes: r.notes || '' });
     setError('');
   }
 
@@ -92,10 +92,16 @@ export default function DistCampRequests() {
               <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13 }}>
                 <strong>{editing.camp_name}</strong> — {editing.school_name}
               </div>
-              <div className="form-row form-row-3">
-                <F label="Attender Name" value={form.attender_name} onChange={v => setForm(p => ({ ...p, attender_name: v }))} />
-                <F label="Attender Email" value={form.attender_email} onChange={v => setForm(p => ({ ...p, attender_email: v }))} />
-                <F label="Attender Phone" value={form.attender_phone} onChange={v => setForm(p => ({ ...p, attender_phone: v }))} />
+              <div className="form-group">
+                <label className="form-label">Camp Attender (you)</label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, fontSize: 13, background: '#f8fafc', borderRadius: 8, padding: 10 }}>
+                  <div><div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>Name</div><div style={{ fontWeight: 600 }}>{editing.attender_name || '—'}</div></div>
+                  <div><div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>Email</div><div style={{ fontWeight: 600 }}>{editing.attender_email || '—'}</div></div>
+                  <div><div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>Phone</div><div style={{ fontWeight: 600 }}>{editing.attender_phone || '—'}</div></div>
+                </div>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>
+                  Set automatically from your account and shared with the school — it can't be edited here.
+                </p>
               </div>
               <div className="form-group">
                 <label className="form-label">Mark as Under Review</label>
@@ -117,14 +123,5 @@ export default function DistCampRequests() {
         </div>
       )}
     </Layout>
-  );
-}
-
-function F({ label, value, onChange }) {
-  return (
-    <div className="form-group">
-      <label className="form-label">{label}</label>
-      <input type="text" className="form-control" value={value || ''} onChange={e => onChange(e.target.value)} />
-    </div>
   );
 }

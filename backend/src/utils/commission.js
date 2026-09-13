@@ -30,6 +30,26 @@ async function resolveHierarchy(school) {
   return { distributorId, superDistributorId };
 }
 
+// A share computed for a tier that doesn't actually exist for this school
+// (no distributor, or a distributor with no super distributor of its own)
+// must never just vanish — every dashboard sums this table filtered by a
+// non-null id, so money assigned to a null distributor_id/
+// super_distributor_id was previously unattributable anywhere and made
+// platform_total (which sums unconditionally) diverge from what any actual
+// person's dashboard could ever show. Redirect anything that would land on
+// a missing tier to Super Admin instead, so platform_share always equals
+// super_admin_amount + super_distributor_amount + distributor_amount.
+// Exported so the historical backfill script (backfill-commission-ledger.js)
+// computes the split identically instead of duplicating this math.
+function computeSplit(price, cfg, distributorId, superDistributorId) {
+  const schoolShare = round2(price * Number(cfg.school_pct) / 100);
+  const platformShare = round2(price - schoolShare); // avoids rounding leftovers vs price*platform_pct/100
+  const superDistributorAmount = superDistributorId ? round2(platformShare * Number(cfg.super_distributor_pct) / 100) : 0;
+  const distributorAmount = distributorId ? round2(platformShare * Number(cfg.distributor_pct) / 100) : 0;
+  const superAdminAmount = round2(platformShare - superDistributorAmount - distributorAmount);
+  return { schoolShare, platformShare, superDistributorAmount, distributorAmount, superAdminAmount };
+}
+
 // Computes and permanently stores the commission split for one certificate.
 // Called once, right after a certificate row is successfully inserted —
 // never before, so a failed/cancelled certificate never gets a ledger row.
@@ -39,21 +59,7 @@ async function recordCommission({ certificateId, certificateType, certificatePri
   const { distributorId, superDistributorId } = await resolveHierarchy(school);
 
   const price = Number(certificatePrice);
-  const schoolShare = round2(price * Number(cfg.school_pct) / 100);
-  const platformShare = round2(price - schoolShare); // avoids rounding leftovers vs price*platform_pct/100
-
-  // A share computed for a tier that doesn't actually exist for this school
-  // (no distributor, or a distributor with no super distributor of its own)
-  // must never just vanish — every dashboard sums this table filtered by a
-  // non-null id, so money assigned to a null distributor_id/
-  // super_distributor_id was previously unattributable anywhere and made
-  // platform_total (which sums unconditionally) diverge from what any actual
-  // person's dashboard could ever show. Redirect anything that would land on
-  // a missing tier to Super Admin instead, so platform_share always equals
-  // super_admin_amount + super_distributor_amount + distributor_amount.
-  const superDistributorAmount = superDistributorId ? round2(platformShare * Number(cfg.super_distributor_pct) / 100) : 0;
-  const distributorAmount = distributorId ? round2(platformShare * Number(cfg.distributor_pct) / 100) : 0;
-  const superAdminAmount = round2(platformShare - superDistributorAmount - distributorAmount);
+  const split = computeSplit(price, cfg, distributorId, superDistributorId);
 
   try {
     await pool.query(
@@ -64,9 +70,9 @@ async function recordCommission({ certificateId, certificateType, certificatePri
         distributor_pct, distributor_amount, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed')`,
       [uuidv4(), certificateId, school.id, distributorId, superDistributorId, certificateType,
-       price, cfg.school_pct, schoolShare, cfg.platform_pct, platformShare,
-       cfg.super_admin_pct, superAdminAmount, cfg.super_distributor_pct, superDistributorAmount,
-       cfg.distributor_pct, distributorAmount]
+       price, cfg.school_pct, split.schoolShare, cfg.platform_pct, split.platformShare,
+       cfg.super_admin_pct, split.superAdminAmount, cfg.super_distributor_pct, split.superDistributorAmount,
+       cfg.distributor_pct, split.distributorAmount]
     );
   } catch (e) {
     // MySQL's duplicate-key code is 'ER_DUP_ENTRY'; Postgres's is '23505'
@@ -77,4 +83,4 @@ async function recordCommission({ certificateId, certificateType, certificatePri
   }
 }
 
-module.exports = { getActiveConfig, recordCommission };
+module.exports = { getActiveConfig, resolveHierarchy, computeSplit, recordCommission };
