@@ -261,9 +261,14 @@ export default function SaSchools() {
                   <div className="form-group">
                     <label className="form-label">Assign Distributor</label>
                     <select className="form-select" value={form.distributorId} onChange={e => handleChange('distributorId', e.target.value)}>
-                      <option value="">-- None --</option>
+                      <option value="">Self (Super Admin — Direct, no distributor)</option>
                       {distributors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                     </select>
+                    {!form.distributorId && (
+                      <div className="form-hint" style={{ marginTop: 4 }}>
+                        No distributor assigned — 100% of the platform commission for this school goes to Super Admin.
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="form-row form-row-3">
@@ -380,9 +385,14 @@ export default function SaSchools() {
               <div className="form-group">
                 <label className="form-label">Distributor</label>
                 <select className="form-select" value={assignDistributorId} onChange={e => setAssignDistributorId(e.target.value)}>
-                  <option value="">-- None (Direct) --</option>
+                  <option value="">Self (Super Admin — Direct, no distributor)</option>
                   {distributors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
+                {!assignDistributorId && (
+                  <div className="form-hint" style={{ marginTop: 4 }}>
+                    No distributor assigned — 100% of the platform commission for this school goes to Super Admin.
+                  </div>
+                )}
               </div>
             </div>
             <div className="modal-footer">

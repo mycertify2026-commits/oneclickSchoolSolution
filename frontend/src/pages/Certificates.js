@@ -43,6 +43,10 @@ export default function Certificates() {
   const [hardCopyLoading, setHardCopyLoading] = useState(false);
   const [hardCopyStudentIds, setHardCopyStudentIds] = useState([]);
 
+  // LC/Bonafide prices — set by Super Admin, fetched live so a price change
+  // is reflected here immediately rather than staying hardcoded.
+  const [certPricing, setCertPricing] = useState({ lc: 50, bonafide: 30 });
+
   function toggleHardCopyStudent(id) {
     setHardCopyStudentIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   }
@@ -55,8 +59,13 @@ export default function Certificates() {
   const [lcRemarks, setLcRemarks] = useState('');
   const [lcClassInWhichStudying, setLcClassInWhichStudying] = useState('');
 
-  // Merge live idcard prices into TYPES
-  const TYPES = BASE_TYPES.map(t => t.key === 'idcard' ? { ...t, price: idCardPricing.soft } : t);
+  // Merge live prices (set by Super Admin) into TYPES
+  const TYPES = BASE_TYPES.map(t => {
+    if (t.key === 'idcard') return { ...t, price: idCardPricing.soft };
+    if (t.key === 'lc') return { ...t, price: certPricing.lc };
+    if (t.key === 'bonafide') return { ...t, price: certPricing.bonafide };
+    return t;
+  });
 
   // Build the purpose string sent to backend:
   // For LC, encode all extra fields as JSON so they survive the cart pipeline.
@@ -96,6 +105,12 @@ export default function Certificates() {
       setIdCardPricing({
         soft: soft ? Number(soft.price) : (data.pricing?.soft ?? 20),
         hard: hard ? Number(hard.price) : (data.pricing?.hard ?? 100),
+      });
+    }).catch(() => {});
+    api.get('/certificates/pricing').then(({ data }) => {
+      setCertPricing({
+        lc: data.pricing?.lc ?? 50,
+        bonafide: data.pricing?.bonafide ?? 30,
       });
     }).catch(() => {});
     loadCart();

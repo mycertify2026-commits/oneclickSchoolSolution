@@ -14,6 +14,7 @@ import SaSchools from './pages/SaSchools';
 import SaSchoolDetail from './pages/SaSchoolDetail';
 import SaRequested from './pages/SaRequested';
 import SaEmployees from './pages/SaEmployees';
+import SaEmployeeDetail from './pages/SaEmployeeDetail';
 import SaSettings from './pages/SaSettings';
 import SaReports from './pages/SaReports';
 import SaWallet from './pages/SaWallet';
@@ -73,6 +74,7 @@ export default function App() {
             <Route path="/sa-schools/:id" element={<ProtectedRoute role="superAdmin"><SaSchoolDetail /></ProtectedRoute>} />
             <Route path="/sa-requested" element={<ProtectedRoute role="superAdmin"><SaRequested /></ProtectedRoute>} />
             <Route path="/sa-employees" element={<ProtectedRoute role="superAdmin"><SaEmployees /></ProtectedRoute>} />
+            <Route path="/sa-employees/:type/:id" element={<ProtectedRoute role="superAdmin"><SaEmployeeDetail /></ProtectedRoute>} />
             <Route path="/sa-settings" element={<ProtectedRoute role="superAdmin"><SaSettings /></ProtectedRoute>} />
             <Route path="/sa-reports" element={<ProtectedRoute role="superAdmin"><SaReports /></ProtectedRoute>} />
             <Route path="/sa-wallet" element={<ProtectedRoute role="superAdmin"><SaWallet /></ProtectedRoute>} />

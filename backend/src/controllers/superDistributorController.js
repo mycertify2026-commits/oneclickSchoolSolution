@@ -294,11 +294,8 @@ async function changeMyPassword(req, res) {
   }
 }
 
-// GET /api/super-distributors/me/dashboard
-async function getDashboard(req, res) {
-  try {
-    const sdId = req.user.id;
-
+// Shared by the SD's own /me/dashboard and Super Admin's per-SD detail view.
+async function computeSuperDistributorStats(sdId) {
     // Total distributors under this SD
     const [distCount] = await pool.query(
       'SELECT COUNT(*) as c FROM distributors WHERE super_distributor_id = ? AND deleted_at IS NULL',
@@ -374,6 +371,12 @@ async function getDashboard(req, res) {
        GROUP BY d.id, u.name ORDER BY total DESC`,
       [sdId]
     );
+    const [ledgerByMonth] = await pool.query(
+      `SELECT ${monthExpr('created_at')} as month, COALESCE(SUM(super_distributor_amount),0) as commission, COUNT(*) as count
+       FROM commission_ledger WHERE super_distributor_id = ? AND status='confirmed'
+       GROUP BY month ORDER BY month DESC LIMIT 12`,
+      [sdId]
+    );
 
     // Flat SD commission — this SD's own commission_rate (%) applied to the
     // price of every certificate generated under this SD's hierarchy.
@@ -405,7 +408,7 @@ async function getDashboard(req, res) {
       })),
     };
 
-    res.json({
+    return {
       totalDistributors: Number(distCount[0].c),
       totalSchools: Number(schoolCount[0].c),
       pendingSchools: Number(pendingCount[0].c),
@@ -418,12 +421,44 @@ async function getDashboard(req, res) {
         totalCertificates: Number(earnings.total_certificates),
         byCertificateType: byType.map(r => ({ type: r.certificate_type, total: Number(r.total), count: Number(r.count) })),
         byDistributor: byDistributor.map(r => ({ distributorId: r.distributor_id, name: r.distributor_name, total: Number(r.total) })),
+        byMonth: ledgerByMonth.map(r => ({ month: r.month, commission: Number(r.commission), count: Number(r.count) })),
       },
       flatCommission,
-    });
+    };
+}
+
+// GET /api/super-distributors/me/dashboard
+async function getDashboard(req, res) {
+  try {
+    const stats = await computeSuperDistributorStats(req.user.id);
+    res.json(stats);
   } catch (err) {
     console.error('SD getDashboard error:', err.message);
     res.status(500).json({ error: 'Server error fetching dashboard' });
+  }
+}
+
+// GET /api/super-distributors/:id (superAdmin) — full profile + commission
+// earned till date, for the Employee Detail page.
+async function getSuperDistributorDetail(req, res) {
+  try {
+    const [rows] = await pool.query(
+      `SELECT u.id, u.name, u.email, u.mobile, u.is_active, u.created_at,
+              sd.district, sd.city, sd.address, sd.area_of_operation, sd.commission_rate,
+              sd.avatar_url, sd.pan_number, sd.bank_account_holder, sd.bank_name, sd.bank_account_number, sd.bank_ifsc
+       FROM users u
+       LEFT JOIN distributors sd ON sd.user_id = u.id AND sd.super_distributor_id IS NULL
+       WHERE u.id = ? AND u.role = 'superDistributor' AND u.deleted_at IS NULL`,
+      [req.params.id]
+    );
+    const superDistributor = rows[0];
+    if (!superDistributor) return res.status(404).json({ error: 'Super Distributor not found' });
+
+    const stats = await computeSuperDistributorStats(superDistributor.id);
+    res.json({ superDistributor: { ...superDistributor, commission_rate: Number(superDistributor.commission_rate) }, ...stats });
+  } catch (err) {
+    console.error('getSuperDistributorDetail error:', err.message);
+    res.status(500).json({ error: 'Server error fetching super distributor detail' });
   }
 }
 
@@ -777,7 +812,7 @@ async function deleteMySchool(req, res) {
 module.exports = {
   // SA
   listSuperDistributors, createSuperDistributor, updateSuperDistributorByAdmin, deleteSuperDistributor,
-  uploadSuperDistributorAvatarByAdmin,
+  uploadSuperDistributorAvatarByAdmin, getSuperDistributorDetail,
   // SD own
   getMyProfile, updateMyProfile, uploadMyAvatar, changeMyPassword, getDashboard,
   listMyDistributors, createMyDistributor, getMyDistributor, updateMyDistributor, deleteMyDistributor,

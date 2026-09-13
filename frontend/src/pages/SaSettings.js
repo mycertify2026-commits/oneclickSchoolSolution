@@ -36,6 +36,12 @@ export default function SaSettings() {
   const [pricingMsg, setPricingMsg] = useState('');
   const [pricingErr, setPricingErr] = useState('');
 
+  // LC / Bonafide Pricing
+  const [certPricing, setCertPricing] = useState({ lc: '', bonafide: '' });
+  const [certPricingSaving, setCertPricingSaving] = useState(false);
+  const [certPricingMsg, setCertPricingMsg] = useState('');
+  const [certPricingErr, setCertPricingErr] = useState('');
+
   const load = useCallback(async (category) => {
     const res = await api.get('/master-data', { params: { category } });
     setItems(res.data.items);
@@ -49,6 +55,9 @@ export default function SaSettings() {
       const hard = data.pricing?.find(p => p.copy_type === 'hard');
       setIdCardPricing({ soft: soft ? String(soft.price) : '20', hard: hard ? String(hard.price) : '100' });
     }).catch(() => {});
+    api.get('/certificates/pricing').then(({ data }) => {
+      setCertPricing({ lc: String(data.pricing?.lc ?? '50'), bonafide: String(data.pricing?.bonafide ?? '30') });
+    }).catch(() => {});
   }, []);
 
   async function handleSavePricing() {
@@ -58,10 +67,25 @@ export default function SaSettings() {
     }
     setPricingSaving(true);
     try {
-      await api.put('/id-cards/pricing', { softPrice: Number(idCardPricing.soft), hardPrice: Number(idCardPricing.hard) });
+      // Backend expects { soft, hard } — a previous mismatch here (softPrice/
+      // hardPrice) meant this save silently failed with a 400 every time.
+      await api.put('/id-cards/pricing', { soft: Number(idCardPricing.soft), hard: Number(idCardPricing.hard) });
       setPricingMsg('ID card pricing saved successfully!');
     } catch (e) { setPricingErr(e.response?.data?.error || 'Failed to save pricing'); }
     finally { setPricingSaving(false); }
+  }
+
+  async function handleSaveCertPricing() {
+    setCertPricingMsg(''); setCertPricingErr('');
+    if (!certPricing.lc || !certPricing.bonafide || isNaN(certPricing.lc) || isNaN(certPricing.bonafide)) {
+      setCertPricingErr('Both prices must be valid numbers'); return;
+    }
+    setCertPricingSaving(true);
+    try {
+      await api.put('/certificates/pricing', { lc: Number(certPricing.lc), bonafide: Number(certPricing.bonafide) });
+      setCertPricingMsg('Certificate pricing saved successfully!');
+    } catch (e) { setCertPricingErr(e.response?.data?.error || 'Failed to save pricing'); }
+    finally { setCertPricingSaving(false); }
   }
 
   async function handleAdd() {
@@ -287,6 +311,32 @@ export default function SaSettings() {
           </div>
         </div>
       )}
+      {/* Certificate (LC / Bonafide) Pricing Section */}
+      <div className="card" style={{ marginTop: 24, padding: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          <i className="fas fa-file-invoice-dollar" style={{ color: 'var(--primary)', fontSize: 18 }}></i>
+          <h3 style={{ margin: 0 }}>Certificate Pricing</h3>
+        </div>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
+          Set the prices charged to schools for generating a Leaving Certificate or Bonafide Certificate. Changes apply immediately to new certificates, receipts, and commission calculations — not to certificates already issued.
+        </p>
+        {certPricingMsg && <div style={{ background: '#ECFDF5', color: '#15803d', padding: 10, borderRadius: 8, fontSize: 13, marginBottom: 12 }}>{certPricingMsg}</div>}
+        {certPricingErr && <div style={{ background: '#FEE2E2', color: 'var(--danger)', padding: 10, borderRadius: 8, fontSize: 13, marginBottom: 12 }}>{certPricingErr}</div>}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, maxWidth: 400, marginBottom: 16 }}>
+          <div className="form-group">
+            <label className="form-label">Leaving Certificate Price (₹)</label>
+            <input type="number" min="0" className="form-control" value={certPricing.lc} onChange={e => setCertPricing(p => ({ ...p, lc: e.target.value }))} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Bonafide Certificate Price (₹)</label>
+            <input type="number" min="0" className="form-control" value={certPricing.bonafide} onChange={e => setCertPricing(p => ({ ...p, bonafide: e.target.value }))} />
+          </div>
+        </div>
+        <button className="btn btn-primary" onClick={handleSaveCertPricing} disabled={certPricingSaving}>
+          <i className="fas fa-save"></i> {certPricingSaving ? 'Saving...' : 'Save Pricing'}
+        </button>
+      </div>
+
       {/* ID Card Pricing Section */}
       <div className="card" style={{ marginTop: 24, padding: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>

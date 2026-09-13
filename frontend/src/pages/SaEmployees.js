@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import api from '../api/client';
 
@@ -19,6 +20,7 @@ function avatarToUrl(filePath) {
 }
 
 export default function SaEmployees() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState('distributors');
 
   // ── Distributor state ──────────────────────────────────────────────────────
@@ -257,6 +259,7 @@ export default function SaEmployees() {
                     <td>{d.school_count}</td>
                     <td><span className={`badge ${d.is_active ? 'badge-success' : 'badge-danger'}`}>{d.is_active ? 'Active' : 'Inactive'}</span></td>
                     <td>
+                      <button className="btn-icon" title="View Detail" onClick={() => navigate(`/sa-employees/distributor/${d.id}`)}><i className="fas fa-eye"></i></button>
                       <button className="btn-icon" title="Edit" onClick={() => openEditDist(d)}><i className="fas fa-edit"></i></button>
                       <button className="btn-icon" title="Delete" onClick={() => handleDeleteDist(d)}><i className="fas fa-trash" style={{ color: 'var(--danger)' }}></i></button>
                     </td>
@@ -288,6 +291,7 @@ export default function SaEmployees() {
                     <td>{sd.direct_school_count ?? 0}</td>
                     <td><span className={`badge ${sd.is_active ? 'badge-success' : 'badge-danger'}`}>{sd.is_active ? 'Active' : 'Inactive'}</span></td>
                     <td>
+                      <button className="btn-icon" title="View Detail" onClick={() => navigate(`/sa-employees/super-distributor/${sd.id}`)}><i className="fas fa-eye"></i></button>
                       <button className="btn-icon" title="Edit" onClick={() => openEditSd(sd)}><i className="fas fa-edit"></i></button>
                       <button className="btn-icon" title="Deactivate" onClick={() => handleDeleteSd(sd)}><i className="fas fa-trash" style={{ color: 'var(--danger)' }}></i></button>
                     </td>

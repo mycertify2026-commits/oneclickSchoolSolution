@@ -31,6 +31,7 @@ router.get('/me/commission', authenticate, requireRole('distributor'), distribut
 router.use(authenticate, requireRole('superAdmin'));
 router.get('/export', distributorController.exportDistributors);
 router.get('/', distributorController.listDistributors);
+router.get('/:id', distributorController.getDistributorDetail);
 router.post('/', sanitizeBody,
   body('name').notEmpty().withMessage('Name is required'),
   body('email').isEmail().withMessage('A valid email is required'),

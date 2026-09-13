@@ -47,6 +47,7 @@ router.delete('/me/schools/:id', authenticate, requireRole('superDistributor'), 
 
 // ── Super Admin management of Super Distributors ───────────────────────────
 router.get('/',    authenticate, requireRole('superAdmin'), c.listSuperDistributors);
+router.get('/:id', authenticate, requireRole('superAdmin'), c.getSuperDistributorDetail);
 router.post('/',   authenticate, requireRole('superAdmin'), sanitizeBody,
   body('name').notEmpty().withMessage('Name is required'),
   body('email').isEmail().withMessage('A valid email is required'),

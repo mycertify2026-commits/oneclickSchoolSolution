@@ -438,66 +438,95 @@ async function deleteMySchool(req, res) {
   }
 }
 
-// GET /api/distributors/me/commission
+// Shared by the distributor's own /me/commission and Super Admin's
+// per-distributor detail view — same ledger-based math either way.
 // Actual earnings come from the commission ledger's permanent per-certificate
 // snapshot (School/Platform split, then Super Admin/Super Distributor/
 // Distributor split of the platform share) — never the full certificate
 // price times a flat rate, and never recalculated from today's percentages.
 // distributors.commission_rate is a separate legacy field kept only for
 // display/admin-management purposes; it no longer drives any payout math.
+async function computeDistributorCommission(distributorId) {
+  const [totalsRows] = await pool.query(
+    `SELECT COALESCE(SUM(c.price), 0) as total_revenue, COUNT(c.id) as total_certificates,
+            COALESCE(SUM(cl.distributor_amount), 0) as total_commission
+     FROM certificates c
+     JOIN schools s ON s.id = c.school_id
+     LEFT JOIN commission_ledger cl ON cl.certificate_id = c.id AND cl.status = 'confirmed'
+     WHERE s.distributor_id = ?`,
+    [distributorId]
+  );
+  const totalRevenue = Number(totalsRows[0].total_revenue);
+  const totalCertificates = Number(totalsRows[0].total_certificates);
+  const totalCommission = Number(totalsRows[0].total_commission);
+
+  const [monthlyRows] = await pool.query(
+    `SELECT ${monthExpr('c.created_at')} as month, SUM(c.price) as revenue, COUNT(c.id) as certificate_count,
+            COALESCE(SUM(cl.distributor_amount), 0) as commission
+     FROM certificates c
+     JOIN schools s ON s.id = c.school_id
+     LEFT JOIN commission_ledger cl ON cl.certificate_id = c.id AND cl.status = 'confirmed'
+     WHERE s.distributor_id = ?
+     GROUP BY month ORDER BY month DESC LIMIT 12`,
+    [distributorId]
+  );
+  const monthly = monthlyRows.map(row => ({
+    month: row.month, revenue: Number(row.revenue), certificateCount: Number(row.certificate_count),
+    commission: Number(row.commission)
+  }));
+
+  const [perSchoolRows] = await pool.query(
+    `SELECT s.id, s.name, COALESCE(SUM(c.price), 0) as revenue, COUNT(c.id) as certificate_count,
+            COALESCE(SUM(cl.distributor_amount), 0) as commission
+     FROM schools s
+     LEFT JOIN certificates c ON c.school_id = s.id
+     LEFT JOIN commission_ledger cl ON cl.certificate_id = c.id AND cl.status = 'confirmed'
+     WHERE s.distributor_id = ?
+     GROUP BY s.id, s.name ORDER BY revenue DESC`,
+    [distributorId]
+  );
+  const perSchool = perSchoolRows.map(row => ({
+    schoolId: row.id, schoolName: row.name, revenue: Number(row.revenue), certificateCount: Number(row.certificate_count),
+    commission: Number(row.commission)
+  }));
+
+  return { totalRevenue, totalCertificates, totalCommission, monthly, perSchool };
+}
+
+// GET /api/distributors/me/commission
 async function getMyCommission(req, res) {
   try {
     const [distRows] = await pool.query('SELECT * FROM distributors WHERE user_id = ?', [req.user.id]);
     const distributor = distRows[0];
     if (!distributor) return res.status(404).json({ error: 'Distributor profile not found' });
 
-    const [totalsRows] = await pool.query(
-      `SELECT COALESCE(SUM(c.price), 0) as total_revenue, COUNT(c.id) as total_certificates,
-              COALESCE(SUM(cl.distributor_amount), 0) as total_commission
-       FROM certificates c
-       JOIN schools s ON s.id = c.school_id
-       LEFT JOIN commission_ledger cl ON cl.certificate_id = c.id AND cl.status = 'confirmed'
-       WHERE s.distributor_id = ?`,
-      [distributor.id]
-    );
-    const totalRevenue = Number(totalsRows[0].total_revenue);
-    const totalCertificates = Number(totalsRows[0].total_certificates);
-    const totalCommission = Number(totalsRows[0].total_commission);
-
-    const [monthlyRows] = await pool.query(
-      `SELECT ${monthExpr('c.created_at')} as month, SUM(c.price) as revenue, COUNT(c.id) as certificate_count,
-              COALESCE(SUM(cl.distributor_amount), 0) as commission
-       FROM certificates c
-       JOIN schools s ON s.id = c.school_id
-       LEFT JOIN commission_ledger cl ON cl.certificate_id = c.id AND cl.status = 'confirmed'
-       WHERE s.distributor_id = ?
-       GROUP BY month ORDER BY month DESC LIMIT 12`,
-      [distributor.id]
-    );
-    const monthly = monthlyRows.map(row => ({
-      month: row.month, revenue: Number(row.revenue), certificateCount: Number(row.certificate_count),
-      commission: Number(row.commission)
-    }));
-
-    const [perSchoolRows] = await pool.query(
-      `SELECT s.id, s.name, COALESCE(SUM(c.price), 0) as revenue, COUNT(c.id) as certificate_count,
-              COALESCE(SUM(cl.distributor_amount), 0) as commission
-       FROM schools s
-       LEFT JOIN certificates c ON c.school_id = s.id
-       LEFT JOIN commission_ledger cl ON cl.certificate_id = c.id AND cl.status = 'confirmed'
-       WHERE s.distributor_id = ?
-       GROUP BY s.id, s.name ORDER BY revenue DESC`,
-      [distributor.id]
-    );
-    const perSchool = perSchoolRows.map(row => ({
-      schoolId: row.id, schoolName: row.name, revenue: Number(row.revenue), certificateCount: Number(row.certificate_count),
-      commission: Number(row.commission)
-    }));
-
-    res.json({ commissionRate: Number(distributor.commission_rate), totalRevenue, totalCertificates, totalCommission, monthly, perSchool });
+    const commission = await computeDistributorCommission(distributor.id);
+    res.json({ commissionRate: Number(distributor.commission_rate), ...commission });
   } catch (err) {
     console.error('getMyCommission error:', err.message);
     res.status(500).json({ error: 'Server error calculating commission' });
+  }
+}
+
+// GET /api/distributors/:id (superAdmin) — full profile + commission earned
+// till date, for the Employee Detail page.
+async function getDistributorDetail(req, res) {
+  try {
+    const [rows] = await pool.query(
+      `SELECT d.*, u.name, u.email, u.mobile, u.is_active,
+              (SELECT COUNT(*) FROM schools s WHERE s.distributor_id = d.id) as school_count
+       FROM distributors d JOIN users u ON u.id = d.user_id
+       WHERE d.id = ? AND d.deleted_at IS NULL`,
+      [req.params.id]
+    );
+    const distributor = rows[0];
+    if (!distributor) return res.status(404).json({ error: 'Distributor not found' });
+
+    const commission = await computeDistributorCommission(distributor.id);
+    res.json({ distributor: { ...distributor, commission_rate: Number(distributor.commission_rate) }, ...commission });
+  } catch (err) {
+    console.error('getDistributorDetail error:', err.message);
+    res.status(500).json({ error: 'Server error fetching distributor detail' });
   }
 }
 
@@ -533,7 +562,7 @@ async function exportDistributors(req, res) {
 
 module.exports = {
   listDistributors, createDistributor, assignDistributor, updateDistributorByAdmin, deleteDistributor,
-  uploadDistributorAvatarByAdmin,
+  uploadDistributorAvatarByAdmin, getDistributorDetail,
   getMyProfile, updateMyProfile, uploadMyAvatar, changeMyPassword,
   addSchool, getMySchools, updateMySchool, deleteMySchool, getMyCommission, exportDistributors
 };
