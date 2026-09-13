@@ -85,6 +85,13 @@ const SCHOOL_BOARD_IDENTITY_COLUMNS = [
   { name: 'board_name', definition: "VARCHAR(200) NOT NULL DEFAULT 'Maharashtra State Education Board'" },
 ];
 
+// Per-school on/off switch for the student photo on the Leaving Certificate
+// only (Bonafide/ID Card are unaffected) — defaults to 1 (shown) so every
+// existing school's LC renders exactly as it did before this toggle existed.
+const SCHOOL_LC_PHOTO_TOGGLE_COLUMN = [
+  { name: 'lc_show_photo', definition: 'TINYINT(1) NOT NULL DEFAULT 1' },
+];
+
 async function migrate() {
   const connection = await mysql.createConnection({
     host: process.env.DB_HOST,
@@ -115,6 +122,8 @@ async function migrate() {
     await addMissingColumns(connection, dbName, 'email_logs', EMAIL_LOG_RETRY_COLUMNS);
     console.log('\nschools (Sanstha name + editable board name):');
     await addMissingColumns(connection, dbName, 'schools', SCHOOL_BOARD_IDENTITY_COLUMNS);
+    console.log('\nschools (LC student-photo toggle):');
+    await addMissingColumns(connection, dbName, 'schools', SCHOOL_LC_PHOTO_TOGGLE_COLUMN);
     console.log('\nProfile-fields migration completed successfully.');
   } catch (err) {
     console.error('Profile-fields migration failed:', err.message);

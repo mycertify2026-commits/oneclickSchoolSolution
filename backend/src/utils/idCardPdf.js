@@ -391,7 +391,11 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
     } catch (e) {}
   }
 
-  // ── Header band: logo | school name (wraps to 2 lines) | QR ──────────────
+  // ── Header band: logo | school name (wraps to 2 lines) ────────────────────
+  // The QR code used to share this header with the school name, which meant
+  // a long school name either overlapped it or got truncated/hidden. The QR
+  // now lives lower on the card (left of the signature, see below) so the
+  // full header width is always available to the name.
   doc.save().rect(0, CARD_TOP, W, HDR_H).fillColor(headerColor).fill().restore();
 
   const logoSz = 26;
@@ -399,15 +403,8 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
     try { doc.image(logoPath, 10, CARD_TOP + 12, { width: logoSz, height: logoSz }); } catch (e) {}
   }
 
-  const qrSz = 26;
-  const qrX = W - 8 - qrSz, qrY = CARD_TOP + 10;
-  doc.save().roundedRect(qrX - 2, qrY - 2, qrSz + 4, qrSz + 4, 2).fillColor(WHITE).fill().restore();
-  if (qrBuffer) {
-    try { doc.image(qrBuffer, qrX, qrY, { width: qrSz, height: qrSz }); } catch (e) {}
-  }
-
   const nameX = 10 + logoSz + 6;
-  const nameW = qrX - 6 - nameX;
+  const nameW = W - 8 - nameX;
   const schoolName = safe(school.id_card_school_name || school.name, 'School name').toUpperCase();
   const nameLines = splitSchoolName(doc, schoolName, nameW, 'Helvetica-Bold', 7.2);
   nameLines.slice(0, 2).forEach((line, index) => {
@@ -456,18 +453,28 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
       .text(valueText, VALUE_X, y, { width: fieldWidth, lineBreak: false });
   });
 
-  // ── Address + Principal Signature — the space freed by dropping the old
-  // text-only "Authorized by" row and the Student UID strip. A real
-  // signature image now sits above the designation label instead of plain
-  // text standing in for it.
-  const sigBandY = rowY0 + fields.length * 9 + 2;
+  // ── Address, then QR (left) + Principal Signature (right) ─────────────────
+  // QR moved down from the header (see above) to sit at the left instead of
+  // the top, and the signature moved from centered to the right, so neither
+  // ever collides with a long school name or with each other.
+  let bandY = rowY0 + fields.length * 9 + 2;
   if (school.id_card_show_address && student.address) {
     const addrW = W - FX * 2;
     const addrText = fitSingleLine(doc, `Address: ${student.address}`, addrW, 'Helvetica', 5.2);
     doc.font('Helvetica').fontSize(5.2).fillColor(TEXT)
-      .text(addrText, FX, sigBandY, { width: addrW, lineBreak: false });
+      .text(addrText, FX, bandY, { width: addrW, lineBreak: false });
+    bandY += 7;
   }
-  const sigW = 50, sigH = 11, sigX = (W - sigW) / 2, sigY = sigBandY + 10;
+
+  const qrSz = Math.max(20, Math.min(26, CONTENT_BOTTOM - bandY - 2));
+  const qrX = FX, qrY = bandY;
+  if (qrBuffer) {
+    try { doc.image(qrBuffer, qrX, qrY, { width: qrSz, height: qrSz }); } catch (e) {}
+  }
+
+  const sigW = 46, sigH = 11;
+  const sigX = W - FX - sigW;
+  const sigY = bandY + Math.max(0, (qrSz - sigH) / 2);
   const sigLineY = sigY + sigH;
   if (canDraw(signaturePath)) {
     try { doc.image(signaturePath, sigX, sigY, { width: sigW, height: sigH, fit: [sigW, sigH] }); } catch (e) {}

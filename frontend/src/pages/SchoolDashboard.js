@@ -75,7 +75,10 @@ export default function SchoolDashboard() {
     setLoadError('');
     const [schoolRes, studentsRes, certsRes, balRes] = await Promise.allSettled([
       api.get('/schools/me'),
-      api.get('/students'),
+      // The default page size is 50 — omitting a limit here silently
+      // undercounted every stat derived from students (total, boys/girls,
+      // the growth chart) for any school with more than 50 students.
+      api.get('/students?limit=5000'),
       api.get('/certificates'),
       api.get('/wallet/balance'),
     ]);

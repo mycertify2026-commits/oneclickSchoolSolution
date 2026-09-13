@@ -125,6 +125,7 @@ CREATE TABLE IF NOT EXISTS schools (
   lc_signature_label VARCHAR(50),
   bonafide_signature_label VARCHAR(50),
   idcard_signature_label VARCHAR(50),
+  lc_show_photo SMALLINT NOT NULL DEFAULT 1,
   status VARCHAR(20) NOT NULL DEFAULT 'pending',
   rejection_reason TEXT,
   deleted_at TIMESTAMP NULL DEFAULT NULL,

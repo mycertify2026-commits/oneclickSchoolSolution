@@ -224,7 +224,7 @@ async function getMySchool(req, res) {
   }
 }
 
-const SCHOOL_EDITABLE_FIELDS = ['name', 'udise_code', 'village', 'city', 'district', 'taluka', 'pin_code', 'phone', 'email', 'medium', 'board', 'cert_header', 'cert_footer', 'principal_name', 'recog_no', 'class_from', 'class_to', 'school_section', 'lc_signature_label', 'bonafide_signature_label', 'sanstha_name', 'board_name'];
+const SCHOOL_EDITABLE_FIELDS = ['name', 'udise_code', 'village', 'city', 'district', 'taluka', 'pin_code', 'phone', 'email', 'medium', 'board', 'cert_header', 'cert_footer', 'principal_name', 'recog_no', 'class_from', 'class_to', 'school_section', 'lc_signature_label', 'bonafide_signature_label', 'sanstha_name', 'board_name', 'lc_show_photo'];
 
 // PUT /api/schools/me (schoolAdmin) - update profile + upload logo/signature/stamp + cert header/footer text
 async function updateMySchool(req, res) {
@@ -232,7 +232,13 @@ async function updateMySchool(req, res) {
     const updates = [];
     const values = [];
     SCHOOL_EDITABLE_FIELDS.forEach(field => {
-      if (req.body[field] !== undefined) { updates.push(`${field} = ?`); values.push(req.body[field]); }
+      if (req.body[field] === undefined) return;
+      updates.push(`${field} = ?`);
+      // This endpoint is always called as multipart/form-data (it also
+      // carries file uploads), so a checkbox arrives as the string "1"/"0"
+      // rather than a real boolean — a plain `? 1 : 0` would treat the
+      // string "0" as truthy and never actually turn the toggle off.
+      values.push(field === 'lc_show_photo' ? (String(req.body[field]) === '1' ? 1 : 0) : req.body[field]);
     });
 
     if (req.files) {

@@ -97,7 +97,7 @@ export default function Certificates() {
   }, []);
 
   useEffect(() => {
-    api.get('/students?limit=1000').then(({ data }) => setStudents(data.students || [])).catch(() => {});
+    api.get('/students?limit=5000').then(({ data }) => setStudents(data.students || [])).catch(() => {});
     api.get('/schools/me').then(({ data }) => setSchoolEmail(data.school?.email || '')).catch(() => {});
     api.get('/id-cards/pricing').then(({ data }) => {
       const soft = data.pricing?.find ? data.pricing.find(p => p.copy_type === 'soft') : null;

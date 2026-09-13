@@ -412,6 +412,7 @@ CREATE TABLE `schools` (
   `id_card_watermark_enabled` SMALLINT NOT NULL DEFAULT 0,
   `sanstha_name` VARCHAR(200),
   `board_name` VARCHAR(200) NOT NULL DEFAULT 'Maharashtra State Education Board',
+  `lc_show_photo` TINYINT(1) NOT NULL DEFAULT 1,
   PRIMARY KEY (`id`),
   FOREIGN KEY (`admin_user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL,
   FOREIGN KEY (`distributor_id`) REFERENCES `distributors`(`id`) ON DELETE SET NULL,

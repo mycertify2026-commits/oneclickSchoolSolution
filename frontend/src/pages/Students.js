@@ -18,7 +18,10 @@ export default function Students() {
   const { t } = useTranslation();
 
   const load = useCallback(async () => {
-    const res = await api.get('/students', { params: { search, standard: filterStd, division: filterDiv, gender: filterGender } });
+    // No pagination UI on this page — it's meant to show the school's whole
+    // roster with client-side filters, so ask for all of it (the default
+    // page size of 50 was silently hiding every student past the 50th).
+    const res = await api.get('/students', { params: { search, standard: filterStd, division: filterDiv, gender: filterGender, limit: 5000 } });
     setStudents(res.data.students);
   }, [search, filterStd, filterDiv, filterGender]);
 

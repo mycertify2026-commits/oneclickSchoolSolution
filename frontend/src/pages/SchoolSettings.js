@@ -13,7 +13,7 @@ function normaliseColor(val) {
   return m ? m[0] : val;
 }
 
-const BLANK = { name: '', udise_code: '', village: '', city: '', district: '', taluka: '', pin_code: '', phone: '', email: '', medium: '', board: '', principal_name: '', recog_no: '', lc_signature_label: '', bonafide_signature_label: '', sanstha_name: '', board_name: '' };
+const BLANK = { name: '', udise_code: '', village: '', city: '', district: '', taluka: '', pin_code: '', phone: '', email: '', medium: '', board: '', principal_name: '', recog_no: '', lc_signature_label: '', bonafide_signature_label: '', sanstha_name: '', board_name: '', lc_show_photo: 1 };
 const SIGNATURE_DESIGNATION_PRESETS = ['Principal', 'Mukhyadhyapak', 'Headmaster'];
 const ID_CARD_PRESET_COLORS = [
   '#1a6fd4','#1557b0','#059669','#047857','#7c3aed','#5b21b6',
@@ -366,6 +366,22 @@ export default function SchoolSettings() {
                   />
                 </div>
                 <button className="btn btn-primary" style={{ marginTop: 4 }} onClick={handleSaveInfo} disabled={saving}>{saving ? 'Saving...' : 'Save Designations'}</button>
+              </div>
+
+              <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+                <h4 style={{ marginBottom: 4 }}>Leaving Certificate Options</h4>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
+                  Controls the student photo on the LC only — Bonafide and ID Card photos are unaffected.
+                </p>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(Number(form.lc_show_photo ?? 1))}
+                    onChange={e => handleChange('lc_show_photo', e.target.checked ? 1 : 0)}
+                  />
+                  Show student photo on Leaving Certificate
+                </label>
+                <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={handleSaveInfo} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
               </div>
 
               <div className="card" style={{ padding: 20, marginBottom: 20 }}>

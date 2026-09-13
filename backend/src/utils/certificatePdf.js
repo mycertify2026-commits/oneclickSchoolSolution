@@ -160,12 +160,14 @@ function currentAcademicYear() {
   return `${startYear} - ${String((startYear + 1) % 100).padStart(2, '0')}`;
 }
 
-function drawDoubleBorder(doc, top = 16, bottom = null) {
+function drawDoubleBorder(doc, top = 16, bottom = null, single = false) {
   const { width, height } = doc.page;
   const bottomY = bottom || height - 16;
   doc.save();
   doc.lineWidth(3).strokeColor(GOLD).rect(16, top, width - 32, bottomY - top).stroke();
-  doc.lineWidth(1.2).strokeColor(NAVY).rect(24, top + 8, width - 48, bottomY - top - 16).stroke();
+  if (!single) {
+    doc.lineWidth(1.2).strokeColor(NAVY).rect(24, top + 8, width - 48, bottomY - top - 16).stroke();
+  }
   doc.restore();
 }
 
@@ -448,7 +450,9 @@ async function generateLcPdf({
       if (canDraw(safeTemplatePath)) {
         try { doc.image(safeTemplatePath, 0, 0, { width: doc.page.width, height: doc.page.height }); } catch (e) {}
       } else {
-        drawDoubleBorder(doc);
+        // LC gets a single gold border — the inner navy rule made it look
+        // like two separate borders rather than one frame.
+        drawDoubleBorder(doc, 16, null, true);
       }
 
       // ── Top row, all in one line: Logo (left) | Board/School name (centre) |
@@ -496,12 +500,13 @@ async function generateLcPdf({
       // ── School-configured header text (School Settings > Certificate
       // Header) — additive text below the school name/logo, empty by
       // default so a school that never sets this renders identically to
-      // before this field existed.
-      const lcContentWidth = doc.page.width - 92;
+      // before this field existed. Centered on the same textX/textW column
+      // as the board/school name above it (not the full page width) so it
+      // shares their center instead of visibly sitting off to one side.
       const headerText = stripHtmlToText(school.cert_header).replace(/\n+/g, ' ');
       if (headerText) {
         doc.font('Helvetica').fontSize(8).fillColor(TEXT)
-          .text(headerText, 46, y, { width: lcContentWidth, align: 'center', lineBreak: false, ellipsis: true });
+          .text(headerText, textX, y, { width: textW, align: 'center', lineBreak: false, ellipsis: true });
         y += 12;
       }
 
@@ -594,11 +599,19 @@ async function generateLcPdf({
       doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT)
         .text(`Place : ${sentenceCase(school.city || school.village || school.taluka)}`, 46, fy + 14);
 
-      // Photo centred
+      // Photo centred — School Admin can turn this off per school (Settings)
+      // for schools that don't want a photo on the LC. The space is still
+      // reserved (LINE_Y below depends on photoH) so the signature/stamp
+      // layout doesn't shift depending on the toggle.
       const photoW  = 74, photoH = 64;
       const photoX  = doc.page.width / 2 - photoW / 2;
       const photoY  = fy;
-      drawPhotoPanel(doc, photoX, photoY, safePhotoPath, photoW, photoH);
+      const showLcPhoto = school.lc_show_photo === undefined || school.lc_show_photo === null
+        ? true
+        : Boolean(Number(school.lc_show_photo));
+      if (showLcPhoto) {
+        drawPhotoPanel(doc, photoX, photoY, safePhotoPath, photoW, photoH);
+      }
 
       // Signature line baseline aligned to the bottom of the photo
       const LINE_Y = photoY + photoH;
