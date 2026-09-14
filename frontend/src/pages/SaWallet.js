@@ -15,8 +15,6 @@ export default function SaWallet() {
   const [success, setSuccess] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const apiBase = (process.env.REACT_APP_UPLOADS_URL || 'http://66.116.246.220:5000');
-
   const loadRequests = useCallback(async (status) => {
     const res = await api.get('/wallet/recharge-requests', { params: status ? { status } : {} });
     setRequests(res.data.requests);
@@ -118,7 +116,7 @@ export default function SaWallet() {
                     <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{r.utr_number}</td>
                     <td>
                       {r.screenshot_path ? (
-                        <a href={`${apiBase}/uploads/wallet/${r.screenshot_path.split('/').pop()}`} target="_blank" rel="noopener noreferrer">
+                        <a href={`/uploads/wallet/${r.screenshot_path.split('/').pop()}`} target="_blank" rel="noopener noreferrer">
                           <i className="fas fa-image" style={{ color: 'var(--primary)' }}></i> View
                         </a>
                       ) : '-'}
@@ -163,10 +161,14 @@ export default function SaWallet() {
           </div>
           <div className="form-group">
             <label className="form-label">Upload QR Code</label>
-            {bankDetails?.qr_code_path && !qrFile && (
+            {(qrFile || bankDetails?.qr_code_path) && (
               <div style={{ marginBottom: 8 }}>
-                <img src={`${apiBase}/uploads/bank-qr/${bankDetails.qr_code_path}`} alt="Current QR" style={{ width: 100, height: 100, objectFit: 'contain', border: '1px solid var(--border)', borderRadius: 8 }} />
-                <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Current QR</div>
+                <img
+                  src={qrFile ? URL.createObjectURL(qrFile) : `/uploads/bank-qr/${bankDetails.qr_code_path}`}
+                  alt={qrFile ? 'Selected QR' : 'Current QR'}
+                  style={{ width: 100, height: 100, objectFit: 'contain', border: '1px solid var(--border)', borderRadius: 8 }}
+                />
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{qrFile ? 'New QR (not saved yet)' : 'Current QR'}</div>
               </div>
             )}
             <input type="file" accept="image/*" className="form-control" onChange={e => setQrFile(e.target.files[0] || null)} />

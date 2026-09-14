@@ -185,6 +185,21 @@ export default function CertificateTemplates() {
               <div className="form-group">
                 <label className="form-label">File (PDF, PNG, or JPEG)</label>
                 <input type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" className="form-control" onChange={e => setFile(e.target.files?.[0] || null)} />
+                {file && (
+                  <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {file.type.startsWith('image/') ? (
+                      <img src={URL.createObjectURL(file)} alt="Selected template" style={{ maxWidth: 140, maxHeight: 140, objectFit: 'contain', border: '1px solid var(--border)', borderRadius: 8 }} />
+                    ) : (
+                      <button type="button" className="btn btn-outline btn-sm" onClick={() => {
+                        const reader = new FileReader();
+                        reader.onload = () => setPreviewPdf(reader.result.split(',')[1]);
+                        reader.readAsDataURL(file);
+                      }}>
+                        <i className="fas fa-eye"></i> Preview {file.name}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
               <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                 After upload, the system will scan the document for existing labels (Name, DOB, Class, etc.) and suggest where to place each field — you'll confirm or adjust these in the next step.

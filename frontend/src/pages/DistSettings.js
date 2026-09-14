@@ -21,6 +21,7 @@ export default function DistSettings() {
   const [saving, setSaving] = useState(false);
   const [changingPw, setChangingPw] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState('');
   const fileInputRef = useRef(null);
 
   function avatarToUrl(filePath) {
@@ -49,6 +50,7 @@ export default function DistSettings() {
     const file = e.target.files?.[0];
     if (!file) return;
     setError(''); setSuccess('');
+    setAvatarPreview(URL.createObjectURL(file));
     setUploadingAvatar(true);
     try {
       const data = new FormData();
@@ -60,6 +62,7 @@ export default function DistSettings() {
       setError(err.response?.data?.error || 'Could not upload profile photo');
     } finally {
       setUploadingAvatar(false);
+      setAvatarPreview('');
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }
@@ -105,9 +108,11 @@ export default function DistSettings() {
             background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
             border: '1px solid var(--border)',
           }}>
-            {avatarUrl
-              ? <img src={avatarToUrl(avatarUrl)} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              : <i className="fas fa-user" style={{ fontSize: 28, color: 'var(--text-light)' }}></i>}
+            {avatarPreview
+              ? <img src={avatarPreview} alt="Selected" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : avatarUrl
+                ? <img src={avatarToUrl(avatarUrl)} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : <i className="fas fa-user" style={{ fontSize: 28, color: 'var(--text-light)' }}></i>}
           </div>
           <div>
             <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarChange} style={{ display: 'none' }} id="dist-avatar-input" />

@@ -633,6 +633,11 @@ export default function SchoolSettings() {
                     <div className="form-group">
                       <label className="form-label">Screenshot (optional)</label>
                       <input type="file" accept="image/*" className="form-control" onChange={e => setRechargeForm(p => ({ ...p, screenshot: e.target.files[0] || null }))} />
+                      {rechargeForm.screenshot && (
+                        <div style={{ marginTop: 8 }}>
+                          <img src={URL.createObjectURL(rechargeForm.screenshot)} alt="Selected screenshot" style={{ maxWidth: 160, maxHeight: 160, objectFit: 'contain', border: '1px solid var(--border)', borderRadius: 8 }} />
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="form-group">

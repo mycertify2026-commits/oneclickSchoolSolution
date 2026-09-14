@@ -31,6 +31,7 @@ export default function SaEmployees() {
   const [distForm, setDistForm] = useState(BLANK_DIST);
   const [editDistForm, setEditDistForm] = useState({});
   const [distAvatarUrl, setDistAvatarUrl] = useState('');
+  const [distAvatarPreview, setDistAvatarPreview] = useState('');
   const [uploadingDistAvatar, setUploadingDistAvatar] = useState(false);
   const distAvatarInputRef = useRef(null);
 
@@ -42,6 +43,7 @@ export default function SaEmployees() {
   const [sdForm, setSdForm] = useState(BLANK_SD);
   const [editSdForm, setEditSdForm] = useState({});
   const [sdAvatarUrl, setSdAvatarUrl] = useState('');
+  const [sdAvatarPreview, setSdAvatarPreview] = useState('');
   const [uploadingSdAvatar, setUploadingSdAvatar] = useState(false);
   const sdAvatarInputRef = useRef(null);
 
@@ -101,6 +103,7 @@ export default function SaEmployees() {
       is_active: d.is_active,
     });
     setDistAvatarUrl(d.avatar_url || '');
+    setDistAvatarPreview('');
     setError('');
     setShowEditDistModal(true);
   }
@@ -109,6 +112,7 @@ export default function SaEmployees() {
     const file = e.target.files?.[0];
     if (!file || !editingDist) return;
     setError('');
+    setDistAvatarPreview(URL.createObjectURL(file));
     setUploadingDistAvatar(true);
     try {
       const data = new FormData();
@@ -119,6 +123,7 @@ export default function SaEmployees() {
       setError(err.response?.data?.error || 'Could not upload profile photo');
     } finally {
       setUploadingDistAvatar(false);
+      setDistAvatarPreview('');
       if (distAvatarInputRef.current) distAvatarInputRef.current.value = '';
     }
   }
@@ -174,6 +179,7 @@ export default function SaEmployees() {
       is_active: sd.is_active,
     });
     setSdAvatarUrl(sd.avatar_url || '');
+    setSdAvatarPreview('');
     setError('');
     setShowEditSdModal(true);
   }
@@ -182,6 +188,7 @@ export default function SaEmployees() {
     const file = e.target.files?.[0];
     if (!file || !editingSd) return;
     setError('');
+    setSdAvatarPreview(URL.createObjectURL(file));
     setUploadingSdAvatar(true);
     try {
       const data = new FormData();
@@ -192,6 +199,7 @@ export default function SaEmployees() {
       setError(err.response?.data?.error || 'Could not upload profile photo');
     } finally {
       setUploadingSdAvatar(false);
+      setSdAvatarPreview('');
       if (sdAvatarInputRef.current) sdAvatarInputRef.current.value = '';
     }
   }
@@ -370,7 +378,9 @@ export default function SaEmployees() {
                   background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                   border: '1px solid var(--border)',
                 }}>
-                  {distAvatarUrl
+                  {distAvatarPreview
+                    ? <img src={distAvatarPreview} alt="Selected" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : distAvatarUrl
                     ? <img src={avatarToUrl(distAvatarUrl)} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     : <i className="fas fa-user" style={{ fontSize: 24, color: 'var(--text-light)' }}></i>}
                 </div>
@@ -492,7 +502,9 @@ export default function SaEmployees() {
                   background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                   border: '1px solid var(--border)',
                 }}>
-                  {sdAvatarUrl
+                  {sdAvatarPreview
+                    ? <img src={sdAvatarPreview} alt="Selected" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : sdAvatarUrl
                     ? <img src={avatarToUrl(sdAvatarUrl)} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     : <i className="fas fa-user" style={{ fontSize: 24, color: 'var(--text-light)' }}></i>}
                 </div>

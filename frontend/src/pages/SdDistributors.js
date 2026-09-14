@@ -22,6 +22,7 @@ export default function SdDistributors() {
   const [form, setForm] = useState(BLANK);
   const [editForm, setEditForm] = useState({});
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [avatarPreview, setAvatarPreview] = useState('');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef(null);
   const [error, setError] = useState('');
@@ -65,6 +66,7 @@ export default function SdDistributors() {
       is_active: d.is_active,
     });
     setAvatarUrl(d.avatar_url || '');
+    setAvatarPreview('');
     setError('');
     setShowEditModal(true);
   }
@@ -73,6 +75,7 @@ export default function SdDistributors() {
     const file = e.target.files?.[0];
     if (!file || !editingDist) return;
     setError('');
+    setAvatarPreview(URL.createObjectURL(file));
     setUploadingAvatar(true);
     try {
       const data = new FormData();
@@ -83,6 +86,7 @@ export default function SdDistributors() {
       setError(err.response?.data?.error || 'Could not upload profile photo');
     } finally {
       setUploadingAvatar(false);
+      setAvatarPreview('');
       if (avatarInputRef.current) avatarInputRef.current.value = '';
     }
   }
@@ -219,9 +223,11 @@ export default function SdDistributors() {
                   background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                   border: '1px solid var(--border)',
                 }}>
-                  {avatarUrl
-                    ? <img src={avatarToUrl(avatarUrl)} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <i className="fas fa-user" style={{ fontSize: 24, color: 'var(--text-light)' }}></i>}
+                  {avatarPreview
+                    ? <img src={avatarPreview} alt="Selected" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : avatarUrl
+                      ? <img src={avatarToUrl(avatarUrl)} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : <i className="fas fa-user" style={{ fontSize: 24, color: 'var(--text-light)' }}></i>}
                 </div>
                 <div>
                   <input ref={avatarInputRef} type="file" accept="image/*" onChange={handleAvatarChange} style={{ display: 'none' }} id="sd-dist-avatar-input" />
