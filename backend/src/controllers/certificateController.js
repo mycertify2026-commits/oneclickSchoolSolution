@@ -198,7 +198,7 @@ async function generateCertificate(req, res) {
     );
     if (recipientRows[0]) {
       const TYPE_LABELS = { lc: 'Leaving Certificate', bonafide: 'Bonafide', idcard: 'ID Card' };
-      sendCertificateGeneratedEmail(recipientRows[0].email, recipientRows[0].name, { studentName: student.full_name, type: TYPE_LABELS[type], serial, schoolId: req.schoolId, certificateId: certId })
+      sendCertificateGeneratedEmail(recipientRows[0].email, recipientRows[0].name, { studentName: student.full_name, type: TYPE_LABELS[type], serial, schoolId: req.schoolId, certificateId: certId, pdfPath })
         .catch(e => console.error('Certificate-generated email failed:', e.message));
     }
 
@@ -1002,7 +1002,7 @@ async function adminApproveRequest(req, res) {
     try {
       const approvalEmailResult = await sendCertificateGeneratedEmail(
         schoolAdminRows[0].email, schoolAdminRows[0].name,
-        { studentName: student.full_name, type: TYPE_LABELS[certReq.type], serial, schoolId: certReq.school_id, certificateId: certId }
+        { studentName: student.full_name, type: TYPE_LABELS[certReq.type], serial, schoolId: certReq.school_id, certificateId: certId, pdfPath }
       );
       if (!approvalEmailResult?.success) {
         console.error('Certificate-approved email not sent:', approvalEmailResult?.error || 'unknown error', '| recipient:', schoolAdminRows[0].email);

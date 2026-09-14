@@ -508,7 +508,7 @@ exports.verifyOtp = async (req, res) => {
           }
         }
 
-        results.push({ cartItemId: item.id, studentName: student.full_name, type: item.type, variant: item.certificate_variant, status: 'generated', certificateId: certId, serial, receiptId });
+        results.push({ cartItemId: item.id, studentName: student.full_name, type: item.type, variant: item.certificate_variant, status: 'generated', certificateId: certId, serial, receiptId, pdfPath: outputPath });
       } catch (genErr) {
         console.error('Cart cert generation failed for item', item.id, genErr.message);
         await pool.query("UPDATE cart_items SET status='failed' WHERE id=?", [item.id]);
@@ -532,7 +532,7 @@ exports.verifyOtp = async (req, res) => {
     }
     try {
       const certEmailResult = await sendCertificateGeneratedEmail(schoolAdminEmail, school.name, {
-        items: results.map(r => ({ type: r.type, studentName: r.studentName || '', serial: r.serial })),
+        items: results.map(r => ({ type: r.type, studentName: r.studentName || '', serial: r.serial, pdfPath: r.pdfPath })),
         schoolId: school.id,
       });
       if (!certEmailResult?.success) {

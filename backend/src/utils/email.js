@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const fs = require('fs');
 const { pool } = require('../config/db');
 require('dotenv').config();
 
@@ -63,7 +64,7 @@ function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function sendMail({ to, subject, html, emailType, relatedUserId, relatedSchoolId, relatedCertificateId }) {
+async function sendMail({ to, subject, html, emailType, relatedUserId, relatedSchoolId, relatedCertificateId, attachments }) {
   const fromName = process.env.EMAIL_FROM_NAME || 'One Click School Solutions';
   const fromAddress = process.env.EMAIL_FROM_ADDRESS || process.env.SMTP_USER;
   const type = emailType || subject;
@@ -79,7 +80,7 @@ async function sendMail({ to, subject, html, emailType, relatedUserId, relatedSc
   for (let attempt = 1; attempt <= MAX_SEND_ATTEMPTS; attempt += 1) {
     attemptsMade = attempt;
     try {
-      await transporter.sendMail({ from: `"${fromName}" <${fromAddress}>`, to, subject, html });
+      await transporter.sendMail({ from: `"${fromName}" <${fromAddress}>`, to, subject, html, attachments });
       await logEmailAttempt({ to, sender: fromAddress, emailType: type, relatedUserId, relatedSchoolId, relatedCertificateId, status: 'SENT', attemptCount: attempt });
       return { success: true };
     } catch (err) {
@@ -299,7 +300,7 @@ async function sendLowBalanceEmail(to, name, schoolName, balance, relatedSchoolI
 async function sendCertificateGeneratedEmail(to, name, payload = {}) {
   const items = payload.items && payload.items.length
     ? payload.items
-    : [{ studentName: payload.studentName, type: payload.type, serial: payload.serial }];
+    : [{ studentName: payload.studentName, type: payload.type, serial: payload.serial, pdfPath: payload.pdfPath }];
   const TYPE_LABELS = { lc: 'Leaving Certificate', bonafide: 'Bonafide', idcard: 'ID Card' };
   const rows = items.map(i => `
     <tr>
@@ -307,9 +308,10 @@ async function sendCertificateGeneratedEmail(to, name, payload = {}) {
       <td style="padding:6px 10px 6px 0">${escapeHtml(i.studentName)}</td>
       <td style="padding:6px 0;font-weight:600">${escapeHtml(i.serial)}</td>
     </tr>`).join('');
+  const attachmentCount = items.filter(i => i.pdfPath).length;
   const html = wrapTemplate('Certificate generated', `
     <p>Hi ${escapeHtml(name)},</p>
-    <p>${items.length > 1 ? `${items.length} certificates have` : 'A certificate has'} been generated:</p>
+    <p>${items.length > 1 ? `${items.length} certificates have` : 'A certificate has'} been generated${attachmentCount ? ' and attached to this email as PDF' : ''}:</p>
     <table style="width:100%;border-collapse:collapse;margin-top:8px">
       <tr>
         <th style="text-align:left;color:#94a3b8;font-size:12px;font-weight:600;padding-bottom:4px">Type</th>
@@ -319,11 +321,20 @@ async function sendCertificateGeneratedEmail(to, name, payload = {}) {
       ${rows}
     </table>
   `);
+  // Attach the actual certificate PDF(s) so the recipient can open the
+  // certificate directly from the email instead of having to log in and
+  // download it separately. A file that's missing on disk (e.g. an
+  // ephemeral container that lost it before this send) is silently
+  // skipped rather than failing the whole email.
+  const attachments = items
+    .filter(i => i.pdfPath && fs.existsSync(i.pdfPath))
+    .map(i => ({ filename: `${i.serial || 'certificate'}.pdf`, path: i.pdfPath, contentType: 'application/pdf' }));
   return sendMail({
     to, subject: 'Certificate generated - One Click School Solutions', html,
     emailType: 'certificate_generated',
     relatedSchoolId: payload.schoolId,
     relatedCertificateId: payload.certificateId,
+    attachments: attachments.length ? attachments : undefined,
   });
 }
 
