@@ -190,11 +190,10 @@ function drawHeader(doc, school, textX, textW, startY) {
     .text(`Taluka: ${safe(school.taluka)}, District: ${safe(school.district)}`, textX, y, { width: textW, align: 'center' });
   y += 13;
 
-  // U-DISE dropped here — it's redundant with the ID info bar just below
-  // this header, which already shows it. RECOG NO stands alone, centered.
-  doc.font('Helvetica').fontSize(8.5).fillColor(GREY)
-    .text(`RECOG NO: ${safe(school.recog_no)}`, textX, y, { width: textW, align: 'center' });
-  y += 15;
+  // U-DISE sits next to RECOG NO here in the header, not in the ID info bar
+  // below the title banner (moved per request — was previously duplicated
+  // in both places, then dropped from here entirely; now it lives only here).
+  y = fitCenteredText(doc, `U-DISE: ${safe(school.udise_code)}   |   RECOG NO: ${safe(school.recog_no)}`, textX, y, textW, 8.5, GREY, false) + 2;
 
   return y;
 }
@@ -522,7 +521,9 @@ async function generateLcPdf({
 
       y = drawTitleBanner(doc, y, 'School leaving certificate');
 
-      // ── U-DISE / Roll No. / G.R. No. / Saral ID bar ──
+      // ── Roll No. / G.R. No. / Saral ID bar ──
+      // U-DISE moved up into the header next to RECOG NO (see drawHeader) —
+      // no longer duplicated here.
       // fitSingleLineText (shrink-then-ellipsis) is used instead of a plain
       // .text() call with {lineBreak:false, ellipsis:true} — pdfkit's own
       // ellipsis handling turned out to still wrap to a second line once a
@@ -530,14 +531,14 @@ async function generateLcPdf({
       // a real PDF with long Saral/GR values), so every cell needs the same
       // shrink-first guard already proven reliable in drawDataRow below.
       const contentWidth = doc.page.width - 92;
-      const idBarSeg = contentWidth / 4;
-      fitSingleLineText(doc, `U-DISE: ${sentenceCase(school.udise_code, '-')}`,       46,               y, idBarSeg - 4, 9.5, TEXT, true, 6);
-      fitSingleLineText(doc, `Roll No.: ${sentenceCase(student.roll_number, '-')}`,   46 + idBarSeg,     y, idBarSeg - 4, 9.5, TEXT, true, 6);
-      fitSingleLineText(doc, `G.R. No.: ${sentenceCase(student.register_number, '-')}`, 46 + 2 * idBarSeg, y, idBarSeg - 4, 9.5, TEXT, true, 6);
-      fitSingleLineText(doc, `Saral ID: ${sentenceCase(student.serial_id, '-')}`,     46 + 3 * idBarSeg, y, idBarSeg - 4, 9.5, TEXT, true, 6);
+      const idBarSeg3 = contentWidth / 3;
+      fitSingleLineText(doc, `Roll No.: ${sentenceCase(student.roll_number, '-')}`,   46,                y, idBarSeg3 - 4, 9.5, TEXT, true, 6);
+      fitSingleLineText(doc, `G.R. No.: ${sentenceCase(student.register_number, '-')}`, 46 + idBarSeg3,  y, idBarSeg3 - 4, 9.5, TEXT, true, 6);
+      fitSingleLineText(doc, `Saral ID: ${sentenceCase(student.serial_id, '-')}`,     46 + 2 * idBarSeg3, y, idBarSeg3 - 4, 9.5, TEXT, true, 6);
       y += 15;
 
       // ── APAAR ID / Student ID / PEN No. / LOC No. bar ──
+      const idBarSeg = contentWidth / 4;
       fitSingleLineText(doc, `APAAR ID: ${sentenceCase(student.apaar_id, '-')}`,        46,               y, idBarSeg - 4, 9.5, TEXT, true, 6);
       fitSingleLineText(doc, `Student ID: ${sentenceCase(student.student_id_no, '-')}`, 46 + idBarSeg,     y, idBarSeg - 4, 9.5, TEXT, true, 6);
       fitSingleLineText(doc, `PEN No.: ${sentenceCase(student.pen_no, '-')}`,           46 + 2 * idBarSeg, y, idBarSeg - 4, 9.5, TEXT, true, 6);
@@ -626,22 +627,14 @@ async function generateLcPdf({
       doc.moveTo(C3, LINE_Y).lineTo(C3 + C3W - 4, LINE_Y).lineWidth(0.7).strokeColor('#999').stroke();
 
       doc.font('Helvetica').fontSize(9).fillColor(TEXT).text('Check by / prepared by', 46, LINE_Y + 5);
-      // Principal name in brackets ABOVE the designation label — the label
-      // text itself is the school's own choice (Principal / Mukhyadhyapak /
-      // Headmaster / a custom title), set in School Settings > Certificate
-      // Header, and defaults to "Head master" only when unset.
+      // Designation label only (Principal / Mukhyadhyapak / Headmaster / a
+      // custom title) — the Principal's name itself is shown on the ID Card
+      // only, never printed here even when school.principal_name is set.
       const lcSignatureLabel = safe(school.lc_signature_label, 'Head master');
-      if (school.principal_name) {
-        doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT)
-          .text(`${lcSignatureLabel} (${sentenceCase(school.principal_name)})`, C3, LINE_Y + 4, { width: C3W, align: 'center' });
-        doc.font('Helvetica').fontSize(7.5).fillColor(GREY)
-          .text(sentenceCase(school.name), C3, LINE_Y + 17, { width: C3W, align: 'center' });
-      } else {
-        doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT)
-          .text(lcSignatureLabel, C3, LINE_Y + 5, { width: C3W, align: 'center' });
-        doc.font('Helvetica').fontSize(8).fillColor(GREY)
-          .text(sentenceCase(school.name), C3, LINE_Y + 17, { width: C3W, align: 'center' });
-      }
+      doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT)
+        .text(lcSignatureLabel, C3, LINE_Y + 5, { width: C3W, align: 'center' });
+      doc.font('Helvetica').fontSize(8).fillColor(GREY)
+        .text(sentenceCase(school.name), C3, LINE_Y + 17, { width: C3W, align: 'center' });
 
       // Supplied transparent PNG frame is drawn last so its ornamentation
       // surrounds the text, QR image, birth date and principal details.
@@ -900,7 +893,7 @@ function drawFlourish(doc, x, y, lineW, towardRight) {
   doc.save().translate(dCx, y).rotate(45).rect(-2.5, -2.5, 5, 5).fillColor(GOLD).fill().restore();
 }
 
-// Renders one landscape bonafide certificate. Layout modeled directly on a
+// Renders one portrait bonafide certificate. Layout modeled directly on a
 // reference design the school provided: board/school identity + circular
 // emblem + certificate-ID/QR block up top, a labeled ID row, a navy title
 // banner, a centered certificate body, a photo with a "digitally signed"
@@ -1170,9 +1163,13 @@ async function generateBonafidePdf({ school, student, certificate, outputPath, p
 
   return new Promise((resolve, reject) => {
     try {
-      // One landscape page. The supplied PNG already contains the Student Copy
-      // label, so it must not be repeated by the PDF renderer.
-      const doc = new PDFDocument({ size: [842, 555.37], margin: 0 });
+      // Portrait A4 (was landscape) — renderSingleBonafide derives every
+      // horizontal position from doc.page.width, so it reflows to the
+      // narrower width; a school's own uploaded bonafide_template_data (or
+      // the shared default frame) is still stretched to fill the page, so a
+      // landscape-shaped background image will look stretched here until
+      // replaced with a portrait one.
+      const doc = new PDFDocument({ size: 'A4', margin: 0 });
       const stream = fs.createWriteStream(outputPath);
       doc.pipe(stream);
 
