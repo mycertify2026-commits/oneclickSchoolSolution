@@ -955,30 +955,34 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
   // everything below it down by the same fixed amount so it never overlaps.
   const sanshaOffset = school.sanstha_name ? 11 : 0;
   const boardY = 38 + sanshaOffset;
+  // fitCenteredText (shrink-font-then-ellipsis) instead of a plain .text()
+  // with {lineBreak:false, ellipsis:true} — this column got much narrower
+  // when Bonafide switched to portrait, and plain ellipsis handling doesn't
+  // reliably stop pdfkit from wrapping (and overlapping the line below) once
+  // text substantially exceeds the box at a fixed font size.
   if (school.sanstha_name) {
-    doc.fillColor(muted).font('Helvetica-Bold').fontSize(8)
-      .text(safe(school.sanstha_name).toUpperCase(), textX, 38, { width: textW, align: 'center', lineBreak: false, ellipsis: true });
+    fitCenteredText(doc, safe(school.sanstha_name).toUpperCase(), textX, 38, textW, 8, muted, true, 6);
   }
-  doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(13)
-    .text(safe(school.board_name, 'Maharashtra State Education Board').toUpperCase(), textX, boardY, { width: textW, align: 'center', lineBreak: false, ellipsis: true });
+  fitCenteredText(doc, safe(school.board_name, 'Maharashtra State Education Board').toUpperCase(), textX, boardY, textW, 13, NAVY, true, 8);
   drawFlourish(doc, textX + 2, boardY + 6, 8, false);
   drawFlourish(doc, textX + textW - 2, boardY + 6, 8, true);
-  doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(17)
-    .text(safe(school.name, 'SCHOOL NAME').toUpperCase(), textX, boardY + 18, { width: textW, align: 'center', lineBreak: false, ellipsis: true });
-  doc.fillColor(black).font('Helvetica').fontSize(8.5)
-    .text(`Taluka: ${safe(school.taluka, '-')}, District: ${safe(school.district, '-')}, Maharashtra`,
-      textX, boardY + 40, { width: textW, align: 'center', lineBreak: false, ellipsis: true });
-  doc.fillColor(muted).font('Helvetica').fontSize(7.5)
-    .text(`U-DISE: ${safe(school.udise_code, '-')}   |   RECOG NO: ${safe(school.recog_no, '-')}`,
-      textX, boardY + 53, { width: textW, align: 'center', lineBreak: false, ellipsis: true });
+  // School name is the line most likely to wrap to 2 lines in this narrower
+  // (portrait) column — chain off its real returned height instead of a
+  // fixed offset, so the Taluka/U-DISE lines below can never overlap it
+  // regardless of how long the name is or where it happens to wrap.
+  let afterNameY = fitCenteredText(doc, safe(school.name, 'SCHOOL NAME').toUpperCase(), textX, boardY + 18, textW, 17, NAVY, true, 9) + 2;
+  afterNameY = fitCenteredText(doc, `Taluka: ${safe(school.taluka, '-')}, District: ${safe(school.district, '-')}, Maharashtra`,
+    textX, afterNameY, textW, 8.5, black, false, 6) + 1;
+  afterNameY = fitCenteredText(doc, `U-DISE: ${safe(school.udise_code, '-')}   |   RECOG NO: ${safe(school.recog_no, '-')}`,
+    textX, afterNameY, textW, 7.5, muted, false, 6);
 
   // School-configured header text (School Settings > Certificate Header) —
-  // additive, empty by default. Rendered as a single line in the existing
-  // gap above the ID row rather than reflowing this fixed-coordinate layout.
+  // additive, empty by default. Chained off afterNameY (not a fixed offset)
+  // for the same reason as the lines above — must stay clear of the school
+  // name even when it wraps to 2 lines.
   const bonafideHeaderText = stripHtmlToText(school.cert_header).replace(/\n+/g, ' ');
   if (bonafideHeaderText) {
-    doc.fillColor(muted).font('Helvetica-Oblique').fontSize(7)
-      .text(bonafideHeaderText, textX, boardY + 65, { width: textW, align: 'center', lineBreak: false, ellipsis: true });
+    fitCenteredText(doc, bonafideHeaderText, textX, afterNameY + 1, textW, 7, muted, false, 5.5);
   }
 
   // ── ID row: Gr. No. / Roll No. / SARAL ID / Aadhar No. ───────────────────
