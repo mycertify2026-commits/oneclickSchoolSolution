@@ -19,11 +19,9 @@ export default function DistCommission() {
 
       <div className="card" style={{ background: 'linear-gradient(135deg,#0F1E3D,#1A6FD4)', color: '#fff', border: 'none', marginBottom: 20 }}>
         <div style={{ padding: 24, display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
-          <Stat label="Total Commission" value={`₹${data.totalCommission.toLocaleString('en-IN')}`} big />
+          <Stat label="Total Revenue" value={`₹${data.totalRevenue.toLocaleString('en-IN')}`} big />
           <Divider />
           <Stat label="Commission Rate" value={`${data.commissionRate}%`} />
-          <Divider />
-          <Stat label="Total Revenue" value={`₹${data.totalRevenue.toLocaleString('en-IN')}`} />
           <Divider />
           <Stat label="Certificates" value={data.totalCertificates} />
         </div>
