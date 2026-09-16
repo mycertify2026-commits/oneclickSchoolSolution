@@ -619,9 +619,11 @@ async function generateLcPdf({
       const C3     = 46 + fw * 0.68;
       const C3W    = fw * 0.32;
 
-      // School stamp placed ABOVE the Head Master signature (right side)
+      // School stamp placed above the signature line (right side). The
+      // Principal's signature itself is intentionally NOT drawn here — LC
+      // and Bonafide are meant to be hand-signed on the printed hard copy;
+      // only the ID Card carries a printed/uploaded signature.
       drawStampIfAvailable(doc, safeStampPath, C3 + C3W / 2 - 26, LINE_Y - 86, 52);
-      drawSignatureIfAvailable(doc, safeSignaturePath, C3 + 10, LINE_Y - 30, 130, 28);
 
       doc.moveTo(46, LINE_Y).lineTo(46 + 160, LINE_Y).lineWidth(0.7).strokeColor('#999').stroke();
       doc.moveTo(C3, LINE_Y).lineTo(C3 + C3W - 4, LINE_Y).lineWidth(0.7).strokeColor('#999').stroke();
@@ -1092,7 +1094,7 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
     .lineWidth(0.6).strokeColor('#10B981').roundedRect(photoResX, badgeY, photoResW, badgeH, 6).stroke().restore();
   drawCheckGlyph(doc, photoResX + 10, badgeY + badgeH / 2, 7, '#10B981');
   doc.fillColor('#047857').font('Helvetica-Bold').fontSize(6.2)
-    .text('Digitally Signed', photoResX + 16, badgeY + 4, { width: photoResW - 18, lineBreak: false });
+    .text('QR Verified', photoResX + 16, badgeY + 4, { width: photoResW - 18, lineBreak: false });
 
   // ── Footer strip: Date of Issue | Place | Verified ───────────────────────
   const stripY = 370, stripH = 44, stripSeg = contentW / 3;
@@ -1114,7 +1116,7 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
   doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(7.5)
     .text('VERIFIED', verX, stripY + 12, { width: stripSeg, align: 'center', lineBreak: false });
   doc.fillColor(muted).font('Helvetica').fontSize(6)
-    .text('This is a digitally-generated certificate. No physical signature is needed.',
+    .text('Scan the QR code above to verify this certificate is genuine.',
       verX + 6, stripY + 23, { width: stripSeg - 12, align: 'center', lineGap: 1 });
 
   // School-configured footer text (School Settings > Certificate Footer) —
@@ -1127,12 +1129,12 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
   }
 
   // ── Signature row: Class Teacher | seal | Principal ──────────────────────
+  // Signature images are intentionally NOT drawn here — Bonafide (like LC)
+  // is meant to be hand-signed on the printed hard copy; only the ID Card
+  // carries a printed/uploaded signature. The stamp/seal is unaffected.
   const sigY = 430, lineY = sigY + 32;
   const sigColW = contentW / 3;
 
-  if (canDraw(signaturePath)) {
-    try { doc.image(signaturePath, left + 20, sigY, { width: sigColW - 60, height: 24, fit: [sigColW - 60, 24] }); } catch (e) {}
-  }
   doc.save().moveTo(left + 15, lineY).lineTo(left + sigColW - 25, lineY).lineWidth(0.7).strokeColor('#999').stroke().restore();
   doc.fillColor(black).font('Helvetica-Bold').fontSize(8)
     .text('Class Teacher', left + 15, lineY + 4, { width: sigColW - 40, align: 'center', lineBreak: false });
@@ -1144,15 +1146,9 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
   doc.save().circle(sealCx, sealCy, sealR).lineWidth(1.2).strokeColor(NAVY).stroke()
     .circle(sealCx, sealCy, sealR - 4).lineWidth(0.6).strokeColor(GOLD).stroke().restore();
 
-  const principalSigX = right - (sigColW - 40);
-  if (canDraw(signaturePath)) {
-    try { doc.image(signaturePath, principalSigX, sigY, { width: sigColW - 60, height: 24, fit: [sigColW - 60, 24] }); } catch (e) {}
-  }
   doc.save().moveTo(right - sigColW + 25, lineY).lineTo(right - 15, lineY).lineWidth(0.7).strokeColor('#999').stroke().restore();
   doc.fillColor(black).font('Helvetica-Bold').fontSize(8)
     .text(safe(school.bonafide_signature_label, 'Principal'), right - sigColW + 25, lineY + 4, { width: sigColW - 40, align: 'center', lineBreak: false });
-  doc.fillColor(muted).font('Helvetica').fontSize(6.5)
-    .text('(Digital Signature)', right - sigColW + 25, lineY + 15, { width: sigColW - 40, align: 'center', lineBreak: false });
 }
 
 async function generateBonafidePdf({ school, student, certificate, outputPath, photoPath, logoPath, purpose, signaturePath, stampPath }) {
