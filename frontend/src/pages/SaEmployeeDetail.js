@@ -41,7 +41,6 @@ export default function SaEmployeeDetail() {
   );
 
   const profile = isSd ? data.superDistributor : data.distributor;
-  const totalCommission = isSd ? data.earnings?.total ?? 0 : data.totalCommission ?? 0;
   const totalCertificates = isSd ? data.earnings?.totalCertificates ?? 0 : data.totalCertificates ?? 0;
   const totalRevenue = isSd ? data.revenue ?? 0 : data.totalRevenue ?? 0;
   // Ledger-based monthly trend for both roles — the same "real" commission
@@ -71,7 +70,6 @@ export default function SaEmployeeDetail() {
       </div>
 
       <div className="stat-grid">
-        <StatCard icon="fa-hand-holding-dollar" color="#059669" bg="rgba(5,150,105,.1)" value={`₹${Number(totalCommission).toLocaleString('en-IN')}`} label="Commission Earned Till Date" />
         <StatCard icon="fa-rupee-sign" color="#f59e0b" bg="rgba(245,158,11,.1)" value={`₹${Number(totalRevenue).toLocaleString('en-IN')}`} label="Total Revenue Generated" />
         <StatCard icon="fa-certificate" color="var(--primary)" bg="rgba(26,111,212,.1)" value={totalCertificates} label="Certificates Issued" />
         <StatCard

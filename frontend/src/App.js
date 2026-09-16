@@ -11,6 +11,7 @@ import SetPassword from './pages/SetPassword';
 
 import SaDashboard from './pages/SaDashboard';
 import SaSchools from './pages/SaSchools';
+import SaSchoolForm from './pages/SaSchoolForm';
 import SaSchoolDetail from './pages/SaSchoolDetail';
 import SaRequested from './pages/SaRequested';
 import SaEmployees from './pages/SaEmployees';
@@ -32,11 +33,13 @@ import Notifications from './pages/Notifications';
 
 import DistDashboard from './pages/DistDashboard';
 import DistSchools from './pages/DistSchools';
+import DistSchoolForm from './pages/DistSchoolForm';
 import DistCommission from './pages/DistCommission';
 import DistSettings from './pages/DistSettings';
 
 import SdDashboard from './pages/SdDashboard';
 import SdSchools from './pages/SdSchools';
+import SdSchoolForm from './pages/SdSchoolForm';
 import SdDistributors from './pages/SdDistributors';
 import SdDistributorDetail from './pages/SdDistributorDetail';
 import SdSettings from './pages/SdSettings';
@@ -72,6 +75,8 @@ export default function App() {
             {/* Super Admin */}
             <Route path="/sa-dashboard" element={<ProtectedRoute role="superAdmin"><SaDashboard /></ProtectedRoute>} />
             <Route path="/sa-schools" element={<ProtectedRoute role="superAdmin"><SaSchools /></ProtectedRoute>} />
+            <Route path="/sa-schools/new" element={<ProtectedRoute role="superAdmin"><SaSchoolForm /></ProtectedRoute>} />
+            <Route path="/sa-schools/:id/edit" element={<ProtectedRoute role="superAdmin"><SaSchoolForm /></ProtectedRoute>} />
             <Route path="/sa-schools/:id" element={<ProtectedRoute role="superAdmin"><SaSchoolDetail /></ProtectedRoute>} />
             <Route path="/sa-requested" element={<ProtectedRoute role="superAdmin"><SaRequested /></ProtectedRoute>} />
             <Route path="/sa-employees" element={<ProtectedRoute role="superAdmin"><SaEmployees /></ProtectedRoute>} />
@@ -99,6 +104,8 @@ export default function App() {
             {/* Distributor */}
             <Route path="/dist-dashboard" element={<ProtectedRoute role="distributor"><DistDashboard /></ProtectedRoute>} />
             <Route path="/dist-schools" element={<ProtectedRoute role="distributor"><DistSchools /></ProtectedRoute>} />
+            <Route path="/dist-schools/new" element={<ProtectedRoute role="distributor"><DistSchoolForm /></ProtectedRoute>} />
+            <Route path="/dist-schools/:id/edit" element={<ProtectedRoute role="distributor"><DistSchoolForm /></ProtectedRoute>} />
             <Route path="/dist-commission" element={<ProtectedRoute role="distributor"><DistCommission /></ProtectedRoute>} />
             <Route path="/dist-settings" element={<ProtectedRoute role="distributor"><DistSettings /></ProtectedRoute>} />
             <Route path="/dist-camp-requests" element={<ProtectedRoute role="distributor"><DistCampRequests /></ProtectedRoute>} />
@@ -107,6 +114,8 @@ export default function App() {
             {/* Super Distributor */}
             <Route path="/sd-dashboard" element={<ProtectedRoute role="superDistributor"><SdDashboard /></ProtectedRoute>} />
             <Route path="/sd-schools" element={<ProtectedRoute role="superDistributor"><SdSchools /></ProtectedRoute>} />
+            <Route path="/sd-schools/new" element={<ProtectedRoute role="superDistributor"><SdSchoolForm /></ProtectedRoute>} />
+            <Route path="/sd-schools/:id/edit" element={<ProtectedRoute role="superDistributor"><SdSchoolForm /></ProtectedRoute>} />
             <Route path="/sd-distributors" element={<ProtectedRoute role="superDistributor"><SdDistributors /></ProtectedRoute>} />
             <Route path="/sd-distributors/:id" element={<ProtectedRoute role="superDistributor"><SdDistributorDetail /></ProtectedRoute>} />
             <Route path="/sd-settings" element={<ProtectedRoute role="superDistributor"><SdSettings /></ProtectedRoute>} />

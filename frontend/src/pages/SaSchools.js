@@ -4,12 +4,6 @@ import Layout from '../components/Layout';
 import { StatusBadge } from './SaDashboard';
 import api from '../api/client';
 
-const BLANK = { name: '', udise_code: '', city: '', taluka: '', district: '', phone: '', email: '', pin_code: '', medium: 'Marathi', board: 'Maharashtra SSC', distributorId: '', adminName: '', adminMobile: '', adminEmail: '', class_from: '', class_to: '', school_section: '' };
-
-const LOWER_CLASS_OPTIONS = ['Nursery', 'Junior KG', 'Senior KG', '1st Standard'];
-const UPPER_CLASS_OPTIONS = ['4th Standard', '5th Standard', '6th Standard', '7th Standard', '8th Standard', '9th Standard', '10th Standard', '11th Standard', '12th Standard'];
-const SCHOOL_SECTION_OPTIONS = ['Primary', 'Upper Primary', 'Secondary', 'Higher Secondary', 'Secondary and Higher Secondary'];
-
 // Long school names get cut to the first word in the list view (hover/title
 // shows the rest); the full name is always shown on the school's own detail
 // page after clicking through.
@@ -18,7 +12,6 @@ function shortName(name) {
   const words = String(name).trim().split(/\s+/);
   return (words.length > 1 || name.length > 20) ? words[0] + '…' : name;
 }
-const EDIT_FIELDS = ['name', 'udise_code', 'village', 'city', 'taluka', 'district', 'pin_code', 'phone', 'email', 'medium', 'board', 'class_from', 'class_to', 'school_section'];
 
 export default function SaSchools() {
   const [schools, setSchools] = useState([]);
@@ -27,16 +20,9 @@ export default function SaSchools() {
   const [search, setSearch] = useState('');
   const [districtFilter, setDistrictFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
-  const [editingSchool, setEditingSchool] = useState(null);
   const [assigningSchool, setAssigningSchool] = useState(null);
   const [assignDistributorId, setAssignDistributorId] = useState('');
-  const [form, setForm] = useState(BLANK);
-  const [editForm, setEditForm] = useState({});
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
 
   const load = useCallback(async (page = 1) => {
@@ -51,9 +37,6 @@ export default function SaSchools() {
 
   useEffect(() => { load(1); loadDistributors(); }, [load, loadDistributors]);
 
-  function handleChange(field, value) { setForm(prev => ({ ...prev, [field]: value })); }
-  function handleEditChange(field, value) { setEditForm(prev => ({ ...prev, [field]: value })); }
-
   async function handleExport() {
     try {
       const res = await api.get('/schools/export', { params: { status: statusFilter || undefined }, responseType: 'blob' });
@@ -64,49 +47,6 @@ export default function SaSchools() {
       link.click();
     } catch (err) {
       alert('Export failed. Please try again.');
-    }
-  }
-
-  async function handleSave() {
-    setError('');
-    if (!form.name || !form.adminName || !form.adminEmail) {
-      setError('School name, admin name, and admin email are required');
-      return;
-    }
-    setSaving(true);
-    try {
-      await api.post('/schools', form);
-      setShowAddModal(false);
-      setForm(BLANK);
-      load(pagination.page);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to save school');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function openEditModal(school) {
-    setEditingSchool(school);
-    const initial = {};
-    EDIT_FIELDS.forEach(f => { initial[f] = school[f] || ''; });
-    setEditForm(initial);
-    setError('');
-    setShowEditModal(true);
-  }
-
-  async function handleSaveEdit() {
-    setError('');
-    if (!editForm.name?.trim()) { setError('School name is required'); return; }
-    setSaving(true);
-    try {
-      await api.put(`/schools/${editingSchool.id}`, editForm);
-      setShowEditModal(false);
-      load(pagination.page);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to update school');
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -154,7 +94,7 @@ export default function SaSchools() {
         <div><h2>Schools</h2></div>
         <div className="page-header-actions">
           <button className="btn btn-outline" onClick={handleExport}><i className="fas fa-file-export"></i> Export</button>
-          <button className="btn btn-primary" onClick={() => { setForm(BLANK); setError(''); setShowAddModal(true); }}><i className="fas fa-plus"></i> Add School</button>
+          <button className="btn btn-primary" onClick={() => navigate('/sa-schools/new')}><i className="fas fa-plus"></i> Add School</button>
         </div>
       </div>
 
@@ -201,7 +141,7 @@ export default function SaSchools() {
                   <td><StatusBadge status={s.status} /></td>
                   <td>
                     <button className="btn-icon" title="View Details" onClick={() => navigate(`/sa-schools/${s.id}`)}><i className="fas fa-eye"></i></button>
-                    <button className="btn-icon" title="Edit" onClick={() => openEditModal(s)}><i className="fas fa-edit"></i></button>
+                    <button className="btn-icon" title="Edit" onClick={() => navigate(`/sa-schools/${s.id}/edit`)}><i className="fas fa-edit"></i></button>
                     {s.status === 'pending' && (
                       <>
                         <button className="btn-icon" title="Approve" onClick={() => updateStatus(s.id, 'active')}><i className="fas fa-check" style={{ color: 'var(--success)' }}></i></button>
@@ -229,149 +169,6 @@ export default function SaSchools() {
           </div>
         )}
       </div>
-
-      {showAddModal && (
-        <div className="modal-overlay show" style={{ display: 'flex' }} onClick={() => setShowAddModal(false)}>
-          <div className="modal-box modal-lg" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3><i className="fas fa-school" style={{ color: 'var(--primary)', marginRight: 8 }}></i>Add School</h3>
-              <button className="modal-close" onClick={() => setShowAddModal(false)}>×</button>
-            </div>
-            <div className="modal-body">
-              {error && <div style={{ background: '#FEE2E2', color: 'var(--danger)', padding: 10, borderRadius: 8, fontSize: 13, marginBottom: 14 }}>{error}</div>}
-              <div className="form-section">
-                <div className="form-section-title"><i className="fas fa-info-circle"></i><h4>School Information</h4></div>
-                <div className="form-row form-row-2">
-                  <Field label="School Name *" value={form.name} onChange={v => handleChange('name', v)} />
-                  <Field label="U-DISE Number" value={form.udise_code} onChange={v => handleChange('udise_code', v)} placeholder="MH27010001" />
-                </div>
-                <div className="form-row form-row-3">
-                  <Field label="City" value={form.city} onChange={v => handleChange('city', v)} />
-                  <Field label="Taluka" value={form.taluka} onChange={v => handleChange('taluka', v)} />
-                  <Field label="District" value={form.district} onChange={v => handleChange('district', v)} />
-                </div>
-                <div className="form-row form-row-3">
-                  <Field label="Phone" value={form.phone} onChange={v => handleChange('phone', v)} />
-                  <Field label="Email" value={form.email} onChange={v => handleChange('email', v)} />
-                  <Field label="PIN Code" value={form.pin_code} onChange={v => handleChange('pin_code', v)} />
-                </div>
-                <div className="form-row form-row-3">
-                  <SelectField label="Medium" value={form.medium} onChange={v => handleChange('medium', v)} options={['Marathi', 'English', 'Hindi', 'Semi-English']} />
-                  <SelectField label="Board" value={form.board} onChange={v => handleChange('board', v)} options={['Maharashtra SSC', 'CBSE', 'ICSE']} />
-                  <div className="form-group">
-                    <label className="form-label">Assign Distributor</label>
-                    <select className="form-select" value={form.distributorId} onChange={e => handleChange('distributorId', e.target.value)}>
-                      <option value="">Self (Super Admin — Direct, no distributor)</option>
-                      {distributors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                    </select>
-                    {!form.distributorId && (
-                      <div className="form-hint" style={{ marginTop: 4 }}>
-                        No distributor assigned — 100% of the platform commission for this school goes to Super Admin.
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="form-row form-row-3">
-                  <div className="form-group">
-                    <label className="form-label">Lower Class</label>
-                    <select className="form-select" value={form.class_from} onChange={e => handleChange('class_from', e.target.value)}>
-                      <option value="">-- Select --</option>
-                      {LOWER_CLASS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Upper Class</label>
-                    <select className="form-select" value={form.class_to} onChange={e => handleChange('class_to', e.target.value)}>
-                      <option value="">-- Select --</option>
-                      {UPPER_CLASS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">School Section</label>
-                    <select className="form-select" value={form.school_section} onChange={e => handleChange('school_section', e.target.value)}>
-                      <option value="">-- Select --</option>
-                      {SCHOOL_SECTION_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  </div>
-                </div>
-              </div>
-              <div className="form-section">
-                <div className="form-section-title"><i className="fas fa-user"></i><h4>School Admin Details</h4></div>
-                <div className="form-row form-row-3">
-                  <Field label="Admin Name *" value={form.adminName} onChange={v => handleChange('adminName', v)} placeholder="Principal Name" />
-                  <Field label="Mobile" value={form.adminMobile} onChange={v => handleChange('adminMobile', v)} placeholder="9876543210" />
-                  <Field label="Admin Email *" value={form.adminEmail} onChange={v => handleChange('adminEmail', v)} placeholder="admin@school.in" />
-                </div>
-                <div className="form-hint">A password setup email will be sent to this address automatically.</div>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleSave} disabled={saving}><i className="fas fa-save"></i> {saving ? 'Saving...' : 'Save School'}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showEditModal && (
-        <div className="modal-overlay show" style={{ display: 'flex' }} onClick={() => setShowEditModal(false)}>
-          <div className="modal-box modal-lg" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3><i className="fas fa-edit" style={{ color: 'var(--primary)', marginRight: 8 }}></i>Edit School - {editingSchool?.name}</h3>
-              <button className="modal-close" onClick={() => setShowEditModal(false)}>×</button>
-            </div>
-            <div className="modal-body">
-              {error && <div style={{ background: '#FEE2E2', color: 'var(--danger)', padding: 10, borderRadius: 8, fontSize: 13, marginBottom: 14 }}>{error}</div>}
-              <div className="form-row form-row-2">
-                <Field label="School Name *" value={editForm.name} onChange={v => handleEditChange('name', v)} />
-                <Field label="U-DISE Number" value={editForm.udise_code} onChange={v => handleEditChange('udise_code', v)} />
-              </div>
-              <div className="form-row form-row-3">
-                <Field label="Village" value={editForm.village} onChange={v => handleEditChange('village', v)} />
-                <Field label="City" value={editForm.city} onChange={v => handleEditChange('city', v)} />
-                <Field label="Taluka" value={editForm.taluka} onChange={v => handleEditChange('taluka', v)} />
-              </div>
-              <div className="form-row form-row-3">
-                <Field label="District" value={editForm.district} onChange={v => handleEditChange('district', v)} />
-                <Field label="PIN Code" value={editForm.pin_code} onChange={v => handleEditChange('pin_code', v)} />
-                <Field label="Phone" value={editForm.phone} onChange={v => handleEditChange('phone', v)} />
-              </div>
-              <div className="form-row form-row-3">
-                <Field label="Email" value={editForm.email} onChange={v => handleEditChange('email', v)} />
-                <Field label="Medium" value={editForm.medium} onChange={v => handleEditChange('medium', v)} />
-                <Field label="Board" value={editForm.board} onChange={v => handleEditChange('board', v)} />
-              </div>
-              <div className="form-row form-row-3">
-                <div className="form-group">
-                  <label className="form-label">Lower Class</label>
-                  <select className="form-select" value={editForm.class_from || ''} onChange={e => handleEditChange('class_from', e.target.value)}>
-                    <option value="">-- Select --</option>
-                    {LOWER_CLASS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Upper Class</label>
-                  <select className="form-select" value={editForm.class_to || ''} onChange={e => handleEditChange('class_to', e.target.value)}>
-                    <option value="">-- Select --</option>
-                    {UPPER_CLASS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">School Section</label>
-                  <select className="form-select" value={editForm.school_section || ''} onChange={e => handleEditChange('school_section', e.target.value)}>
-                    <option value="">-- Select --</option>
-                    {SCHOOL_SECTION_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                </div>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowEditModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleSaveEdit} disabled={saving}><i className="fas fa-save"></i> {saving ? 'Saving...' : 'Save Changes'}</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {showAssignModal && (
         <div className="modal-overlay show" style={{ display: 'flex' }} onClick={() => setShowAssignModal(false)}>
@@ -403,24 +200,5 @@ export default function SaSchools() {
         </div>
       )}
     </Layout>
-  );
-}
-
-function Field({ label, value, onChange, placeholder }) {
-  return (
-    <div className="form-group">
-      <label className="form-label">{label}</label>
-      <input type="text" className="form-control" value={value || ''} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
-    </div>
-  );
-}
-function SelectField({ label, value, onChange, options }) {
-  return (
-    <div className="form-group">
-      <label className="form-label">{label}</label>
-      <select className="form-select" value={value} onChange={e => onChange(e.target.value)}>
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
-    </div>
   );
 }
