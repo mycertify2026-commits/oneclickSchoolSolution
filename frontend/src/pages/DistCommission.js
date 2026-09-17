@@ -23,6 +23,8 @@ export default function DistCommission() {
           <Divider />
           <Stat label="Commission Rate" value={`${data.commissionRate}%`} />
           <Divider />
+          <Stat label="Total Commission" value={`₹${data.totalCommission.toLocaleString('en-IN')}`} />
+          <Divider />
           <Stat label="Certificates" value={data.totalCertificates} />
         </div>
       </div>
