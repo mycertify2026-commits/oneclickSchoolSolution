@@ -125,11 +125,11 @@ export default function SdDistributors() {
         <div className="table-responsive">
           <table className="data-table">
             <thead>
-              <tr><th>Name</th><th>Email</th><th>Mobile</th><th>District</th><th>Commission</th><th>Schools</th><th>Status</th><th>Actions</th></tr>
+              <tr><th>Name</th><th>Email</th><th>Mobile</th><th>District</th><th>Schools</th><th>Status</th><th>Actions</th></tr>
             </thead>
             <tbody>
               {distributors.length === 0 ? (
-                <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>No distributors yet.</td></tr>
+                <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>No distributors yet.</td></tr>
               ) : distributors.map(d => (
                 <tr key={d.id}>
                   <td>
@@ -141,7 +141,6 @@ export default function SdDistributors() {
                   <td>{d.email}</td>
                   <td>{d.mobile || '—'}</td>
                   <td>{d.district || '—'}</td>
-                  <td>{d.commission_rate}%</td>
                   <td>{d.school_count}</td>
                   <td><span className={`badge ${d.is_active ? 'badge-success' : 'badge-danger'}`}>{d.is_active ? 'Active' : 'Inactive'}</span></td>
                   <td>

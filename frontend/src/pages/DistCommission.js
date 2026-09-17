@@ -31,15 +31,14 @@ export default function DistCommission() {
         <div className="card-header"><h3 className="card-title">Monthly Breakdown</h3></div>
         <div className="table-responsive">
           <table className="data-table">
-            <thead><tr><th>Month</th><th>Certificates</th><th>Revenue</th><th>Commission</th></tr></thead>
+            <thead><tr><th>Month</th><th>Certificates</th><th>Revenue</th></tr></thead>
             <tbody>
               {data.monthly.length === 0 ? (
-                <tr><td colSpan={4}>No transactions yet.</td></tr>
+                <tr><td colSpan={3}>No transactions yet.</td></tr>
               ) : data.monthly.map(row => (
                 <tr key={row.month}>
                   <td>{formatMonth(row.month)}</td><td>{row.certificateCount}</td>
                   <td>₹{row.revenue.toLocaleString('en-IN')}</td>
-                  <td style={{ color: 'var(--success)', fontWeight: 600 }}>₹{row.commission.toLocaleString('en-IN')}</td>
                 </tr>
               ))}
             </tbody>
@@ -51,15 +50,14 @@ export default function DistCommission() {
         <div className="card-header"><h3 className="card-title">Breakdown by School</h3></div>
         <div className="table-responsive">
           <table className="data-table">
-            <thead><tr><th>School</th><th>Certificates</th><th>Revenue</th><th>Commission</th></tr></thead>
+            <thead><tr><th>School</th><th>Certificates</th><th>Revenue</th></tr></thead>
             <tbody>
               {data.perSchool.length === 0 ? (
-                <tr><td colSpan={4}>No schools yet.</td></tr>
+                <tr><td colSpan={3}>No schools yet.</td></tr>
               ) : data.perSchool.map(row => (
                 <tr key={row.schoolId}>
                   <td>{row.schoolName}</td><td>{row.certificateCount}</td>
                   <td>₹{row.revenue.toLocaleString('en-IN')}</td>
-                  <td style={{ color: 'var(--success)', fontWeight: 600 }}>₹{row.commission.toLocaleString('en-IN')}</td>
                 </tr>
               ))}
             </tbody>

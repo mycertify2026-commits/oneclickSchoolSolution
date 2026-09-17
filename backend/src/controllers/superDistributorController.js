@@ -363,7 +363,10 @@ async function computeSuperDistributorStats(sdId) {
       [sdId]
     );
     const [byDistributor] = await pool.query(
-      `SELECT d.id as distributor_id, u.name as distributor_name, COALESCE(SUM(cl.super_distributor_amount),0) as total
+      `SELECT d.id as distributor_id, u.name as distributor_name,
+              COALESCE(SUM(cl.super_distributor_amount),0) as total,
+              COALESCE(SUM(cl.certificate_price),0) as revenue,
+              COUNT(*) as cert_count
        FROM commission_ledger cl
        JOIN distributors d ON d.id = cl.distributor_id
        JOIN users u ON u.id = d.user_id
@@ -420,7 +423,7 @@ async function computeSuperDistributorStats(sdId) {
         thisMonth: Number(earnings.this_month),
         totalCertificates: Number(earnings.total_certificates),
         byCertificateType: byType.map(r => ({ type: r.certificate_type, total: Number(r.total), count: Number(r.count) })),
-        byDistributor: byDistributor.map(r => ({ distributorId: r.distributor_id, name: r.distributor_name, total: Number(r.total) })),
+        byDistributor: byDistributor.map(r => ({ distributorId: r.distributor_id, name: r.distributor_name, total: Number(r.total), revenue: Number(r.revenue), certificateCount: Number(r.cert_count) })),
         byMonth: ledgerByMonth.map(r => ({ month: r.month, commission: Number(r.commission), count: Number(r.count) })),
       },
       flatCommission,

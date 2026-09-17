@@ -43,14 +43,13 @@ export default function SaEmployeeDetail() {
   const profile = isSd ? data.superDistributor : data.distributor;
   const totalCertificates = isSd ? data.earnings?.totalCertificates ?? 0 : data.totalCertificates ?? 0;
   const totalRevenue = isSd ? data.revenue ?? 0 : data.totalRevenue ?? 0;
-  // Ledger-based monthly trend for both roles — the same "real" commission
-  // the stat card total comes from, not the separate legacy flat-rate figure.
+  // Ledger-based monthly trend for both roles.
   const monthly = isSd
-    ? (data.earnings?.byMonth || []).map(m => ({ month: m.month, certificateCount: m.count, commission: m.commission }))
-    : (data.monthly || []).map(m => ({ month: m.month, certificateCount: m.certificateCount, revenue: m.revenue, commission: m.commission }));
+    ? (data.earnings?.byMonth || []).map(m => ({ month: m.month, certificateCount: m.count }))
+    : (data.monthly || []).map(m => ({ month: m.month, certificateCount: m.certificateCount, revenue: m.revenue }));
   const breakdown = isSd
-    ? (data.earnings?.byDistributor || []).map(r => ({ name: r.name, commission: r.total }))
-    : (data.perSchool || []).map(r => ({ name: r.schoolName, commission: r.commission, revenue: r.revenue, certificateCount: r.certificateCount }));
+    ? (data.earnings?.byDistributor || []).map(r => ({ name: r.name, revenue: r.revenue, certificateCount: r.certificateCount }))
+    : (data.perSchool || []).map(r => ({ name: r.schoolName, revenue: r.revenue, certificateCount: r.certificateCount }));
 
   return (
     <Layout role="superAdmin">
@@ -95,19 +94,18 @@ export default function SaEmployeeDetail() {
       </div>
 
       <div className="card" style={{ marginTop: 20 }}>
-        <div className="card-header"><h3 className="card-title">Monthly Commission (last {monthly.length || 0} months)</h3></div>
+        <div className="card-header"><h3 className="card-title">Monthly Activity (last {monthly.length || 0} months)</h3></div>
         <div className="table-responsive">
           <table className="data-table">
-            <thead><tr><th>Month</th><th>Certificates</th><th>Revenue</th><th>Commission</th></tr></thead>
+            <thead><tr><th>Month</th><th>Certificates</th>{!isSd && <th>Revenue</th>}</tr></thead>
             <tbody>
               {monthly.length === 0 ? (
-                <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 20 }}>No activity yet.</td></tr>
+                <tr><td colSpan={isSd ? 2 : 3} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 20 }}>No activity yet.</td></tr>
               ) : monthly.map((m, i) => (
                 <tr key={i}>
                   <td>{m.month}</td>
                   <td>{m.certificateCount}</td>
-                  <td>₹{Number(m.revenue).toLocaleString('en-IN')}</td>
-                  <td style={{ fontWeight: 600, color: '#059669' }}>₹{Number(m.commission).toLocaleString('en-IN')}</td>
+                  {!isSd && <td>₹{Number(m.revenue).toLocaleString('en-IN')}</td>}
                 </tr>
               ))}
             </tbody>
@@ -116,18 +114,18 @@ export default function SaEmployeeDetail() {
       </div>
 
       <div className="card" style={{ marginTop: 20 }}>
-        <div className="card-header"><h3 className="card-title">{isSd ? 'Commission by Distributor' : 'Commission by School'}</h3></div>
+        <div className="card-header"><h3 className="card-title">{isSd ? 'Activity by Distributor' : 'Activity by School'}</h3></div>
         <div className="table-responsive">
           <table className="data-table">
-            <thead><tr><th>{isSd ? 'Distributor' : 'School'}</th>{!isSd && <><th>Certificates</th><th>Revenue</th></>}<th>Commission</th></tr></thead>
+            <thead><tr><th>{isSd ? 'Distributor' : 'School'}</th><th>Certificates</th><th>Revenue</th></tr></thead>
             <tbody>
               {breakdown.length === 0 ? (
-                <tr><td colSpan={isSd ? 2 : 4} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 20 }}>No activity yet.</td></tr>
+                <tr><td colSpan={3} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 20 }}>No activity yet.</td></tr>
               ) : breakdown.map((r, i) => (
                 <tr key={i}>
                   <td>{r.name}</td>
-                  {!isSd && <><td>{r.certificateCount}</td><td>₹{Number(r.revenue).toLocaleString('en-IN')}</td></>}
-                  <td style={{ fontWeight: 600, color: '#059669' }}>₹{Number(r.commission).toLocaleString('en-IN')}</td>
+                  <td>{r.certificateCount}</td>
+                  <td>₹{Number(r.revenue).toLocaleString('en-IN')}</td>
                 </tr>
               ))}
             </tbody>
