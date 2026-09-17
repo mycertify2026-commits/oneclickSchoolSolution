@@ -153,6 +153,35 @@ function fitSingleLineText(doc, text, x, y, width, maxFontSize, color, bold = tr
   return fontSize;
 }
 
+// Never print a raw Aadhaar number on a certificate — same masking already
+// used elsewhere in this file, extracted here since drawIdInfoTable needs it too.
+function maskAadhaar(aadhaar) {
+  return aadhaar ? `XXXX-XXXX-${String(aadhaar).slice(-4)}` : '-';
+}
+
+// Compact bordered table for the 6 core student ID numbers (G.R. No,
+// Aadhaar, Saral ID, APAAR ID, PEN No, LOC No) — used identically in both
+// LC (right after the title banner) and Bonafide (right before it), so the
+// two certificate types present the same ID information the same way.
+// cellRows is an array of [label1, value1, label2, value2] triples, one per
+// row. Returns the Y position just below the table.
+function drawIdInfoTable(doc, x, y, width, cellRows) {
+  const rowH = 16;
+  const colW = width / 2;
+  const tableH = rowH * cellRows.length;
+  doc.save().lineWidth(0.7).strokeColor('#94a3b8').rect(x, y, width, tableH).stroke().restore();
+  doc.save().lineWidth(0.7).strokeColor('#94a3b8').moveTo(x + colW, y).lineTo(x + colW, y + tableH).stroke().restore();
+  cellRows.forEach(([label1, value1, label2, value2], i) => {
+    const rowY = y + i * rowH;
+    if (i > 0) {
+      doc.save().lineWidth(0.5).strokeColor('#cbd5e1').moveTo(x, rowY).lineTo(x + width, rowY).stroke().restore();
+    }
+    fitSingleLineText(doc, `${label1} : ${value1}`, x + 8, rowY + 4.5, colW - 16, 9, TEXT, true, 6.5);
+    fitSingleLineText(doc, `${label2} : ${value2}`, x + colW + 8, rowY + 4.5, colW - 16, 9, TEXT, true, 6.5);
+  });
+  return y + tableH;
+}
+
 // Indian academic year (June–May): e.g. Aug 2026 → "2026 - 27"
 function currentAcademicYear() {
   const now = new Date();
@@ -504,9 +533,12 @@ async function generateLcPdf({
       // shares their center instead of visibly sitting off to one side.
       const headerText = stripHtmlToText(school.cert_header).replace(/\n+/g, ' ');
       if (headerText) {
-        doc.font('Helvetica').fontSize(8).fillColor(TEXT)
-          .text(headerText, textX, y, { width: textW, align: 'center', lineBreak: false, ellipsis: true });
-        y += 12;
+        // fitCenteredText (shrink-then-real-height) instead of a plain
+        // .text() at a fixed font size with a fixed y+=12 afterwards — a
+        // long header wraps to 2 lines in this narrow column, and the fixed
+        // advance let the 2nd line bleed into the Original/Duplicate pill
+        // drawn right after it.
+        y = fitCenteredText(doc, headerText, textX, y, textW, 8, TEXT, false, 6) + 2;
       }
 
       // ── Original / Duplicate pill ──
@@ -521,33 +553,15 @@ async function generateLcPdf({
 
       y = drawTitleBanner(doc, y, 'School leaving certificate');
 
-      // ── Roll No. / G.R. No. / Saral ID bar ──
-      // U-DISE moved up into the header next to RECOG NO (see drawHeader) —
-      // no longer duplicated here.
-      // fitSingleLineText (shrink-then-ellipsis) is used instead of a plain
-      // .text() call with {lineBreak:false, ellipsis:true} — pdfkit's own
-      // ellipsis handling turned out to still wrap to a second line once a
-      // value was genuinely wider than its column (confirmed by generating
-      // a real PDF with long Saral/GR values), so every cell needs the same
-      // shrink-first guard already proven reliable in drawDataRow below.
+      // ── Student ID info table (bordered, 2 columns x 3 rows) ──
+      // U-DISE moved up into the header next to RECOG NO (see drawHeader).
       const contentWidth = doc.page.width - 92;
-      const idBarSeg3 = contentWidth / 3;
-      fitSingleLineText(doc, `Roll No.: ${sentenceCase(student.roll_number, '-')}`,   46,                y, idBarSeg3 - 4, 9.5, TEXT, true, 6);
-      fitSingleLineText(doc, `G.R. No.: ${sentenceCase(student.register_number, '-')}`, 46 + idBarSeg3,  y, idBarSeg3 - 4, 9.5, TEXT, true, 6);
-      fitSingleLineText(doc, `Saral ID: ${sentenceCase(student.serial_id, '-')}`,     46 + 2 * idBarSeg3, y, idBarSeg3 - 4, 9.5, TEXT, true, 6);
-      y += 15;
-
-      // ── APAAR ID / Student ID / PEN No. / LOC No. bar ──
-      const idBarSeg = contentWidth / 4;
-      fitSingleLineText(doc, `APAAR ID: ${sentenceCase(student.apaar_id, '-')}`,        46,               y, idBarSeg - 4, 9.5, TEXT, true, 6);
-      fitSingleLineText(doc, `Student ID: ${sentenceCase(student.student_id_no, '-')}`, 46 + idBarSeg,     y, idBarSeg - 4, 9.5, TEXT, true, 6);
-      fitSingleLineText(doc, `PEN No.: ${sentenceCase(student.pen_no, '-')}`,           46 + 2 * idBarSeg, y, idBarSeg - 4, 9.5, TEXT, true, 6);
-      fitSingleLineText(doc, `LOC No.: ${sentenceCase(student.loc_no, '-')}`,           46 + 3 * idBarSeg, y, idBarSeg - 4, 9.5, TEXT, true, 6);
-      y += 16;
-
-      doc.font('Helvetica').fontSize(7.5).fillColor(GREY)
-        .text(`Aadhar: ${student.aadhaar ? 'XXXX-XXXX-' + String(student.aadhaar).slice(-4) : '-'}`, 46, y, { width: contentWidth });
-      y += 14;
+      y = drawIdInfoTable(doc, 46, y, contentWidth, [
+        ['General Register No.', sentenceCase(student.register_number, '-'), 'Student Aadhar No', maskAadhaar(student.aadhaar)],
+        ['Student Saral Id', sentenceCase(student.serial_id, '-'), 'Student Apar Id', sentenceCase(student.apaar_id, '-')],
+        ['Student PEN ID', sentenceCase(student.pen_no, '-'), 'LOC No.', sentenceCase(student.loc_no, '-')],
+      ]);
+      y += 6;
 
       // ── Data rows — full content width, compact 18 pt height ──
       // Passed straight to fmtDate (not wrapped in `new Date()` first) so a
@@ -935,21 +949,27 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
   doc.save().circle(logoCx, logoCy, logoSz / 2).lineWidth(1.5).strokeColor(NAVY).stroke()
     .circle(logoCx, logoCy, logoSz / 2 - 3).lineWidth(0.6).strokeColor(GOLD).stroke().restore();
 
+  // QR sits at the very top, flush with the school logo's top edge and close
+  // to its size — matching the LC layout's logo/QR alignment — instead of
+  // being pushed down below a label+number stack sitting above it, which is
+  // what made it read as visually mis-aligned against the logo.
   const idBoxW = 130, idBoxX = right - idBoxW;
-  doc.save().roundedRect(idBoxX, 36, idBoxW, 14, 3).fillColor(NAVY).fill().restore();
+  const qrSize = 58, qrX = idBoxX + (idBoxW - qrSize) / 2, qrY = logoCy - logoSz / 2;
+  if (qrBuffer) {
+    try { doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize }); } catch (e) {}
+  }
+  const idPillY = qrY + qrSize + 6;
+  doc.save().roundedRect(idBoxX, idPillY, idBoxW, 14, 3).fillColor(NAVY).fill().restore();
   doc.fillColor('#fff').font('Helvetica-Bold').fontSize(7)
-    .text('CERTIFICATE ID', idBoxX, 40, { width: idBoxW, align: 'center', lineBreak: false });
+    .text('CERTIFICATE ID', idBoxX, idPillY + 4, { width: idBoxW, align: 'center', lineBreak: false });
   let idSz = 11;
   doc.font('Helvetica-Bold');
   while (idSz > 6.5 && doc.fontSize(idSz).widthOfString(safe(certificate.serial_number, '-')) > idBoxW - 6) idSz -= 0.5;
   doc.fontSize(idSz).fillColor('#D6272B')
-    .text(safe(certificate.serial_number, '-'), idBoxX, 53, { width: idBoxW, align: 'center', lineBreak: false });
-  const qrSize = 58, qrX = idBoxX + (idBoxW - qrSize) / 2, qrY = 68;
-  if (qrBuffer) {
-    try { doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize }); } catch (e) {}
-  }
-  doc.fillColor(muted).font('Helvetica').fontSize(6)
-    .text(`S/N: ${safe(certificate.serial_number, '-')}`, idBoxX, qrY + qrSize + 3, { width: idBoxW, align: 'center', lineBreak: false, ellipsis: true });
+    .text(safe(certificate.serial_number, '-'), idBoxX, idPillY + 17, { width: idBoxW, align: 'center', lineBreak: false });
+  // Bottom of this whole right-hand column (QR + pill + serial number) —
+  // used below to keep the ID info table clear of it regardless of layout.
+  const idBoxBottomY = idPillY + 14 + 20;
 
   const textX = logoCx + logoSz / 2 + 16;
   const textW = idBoxX - 16 - textX;
@@ -983,50 +1003,31 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
   // for the same reason as the lines above — must stay clear of the school
   // name even when it wraps to 2 lines.
   const bonafideHeaderText = stripHtmlToText(school.cert_header).replace(/\n+/g, ' ');
+  let headerBottomY = afterNameY;
   if (bonafideHeaderText) {
-    fitCenteredText(doc, bonafideHeaderText, textX, afterNameY + 1, textW, 7, muted, false, 5.5);
+    headerBottomY = fitCenteredText(doc, bonafideHeaderText, textX, afterNameY + 1, textW, 7, muted, false, 5.5);
   }
 
-  // ── ID row: Gr. No. / Roll No. / SARAL ID / Aadhar No. ───────────────────
-  const idRowY = 140;
-  const idFields = [
-    ['Gr. No.', safe(student.register_number, '-')],
-    ['Roll No.', safe(student.roll_number, '-')],
-    ['SARAL ID', safe(student.serial_id, '-')],
-    ['Aadhar No.', student.aadhaar ? 'XXXX-XXXX-' + String(student.aadhaar).slice(-4) : '-'],
-  ];
-  const idSeg = contentW / idFields.length;
-  idFields.forEach(([label, value], i) => {
-    const x = left + i * idSeg;
-    doc.circle(x + 6, idRowY + 4, 2.5).fillColor(GOLD).fill();
-    doc.fillColor(black).font('Helvetica-Bold').fontSize(7.5)
-      .text(`${label}: `, x + 14, idRowY, { continued: true, lineBreak: false });
-    doc.font('Helvetica').fillColor(muted).text(value, { lineBreak: false, width: idSeg - 18 });
-  });
-
-  // ── Second ID row: APAAR ID / Student ID / PEN No. / LOC No. ─────────────
-  const idRow2Y = idRowY + 15;
-  const idFields2 = [
-    ['APAAR ID', safe(student.apaar_id, '-')],
-    ['Student ID', safe(student.student_id_no, '-')],
-    ['PEN No.', safe(student.pen_no, '-')],
-    ['LOC No.', safe(student.loc_no, '-')],
-  ];
-  idFields2.forEach(([label, value], i) => {
-    const x = left + i * idSeg;
-    doc.circle(x + 6, idRow2Y + 4, 2.5).fillColor(GOLD).fill();
-    doc.fillColor(black).font('Helvetica-Bold').fontSize(7.5)
-      .text(`${label}: `, x + 14, idRow2Y, { continued: true, lineBreak: false });
-    doc.font('Helvetica').fillColor(muted).text(value, { lineBreak: false, width: idSeg - 18 });
-  });
+  // ── Student ID info table (bordered, 2 columns x 3 rows) ─────────────────
+  // Started below whichever header column is taller — the left text block
+  // (which can wrap to 2 lines on a long school name) or the right QR/ID
+  // column — instead of a fixed Y, so it can never overlap either.
+  const idTableY = Math.max(headerBottomY + 8, idBoxBottomY);
+  const idTableBottomY = drawIdInfoTable(doc, left, idTableY, contentW, [
+    ['General Register No.', sentenceCase(student.register_number, '-'), 'Student Aadhar No', maskAadhaar(student.aadhaar)],
+    ['Student Saral Id', sentenceCase(student.serial_id, '-'), 'Student Apar Id', sentenceCase(student.apaar_id, '-')],
+    ['Student PEN ID', sentenceCase(student.pen_no, '-'), 'LOC No.', sentenceCase(student.loc_no, '-')],
+  ]);
 
   // ── Title banner ───────────────────────────────────────────────────────
   // The "This is to certify that" intro line and the standalone student-name
   // heading both moved into the paragraph itself (per request: the opening
   // statement should read as the first words of the description, with the
   // name bold inline, not as separate elements above it) — freeing this
-  // space for the banner to sit right after the ID rows.
-  const bannerY = 175, bannerH = 22;
+  // space for the banner to sit right after the ID table. Chained off the
+  // table's real returned Y instead of a fixed offset, same reasoning as
+  // the header text above.
+  const bannerY = idTableBottomY + 8, bannerH = 22;
   doc.save().roundedRect(left, bannerY, contentW, bannerH, 5).fillColor(NAVY).fill()
     .lineWidth(1).strokeColor(GOLD).roundedRect(left, bannerY, contentW, bannerH, 5).stroke()
     .restore();
@@ -1074,7 +1075,9 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
     paraSegments.push({ text: '.' });
   }
 
-  const bodyY = 212;
+  // Chained off the banner's real bottom (itself chained off the ID table)
+  // instead of a fixed offset, for the same overlap-safety reason as above.
+  const bodyY = bannerY + bannerH + 10;
   const photoResW = 66, photoResX = right - photoResW - 4;
   const bodyW = contentW - photoResW - 16;
   const bodyBottom = 360;
