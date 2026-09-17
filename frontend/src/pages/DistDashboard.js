@@ -68,20 +68,17 @@ export default function DistDashboard() {
 
       <div className="card" style={{ marginTop: 20, background: 'linear-gradient(135deg,#0F1E3D,#1A6FD4)', color: '#fff', border: 'none' }}>
         <div style={{ padding: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
-          <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'center' }}>
-            <div>
-              <div style={{ opacity: 0.7, fontSize: 13, marginBottom: 4 }}>Total Revenue</div>
-              <div style={{ fontSize: 32, fontWeight: 800 }}>₹{(commission?.totalRevenue || 0).toLocaleString('en-IN')}</div>
-            </div>
-            <div style={{ width: 1, height: 40, background: 'rgba(255,255,255,.2)' }}></div>
-            <div>
-              <div style={{ opacity: 0.7, fontSize: 13, marginBottom: 4 }}>Flat Commission ({commission?.commissionRate || 0}%)</div>
-              <div style={{ fontSize: 32, fontWeight: 800 }}>₹{(commission?.totalCommission || 0).toLocaleString('en-IN')}</div>
-            </div>
+          <div>
+            <div style={{ opacity: 0.7, fontSize: 13, marginBottom: 4 }}>Total Revenue</div>
+            <div style={{ fontSize: 32, fontWeight: 800 }}>₹{(commission?.totalRevenue || 0).toLocaleString('en-IN')}</div>
+            <div style={{ opacity: 0.7, fontSize: 12, marginTop: 4 }}>From certificates issued to your schools — see Details for the full breakdown</div>
           </div>
           <button className="btn" style={{ background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.3)' }} onClick={() => navigate('/dist-commission')}>View Details</button>
         </div>
-        <div style={{ opacity: 0.7, fontSize: 12, padding: '0 24px 16px' }}>From certificates issued to your schools — see Details for the full breakdown</div>
+      </div>
+
+      <div className="stat-grid" style={{ marginTop: 16 }}>
+        <StatCard icon="fa-percent" color="#10B981" bg="rgba(16,185,129,.1)" value={`₹${(commission?.totalCommission || 0).toLocaleString('en-IN')}`} label={`Flat Commission (${commission?.commissionRate || 0}%)`} />
       </div>
 
       <div className="card" style={{ marginTop: 20 }}>
