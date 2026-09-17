@@ -11,10 +11,15 @@ const GOLD = '#7A8CA3';
 const NAVY = '#0F2A5E';
 const GREY = '#6b7280';
 const TEXT = '#1a1a1a';
+// LC-only palette (School Admin requested a specific blue "Student
+// Information" / "School Details" panel format) — kept separate from the
+// GOLD/NAVY theme used elsewhere in this file so Bonafide/ID Card are
+// unaffected.
+const LC_BLUE = '#123C82';
+const LC_BLUE_BG = '#E8F1FC';
+const LC_BORDER = '#B7CDEE';
 const BONAFIDE_FRAME_PATH = process.env.BONAFIDE_FRAME_PATH ||
   path.resolve(__dirname, '../../../attached_assets/bonafide_student_copy_white.png');
-const LC_FRAME_PATH = process.env.LC_FRAME_PATH ||
-  path.resolve(__dirname, '../../../attached_assets/ChatGPT_Image_Aug_16,_2026,_09_36_17_PM_1786938001048.png');
 
 // School Settings > Certificate Header/Footer stores raw contentEditable
 // HTML (bold/italic/underline + div/br line breaks from the browser) —
@@ -210,19 +215,19 @@ function drawHeader(doc, school, textX, textW, startY) {
   // (School Settings > Certificate Header) — "Maharashtra State Education
   // Board" is only the column's default value, not a hardcoded string here.
   if (school.sanstha_name) {
-    y = fitCenteredText(doc, safe(school.sanstha_name), textX, y, textW, 10, GREY, false) + 1;
+    y = fitCenteredText(doc, safe(school.sanstha_name), textX, y, textW, 11, LC_BLUE, false, 8) + 2;
   }
-  y = fitCenteredText(doc, safe(school.board_name, 'Maharashtra State Education Board'), textX, y, textW, 15, NAVY) + 3;
-  y = fitCenteredText(doc, sentenceCase(school.name, 'School name'), textX, y, textW, 16, NAVY) + 4;
-
-  doc.font('Helvetica').fontSize(9).fillColor(TEXT)
-    .text(`Taluka: ${safe(school.taluka)}, District: ${safe(school.district)}`, textX, y, { width: textW, align: 'center' });
-  y += 13;
+  // Board name and school name are the two large, bold headline lines —
+  // each shrink-then-real-height chained off the one above it (never a
+  // fixed offset) since either can wrap to 2 lines for a long name.
+  y = fitCenteredText(doc, safe(school.board_name, 'Maharashtra State Education Board'), textX, y, textW, 19, LC_BLUE, true, 12) + 3;
+  y = fitCenteredText(doc, sentenceCase(school.name, 'School name'), textX, y, textW, 18, LC_BLUE, true, 11) + 5;
+  y = fitCenteredText(doc, `Taluka: ${safe(school.taluka)}, District: ${safe(school.district)}`, textX, y, textW, 10, TEXT, false, 7.5) + 2;
 
   // U-DISE sits next to RECOG NO here in the header, not in the ID info bar
   // below the title banner (moved per request — was previously duplicated
   // in both places, then dropped from here entirely; now it lives only here).
-  y = fitCenteredText(doc, `U-DISE: ${safe(school.udise_code)}   |   RECOG NO: ${safe(school.recog_no)}`, textX, y, textW, 8.5, GREY, false) + 2;
+  y = fitCenteredText(doc, `U-DISE: ${safe(school.udise_code)}   |   RECOG NO: ${safe(school.recog_no)}`, textX, y, textW, 9, GREY, false, 6.5) + 2;
 
   return y;
 }
@@ -234,40 +239,111 @@ function drawIdBox(doc, x, y, label, value, width = 130) {
     fontSize -= 0.5;
   }
   doc.save();
-  doc.roundedRect(x, y, width, 20, 3).fillColor(NAVY).fill();
+  doc.roundedRect(x, y, width, 20, 3).fillColor(LC_BLUE).fill();
   doc.fillColor('#fff').font('Helvetica-Bold').fontSize(7.5).text(sentenceCase(label), x, y + 5.5, { width, align: 'center', lineBreak: false });
   doc.restore();
   doc.fillColor('#D6272B').font('Helvetica-Bold').fontSize(fontSize).text(value, x, y + 25, { width, align: 'center', lineBreak: false });
   return y + 40;
 }
 
+// Big rounded "pill" title banner (School Admin requested this exact look
+// for the LC) — full-height corner radius and a wider font than the boxy
+// banner used to have, and doesn't span the full content width like it did.
 function drawTitleBanner(doc, y, title, marginX = 46) {
-  const width = doc.page.width - marginX * 2;
-  doc.save();
-  doc.roundedRect(marginX, y, width, 30, 6).fillColor(NAVY).fill();
-  doc.lineWidth(1).strokeColor(GOLD).roundedRect(marginX, y, width, 30, 6).stroke();
-  doc.restore();
-  fitCenteredText(doc, sentenceCase(title), marginX, y + 9, width, 16, '#fff');
-  return y + 44;
+  const fullWidth = doc.page.width - marginX * 2;
+  const bannerW = fullWidth * 0.86;
+  const bannerX = marginX + (fullWidth - bannerW) / 2;
+  const bannerH = 34;
+  doc.save().roundedRect(bannerX, y, bannerW, bannerH, bannerH / 2).fillColor(LC_BLUE).fill().restore();
+  fitCenteredText(doc, sentenceCase(title), bannerX, y + 9, bannerW, 17, '#fff', true, 13);
+  return y + bannerH + 8;
 }
 
-// LC data row — keys and values share the same sentence-case 12pt style.
-// The value shrinks (then ellipsizes) rather than overflow into the border,
-// the next row, or the QR/photo — student data length is never guaranteed.
-function drawDataRow(doc, x, y, width, num, label, value) {
-  const key = sentenceCase(label);
-  const displayValue = sentenceCase(value);
-  doc.font('Helvetica-Bold').fontSize(12).fillColor(TEXT).text(`${num}.`, x, y, { width: 22 });
-  doc.font('Helvetica-Bold').fontSize(12).fillColor(TEXT).text(key, x + 22, y, { width: 188 });
-  doc.font('Helvetica-Bold').fontSize(12).fillColor(TEXT).text(':', x + 212, y, { width: 10 });
-  fitSingleLineText(doc, displayValue, x + 226, y, width - 226, 12, TEXT, true, 8);
-  doc.save().moveTo(x, y + 16.5).lineTo(x + width, y + 16.5).lineWidth(0.5).strokeColor('#e2e8f0').stroke().restore();
-  return y + 20;
+// ── "Student Information" / "School Details" bordered panels ─────────────
+// Content height isn't known until it's drawn (varies by row count), so the
+// panel border is drawn LAST around the recorded start/end Y rather than
+// needing a height up front — draws fine either order since strokes never
+// get covered by the fills drawn in between.
+function drawPanelTitleBar(doc, x, y, width, title) {
+  const headerH = 24;
+  doc.save().rect(x, y, width, headerH).fillColor(LC_BLUE_BG).fill().restore();
+  doc.fillColor(LC_BLUE).font('Helvetica-Bold').fontSize(11.5)
+    .text(title, x + 12, y + 6.5, { width: width - 24, lineBreak: false });
+  doc.save().lineWidth(0.8).strokeColor(LC_BORDER).moveTo(x, y + headerH).lineTo(x + width, y + headerH).stroke().restore();
+  return y + headerH;
 }
+function drawPanelBorder(doc, x, startY, width, endY, radius = 6) {
+  doc.save().lineWidth(1).strokeColor(LC_BORDER).roundedRect(x, startY, width, endY - startY, radius).stroke().restore();
+}
+
+// The 2-column x 3-row student ID table, restyled for the "Student
+// Information" panel — separate from the shared drawIdInfoTable (which
+// Bonafide also uses) so Bonafide's look is unaffected by this LC-only
+// redesign. Label/colon/value each get a fixed slot so the colons line up
+// down the column, matching the requested reference layout.
+function drawStudentInfoTable(doc, x, y, width, cellRows) {
+  const rowH = 20;
+  const colW = width / 2;
+  const labelW = colW * 0.52;
+  const tableH = rowH * cellRows.length;
+  doc.save().lineWidth(0.8).strokeColor(LC_BORDER).rect(x, y, width, tableH).stroke().restore();
+  doc.save().lineWidth(0.8).strokeColor(LC_BORDER).moveTo(x + colW, y).lineTo(x + colW, y + tableH).stroke().restore();
+  const drawCell = (cx, cy, label, value) => {
+    doc.font('Helvetica').fontSize(9.5).fillColor(TEXT).text(label, cx, cy, { width: labelW - 10, lineBreak: false });
+    doc.font('Helvetica-Bold').fontSize(9.5).fillColor(TEXT).text(':', cx + labelW - 6, cy, { width: 8, lineBreak: false });
+    fitSingleLineText(doc, value, cx + labelW + 8, cy, colW - labelW - 20, 9.5, TEXT, true, 7);
+  };
+  cellRows.forEach(([l1, v1, l2, v2], i) => {
+    const rowY = y + i * rowH;
+    if (i > 0) {
+      doc.save().lineWidth(0.6).strokeColor(LC_BLUE_BG).moveTo(x, rowY).lineTo(x + width, rowY).stroke().restore();
+    }
+    const textY = rowY + rowH / 2 - 5;
+    drawCell(x + 12, textY, l1, v1);
+    drawCell(x + colW + 12, textY, l2, v2);
+  });
+  return y + tableH;
+}
+
+// The 15-row "Sr. No. | Particulars | Information" table, replacing the old
+// plain "N. Label : Value" rows with a real bordered 3-column table matching
+// the requested reference format.
+function drawSchoolDetailsTable(doc, x, y, width, rows) {
+  const headerH = 20, rowH = 17;
+  const srW = 34, particularsW = width * 0.33, infoW = width - srW - particularsW;
+  const totalH = headerH + rowH * rows.length;
+
+  doc.save().rect(x, y, width, headerH).fillColor(LC_BLUE_BG).fill().restore();
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(LC_BLUE)
+    .text('Sr. No.', x, y + 6, { width: srW, align: 'center', lineBreak: false });
+  doc.text('Particulars', x + srW + 8, y + 6, { width: particularsW - 16, lineBreak: false });
+  doc.text('Information', x + srW + particularsW + 8, y + 6, { width: infoW - 16, lineBreak: false });
+
+  rows.forEach(([label, value], i) => {
+    const rowY = y + headerH + i * rowH;
+    if (i > 0) {
+      doc.save().lineWidth(0.5).strokeColor(LC_BLUE_BG).moveTo(x, rowY).lineTo(x + width, rowY).stroke().restore();
+    }
+    const textY = rowY + rowH / 2 - 4.5;
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT)
+      .text(String(i + 1), x, textY, { width: srW, align: 'center', lineBreak: false });
+    doc.font('Helvetica').fontSize(9).fillColor(TEXT)
+      .text(sentenceCase(label), x + srW + 8, textY, { width: particularsW - 16, lineBreak: false });
+    fitSingleLineText(doc, sentenceCase(value, '-'), x + srW + particularsW + 8, textY, infoW - 16, 9, TEXT, true, 6.5);
+  });
+
+  doc.save().lineWidth(0.8).strokeColor(LC_BORDER).moveTo(x, y + headerH).lineTo(x + width, y + headerH).stroke().restore();
+  doc.save().lineWidth(0.8).strokeColor(LC_BORDER).moveTo(x + srW, y).lineTo(x + srW, y + totalH).stroke().restore();
+  doc.save().lineWidth(0.8).strokeColor(LC_BORDER).moveTo(x + srW + particularsW, y).lineTo(x + srW + particularsW, y + totalH).stroke().restore();
+  doc.save().lineWidth(0.8).strokeColor(LC_BORDER).rect(x, y, width, totalH).stroke().restore();
+
+  return y + totalH;
+}
+
 
 function drawPhotoPanel(doc, x, y, photoPath, w = 80, h = 96) {
   doc.save();
-  doc.roundedRect(x, y, w, h, 4).lineWidth(1).strokeColor(GOLD).stroke();
+  doc.roundedRect(x, y, w, h, 4).lineWidth(1).strokeColor(LC_BLUE).stroke();
   if (canDraw(photoPath)) {
     try { doc.image(photoPath, x + 1, y + 1, { width: w - 2, height: h - 2 }); }
     catch (e) { console.error('[PDF] photo draw failed:', e.message); }
@@ -475,25 +551,26 @@ async function generateLcPdf({
       const stream = fs.createWriteStream(outputPath);
       doc.pipe(stream);
 
-      if (canDraw(safeTemplatePath)) {
-        try { doc.image(safeTemplatePath, 0, 0, { width: doc.page.width, height: doc.page.height }); } catch (e) {}
-      } else {
-        // LC gets a single gold border — the inner navy rule made it look
-        // like two separate borders rather than one frame.
-        drawDoubleBorder(doc, 16, null, true);
-      }
+      const drawLcPageBorder = () => {
+        if (canDraw(safeTemplatePath)) {
+          try { doc.image(safeTemplatePath, 0, 0, { width: doc.page.width, height: doc.page.height }); } catch (e) {}
+        } else {
+          // Clean flat double-line border in the requested blue "Student
+          // Information / School Details" format — no ornamental frame
+          // graphic (that was gold-toned and would clash with this palette).
+          doc.save().lineWidth(1.4).strokeColor(LC_BLUE).rect(14, 14, doc.page.width - 28, doc.page.height - 28).stroke().restore();
+          doc.save().lineWidth(0.8).strokeColor(LC_BLUE).rect(20, 20, doc.page.width - 40, doc.page.height - 40).stroke().restore();
+        }
+      };
+      drawLcPageBorder();
 
       // ── Top row, all in one line: Logo (left) | Board/School name (centre) |
       // QR + Certificate No. stacked (right) ── QR sits directly above the
       // Certificate Number box so both read as one verification unit, and is
       // the same size as the school logo (62pt) on request.
-      // A wider right-hand margin (52pt vs the usual 46pt content margin)
-      // keeps the QR/Certificate-No. column clear of a school's uploaded
-      // border frame artwork, whose actual printed border thickness this
-      // code can't know in advance — found overlapping in a real render.
       const boxW     = 100;
       const certIdX  = doc.page.width - 52 - boxW;
-      const metaTop  = 42;
+      const metaTop  = 34;
       const qrSize   = 62;
       const logoSize = 62;
       const logoX    = 46;
@@ -502,17 +579,43 @@ async function generateLcPdf({
         try { doc.image(safeLogoPath, logoX, metaTop, { width: logoSize, height: logoSize }); }
         catch (e) { console.error('[PDF] logo draw failed:', e.message); }
       } else {
-        doc.save().circle(logoX + logoSize / 2, metaTop + logoSize / 2, logoSize / 2 - 2).lineWidth(1.3).strokeColor(NAVY).stroke().restore();
+        doc.save().circle(logoX + logoSize / 2, metaTop + logoSize / 2, logoSize / 2 - 2).lineWidth(1.3).strokeColor(LC_BLUE).stroke().restore();
       }
 
       if (qrBuffer) {
         const qrX = certIdX + (boxW - qrSize) / 2;
         try { doc.image(qrBuffer, qrX, metaTop, { width: qrSize, height: qrSize }); } catch (e) {}
-        doc.font('Helvetica').fontSize(5).fillColor(GREY)
-          .text('Scan to verify', certIdX, metaTop + qrSize + 1, { width: boxW, align: 'center', lineBreak: false });
       }
       const certIdY = metaTop + qrSize + 6;
       const certIdBottom = drawIdBox(doc, certIdX, certIdY, 'CERTIFICATE NO.', certificate.serial_number, boxW);
+      // "Scan to verify" replaces a fixed government URL — this system's
+      // own QR verification page, not a claim about a domain we don't own.
+      doc.font('Helvetica-Oblique').fontSize(6.5).fillColor('#b91c1c')
+        .text('(Scan QR to verify)', certIdX, certIdBottom, { width: boxW, align: 'center', lineBreak: false });
+      let rightColBottom = certIdBottom + 10;
+
+      // ── Original / Duplicate marker — unobtrusive, only shown for an
+      // actual Duplicate copy (an Original renders with nothing extra here,
+      // matching the requested reference which has no visible marker at all).
+      // sentenceCase only capitalizes the first letter (e.g. 'duplicate' ->
+      // 'Duplicate'), so compare case-insensitively — matching against the
+      // literal 'DUPLICATE' here always failed silently.
+      const typeLabel = sentenceCase(lcType || 'Original');
+      if (typeLabel.toUpperCase() === 'DUPLICATE') {
+        doc.font('Helvetica-Bold').fontSize(7.5).fillColor('#dc2626')
+          .text('DUPLICATE COPY', certIdX, rightColBottom, { width: boxW, align: 'center', lineBreak: false });
+        rightColBottom += 11;
+      }
+
+      // Photo — School Admin can turn this off per school (Settings). Moved
+      // into this right-hand column (below the certificate number) since
+      // the requested reference format has no photo slot in the footer.
+      const showLcPhoto = school.lc_show_photo === undefined || school.lc_show_photo === null
+        ? true
+        : Boolean(Number(school.lc_show_photo));
+      if (showLcPhoto) {
+        rightColBottom = drawPhotoPanel(doc, certIdX, rightColBottom + 2, safePhotoPath, boxW, 58);
+      }
 
       // The QR+Certificate-No. column (logo-matched QR size, stacked above
       // the number box) is inherently taller than the identity text block
@@ -521,9 +624,8 @@ async function generateLcPdf({
       // down distributes that whitespace evenly above and below instead.
       const textX = logoX + logoSize + 14;
       const textW = certIdX - 14 - textX;
-      const textTopOffset = school.sanstha_name ? 17 : 22;
+      const textTopOffset = school.sanstha_name ? 6 : 12;
       let y = drawHeader(doc, school, textX, textW, metaTop + textTopOffset);
-      y = Math.max(y, certIdBottom + 8, metaTop + logoSize + 8);
 
       // ── School-configured header text (School Settings > Certificate
       // Header) — additive text below the school name/logo, empty by
@@ -534,36 +636,33 @@ async function generateLcPdf({
       const headerText = stripHtmlToText(school.cert_header).replace(/\n+/g, ' ');
       if (headerText) {
         // fitCenteredText (shrink-then-real-height) instead of a plain
-        // .text() at a fixed font size with a fixed y+=12 afterwards — a
-        // long header wraps to 2 lines in this narrow column, and the fixed
-        // advance let the 2nd line bleed into the Original/Duplicate pill
-        // drawn right after it.
+        // .text() at a fixed font size with a fixed y-advance afterwards —
+        // a long header wraps to 2 lines in this narrow column, and a fixed
+        // advance would let the 2nd line bleed into the banner below it.
         y = fitCenteredText(doc, headerText, textX, y, textW, 8, TEXT, false, 6) + 2;
       }
 
-      // ── Original / Duplicate pill ──
-      const typeLabel      = sentenceCase(lcType || 'Original');
-      const typeLabelColor = typeLabel === 'DUPLICATE' ? '#dc2626' : '#1d4ed8';
-      doc.save()
-        .roundedRect(doc.page.width / 2 - 55, y, 110, 18, 9)
-        .fillColor(typeLabelColor).fill().restore();
-      doc.fillColor('#fff').font('Helvetica-Bold').fontSize(9)
-        .text(typeLabel, doc.page.width / 2 - 55, y + 4.5, { width: 110, align: 'center', lineBreak: false });
-      y += 26;
+      // Both header columns (identity text on the left, QR/cert-no/photo on
+      // the right) can vary in height — start the title banner below
+      // whichever is taller, never a fixed offset.
+      y = Math.max(y, rightColBottom) + 10;
 
       y = drawTitleBanner(doc, y, 'School leaving certificate');
 
-      // ── Student ID info table (bordered, 2 columns x 3 rows) ──
+      // ── "Student Information" panel: bordered 2 x 3 ID table ──
       // U-DISE moved up into the header next to RECOG NO (see drawHeader).
       const contentWidth = doc.page.width - 92;
-      y = drawIdInfoTable(doc, 46, y, contentWidth, [
+      const panel1Y = y;
+      y = drawPanelTitleBar(doc, 46, y, contentWidth, 'Student Information');
+      y = drawStudentInfoTable(doc, 46, y, contentWidth, [
         ['General Register No.', sentenceCase(student.register_number, '-'), 'Student Aadhar No', maskAadhaar(student.aadhaar)],
         ['Student Saral Id', sentenceCase(student.serial_id, '-'), 'Student Apar Id', sentenceCase(student.apaar_id, '-')],
         ['Student PEN ID', sentenceCase(student.pen_no, '-'), 'LOC No.', sentenceCase(student.loc_no, '-')],
       ]);
-      y += 6;
+      drawPanelBorder(doc, 46, panel1Y, contentWidth, y);
+      y += 10;
 
-      // ── Data rows — full content width, compact 18 pt height ──
+      // ── "School Details" panel: bordered Sr.No/Particulars/Information table ──
       // Passed straight to fmtDate (not wrapped in `new Date()` first) so a
       // plain "YYYY-MM-DD" string never goes through UTC-midnight parsing.
       const leavingDate = dateOfLeaving ? fmtDate(dateOfLeaving) : '';
@@ -586,89 +685,78 @@ async function generateLcPdf({
         ['Remarks',                        safe(remarks, '')],
       ];
 
-      let rowY = y;
-      rows.forEach((r, i) => {
-        rowY = drawDataRow(doc, 46, rowY, contentWidth, i + 1, r[0], r[1]);
-      });
+      const panel2Y = y;
+      y = drawPanelTitleBar(doc, 46, y, contentWidth, 'School Details');
+      y = drawSchoolDetailsTable(doc, 46, y, contentWidth, rows);
+      drawPanelBorder(doc, 46, panel2Y, contentWidth, y);
+      y += 14;
 
       // ── School-configured footer text (School Settings > Certificate
-      // Footer) — additive, empty by default. Sits above the signature
-      // block, exactly like the LC declaration note lower on the page.
+      // Footer) — additive, empty by default.
       const footerText = stripHtmlToText(school.cert_footer).replace(/\n+/g, ' ');
       if (footerText) {
-        doc.font('Helvetica').fontSize(7.5).fillColor(TEXT)
-          .text(footerText, 46, rowY + 4, { width: contentWidth, align: 'center', lineBreak: false, ellipsis: true });
-        rowY += 14;
+        y = fitCenteredText(doc, footerText, 46, y, contentWidth, 8, TEXT, false, 6) + 6;
       }
 
-      // ── Footer: Check by (left) | Photo (centre) | HEAD MASTER (right) — one line ──
-      const fw   = contentWidth;
-      let fy     = rowY + 6;
-
-      doc.save().dash(2, { space: 2 }).moveTo(46, fy).lineTo(46 + fw, fy).strokeColor('#cbd5e1').stroke().undash().restore();
-      fy += 8;
-
-      // Date / Place at top-left of footer block
-      doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT)
-        .text(`Date  : ${leavingDate || fmtDate(new Date())}`, 46, fy);
-      doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT)
-        .text(`Place : ${sentenceCase(school.city || school.village || school.taluka)}`, 46, fy + 14);
-
-      // Photo centred — School Admin can turn this off per school (Settings)
-      // for schools that don't want a photo on the LC. The space is still
-      // reserved (LINE_Y below depends on photoH) so the signature/stamp
-      // layout doesn't shift depending on the toggle.
-      const photoW  = 74, photoH = 64;
-      const photoX  = doc.page.width / 2 - photoW / 2;
-      const photoY  = fy;
-      const showLcPhoto = school.lc_show_photo === undefined || school.lc_show_photo === null
-        ? true
-        : Boolean(Number(school.lc_show_photo));
-      if (showLcPhoto) {
-        drawPhotoPanel(doc, photoX, photoY, safePhotoPath, photoW, photoH);
+      // An unusually tall combination above (long sanstha/board/school names,
+      // a full custom header/footer, every optional field filled) can leave
+      // too little room for the whole Date/Place + signatures + note block.
+      // Rather than let pdfkit auto-paginate mid-block (splitting it across
+      // pages in a broken-looking way), move the whole block onto a fresh,
+      // still-bordered page together.
+      const footerBlockH = 105;
+      if (y + footerBlockH > doc.page.height - 30) {
+        doc.addPage();
+        drawLcPageBorder();
+        y = 40;
       }
 
-      // Signature line baseline aligned to the bottom of the photo
-      const LINE_Y = photoY + photoH;
-      const C3     = 46 + fw * 0.68;
-      const C3W    = fw * 0.32;
+      // ── Footer: Date/Place (left) | seal (centre) | Checked-by / Head
+      // Master signature lines — chained off the panels above instead of a
+      // fixed offset, since the header/photo column height varies.
+      doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT).text(`Date  : ${leavingDate || fmtDate(new Date())}`, 46, y);
+      doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT).text(`Place : ${sentenceCase(school.city || school.village || school.taluka)}`, 46, y + 14);
 
-      // School stamp placed above the signature line (right side). The
+      const sigLineY = y + 56;
+      const C1 = 46, C1W = contentWidth * 0.42;
+      const C3 = 46 + contentWidth * 0.58, C3W = contentWidth * 0.42;
+
+      // School stamp, centred between the two signature lines. The
       // Principal's signature itself is intentionally NOT drawn here — LC
       // and Bonafide are meant to be hand-signed on the printed hard copy;
       // only the ID Card carries a printed/uploaded signature.
-      drawStampIfAvailable(doc, safeStampPath, C3 + C3W / 2 - 26, LINE_Y - 86, 52);
+      drawStampIfAvailable(doc, safeStampPath, 46 + contentWidth / 2 - 22, sigLineY - 52, 44);
 
-      doc.moveTo(46, LINE_Y).lineTo(46 + 160, LINE_Y).lineWidth(0.7).strokeColor('#999').stroke();
-      doc.moveTo(C3, LINE_Y).lineTo(C3 + C3W - 4, LINE_Y).lineWidth(0.7).strokeColor('#999').stroke();
+      doc.moveTo(C1, sigLineY).lineTo(C1 + C1W, sigLineY).lineWidth(0.7).strokeColor('#9ca3af').stroke();
+      doc.moveTo(C3, sigLineY).lineTo(C3 + C3W, sigLineY).lineWidth(0.7).strokeColor('#9ca3af').stroke();
 
-      doc.font('Helvetica').fontSize(9).fillColor(TEXT).text('Check by / prepared by', 46, LINE_Y + 5);
+      doc.font('Helvetica').fontSize(9).fillColor(TEXT)
+        .text('Checked by / Approved by', C1, sigLineY + 5, { width: C1W, align: 'center', lineBreak: false });
       // Designation label only (Principal / Mukhyadhyapak / Headmaster / a
       // custom title) — the Principal's name itself is shown on the ID Card
       // only, never printed here even when school.principal_name is set.
-      const lcSignatureLabel = safe(school.lc_signature_label, 'Head master');
+      const lcSignatureLabel = safe(school.lc_signature_label, 'Head Master');
       doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT)
-        .text(lcSignatureLabel, C3, LINE_Y + 5, { width: C3W, align: 'center' });
-      doc.font('Helvetica').fontSize(8).fillColor(GREY)
-        .text(sentenceCase(school.name), C3, LINE_Y + 17, { width: C3W, align: 'center' });
+        .text(lcSignatureLabel, C3, sigLineY + 5, { width: C3W, align: 'center', lineBreak: false });
+      // fitSingleLineText (shrink-then-ellipsis), not a plain wrapping
+      // .text() — a long school name wrapping to 2 lines here pushed the
+      // total content past the page bottom and triggered an unwanted,
+      // mostly-blank 2nd page (pdfkit auto-paginates flowed text that would
+      // overflow, even with margin:0).
+      fitSingleLineText(doc, sentenceCase(school.name), C3, sigLineY + 17, C3W, 8, GREY, false, 6);
 
-      // Supplied transparent PNG frame is drawn last so its ornamentation
-      // surrounds the text, QR image, birth date and principal details.
-      if (!canDraw(safeTemplatePath)) {
-        drawFrameIfAvailable(doc, LC_FRAME_PATH, 0, 0, doc.page.width, doc.page.height);
-      }
-
-      // Combined note at bottom — kept well clear of the page edge so a
-      // school-uploaded border template (of realistic thickness) never
-      // overlaps it, matching the ~46pt margin used everywhere else on
-      // this certificate.
-      const noteY = doc.page.height - 45;
-      doc.save().moveTo(46, noteY).lineTo(46 + fw, noteY).lineWidth(1.2).strokeColor(GOLD).stroke().restore();
+      // Combined note at bottom — anchored near the physical bottom margin
+      // for the normal case (matching the ~46pt margin used everywhere else
+      // on this certificate), but never less than sigLineY + 32 so an
+      // unusually tall header/table combination (long names, every optional
+      // field filled) can't push the signature block into/past it.
+      const noteY = Math.max(doc.page.height - 45, sigLineY + 32);
+      doc.save().moveTo(46, noteY).lineTo(46 + contentWidth, noteY).lineWidth(1).strokeColor(LC_BLUE).stroke().restore();
       doc.font('Helvetica-Bold').fontSize(7.5).fillColor(TEXT)
         .text(
           'No change in any entry in this certificate shall be made except by the authority issuing it. ' +
           'Certified that the above information is true to the best of our knowledge as per school records.',
-          46, noteY + 6, { width: fw, align: 'center' }
+          46, noteY + 6, { width: contentWidth, align: 'center' }
         );
 
       doc.end();

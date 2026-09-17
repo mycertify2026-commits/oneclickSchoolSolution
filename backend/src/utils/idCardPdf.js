@@ -321,7 +321,10 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   const sigW = 42, sigH = 11, sigX = FX + 74;
   const sigLineY = sigBandY + sigH;
   if (canDraw(signaturePath)) {
-    try { doc.image(signaturePath, sigX, sigBandY, { width: sigW, height: sigH, fit: [sigW, sigH] }); } catch (e) {}
+    // align/valign so a signature image whose own aspect ratio isn't
+    // exactly sigW:sigH sits centered over the underline below it, not
+    // flush against its left edge (pdfkit's default for `fit`).
+    try { doc.image(signaturePath, sigX, sigBandY, { width: sigW, height: sigH, fit: [sigW, sigH], align: 'center', valign: 'bottom' }); } catch (e) {}
   }
   doc.save().moveTo(sigX, sigLineY).lineTo(sigX + sigW, sigLineY).lineWidth(0.4).strokeColor('#9ca3af').stroke().restore();
   doc.font('Helvetica').fontSize(4.2).fillColor(GREY)
@@ -477,7 +480,9 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   const sigY = bandY + Math.max(0, (qrSz - sigH) / 2);
   const sigLineY = sigY + sigH;
   if (canDraw(signaturePath)) {
-    try { doc.image(signaturePath, sigX, sigY, { width: sigW, height: sigH, fit: [sigW, sigH] }); } catch (e) {}
+    // Same centering fix as the horizontal layout — otherwise a signature
+    // image narrower than sigW sits flush left instead of over the line.
+    try { doc.image(signaturePath, sigX, sigY, { width: sigW, height: sigH, fit: [sigW, sigH], align: 'center', valign: 'bottom' }); } catch (e) {}
   }
   doc.save().moveTo(sigX, sigLineY).lineTo(sigX + sigW, sigLineY).lineWidth(0.4).strokeColor('#9ca3af').stroke().restore();
   doc.font('Helvetica').fontSize(4.8).fillColor(GREY)
