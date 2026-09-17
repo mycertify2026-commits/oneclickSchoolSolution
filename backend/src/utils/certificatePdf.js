@@ -253,10 +253,12 @@ function drawTitleBanner(doc, y, title, marginX = 46) {
   const fullWidth = doc.page.width - marginX * 2;
   const bannerW = fullWidth * 0.86;
   const bannerX = marginX + (fullWidth - bannerW) / 2;
-  const bannerH = 40;
+  // Bold + bigger than the original 16/17pt, but snugger around the text
+  // than the previous 40pt-tall version — that had too much vertical
+  // padding above/below the title compared to the reference image.
+  const bannerH = 30;
   doc.save().roundedRect(bannerX, y, bannerW, bannerH, bannerH / 2).fillColor(LC_BLUE).fill().restore();
-  // Bold + bigger per request (was 17pt) — the certificate's main title.
-  fitCenteredText(doc, sentenceCase(title), bannerX, y + 10, bannerW, 21, '#fff', true, 15);
+  fitCenteredText(doc, sentenceCase(title), bannerX, y + 5, bannerW, 19, '#fff', true, 14);
   return y + bannerH + 8;
 }
 
@@ -283,23 +285,25 @@ function drawPanelBorder(doc, x, startY, width, endY, radius = 6) {
 // redesign. Label/colon/value each get a fixed slot so the colons line up
 // down the column, matching the requested reference layout.
 function drawStudentInfoTable(doc, x, y, width, cellRows) {
-  const rowH = 20;
+  const rowH = 22;
   const colW = width / 2;
   const labelW = colW * 0.52;
   const tableH = rowH * cellRows.length;
   doc.save().lineWidth(0.8).strokeColor(LC_BORDER).rect(x, y, width, tableH).stroke().restore();
   doc.save().lineWidth(0.8).strokeColor(LC_BORDER).moveTo(x + colW, y).lineTo(x + colW, y + tableH).stroke().restore();
+  // Label AND value both bold now (label was plain weight before) — per
+  // request, and bumped from 9.5pt to 10.5pt.
   const drawCell = (cx, cy, label, value) => {
-    doc.font('Helvetica').fontSize(9.5).fillColor(TEXT).text(label, cx, cy, { width: labelW - 10, lineBreak: false });
-    doc.font('Helvetica-Bold').fontSize(9.5).fillColor(TEXT).text(':', cx + labelW - 6, cy, { width: 8, lineBreak: false });
-    fitSingleLineText(doc, value, cx + labelW + 8, cy, colW - labelW - 20, 9.5, TEXT, true, 7);
+    doc.font('Helvetica-Bold').fontSize(10.5).fillColor(TEXT).text(label, cx, cy, { width: labelW - 10, lineBreak: false });
+    doc.font('Helvetica-Bold').fontSize(10.5).fillColor(TEXT).text(':', cx + labelW - 6, cy, { width: 8, lineBreak: false });
+    fitSingleLineText(doc, value, cx + labelW + 8, cy, colW - labelW - 20, 10.5, TEXT, true, 7.5);
   };
   cellRows.forEach(([l1, v1, l2, v2], i) => {
     const rowY = y + i * rowH;
     if (i > 0) {
       doc.save().lineWidth(0.6).strokeColor(LC_BLUE_BG).moveTo(x, rowY).lineTo(x + width, rowY).stroke().restore();
     }
-    const textY = rowY + rowH / 2 - 5;
+    const textY = rowY + rowH / 2 - 5.5;
     drawCell(x + 12, textY, l1, v1);
     drawCell(x + colW + 12, textY, l2, v2);
   });
@@ -310,27 +314,29 @@ function drawStudentInfoTable(doc, x, y, width, cellRows) {
 // plain "N. Label : Value" rows with a real bordered 3-column table matching
 // the requested reference format.
 function drawSchoolDetailsTable(doc, x, y, width, rows) {
-  const headerH = 20, rowH = 17;
+  const headerH = 22, rowH = 18;
   const srW = 34, particularsW = width * 0.33, infoW = width - srW - particularsW;
   const totalH = headerH + rowH * rows.length;
 
   doc.save().rect(x, y, width, headerH).fillColor(LC_BLUE_BG).fill().restore();
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(LC_BLUE)
-    .text('Sr. No.', x, y + 6, { width: srW, align: 'center', lineBreak: false });
-  doc.text('Particulars', x + srW + 8, y + 6, { width: particularsW - 16, lineBreak: false });
-  doc.text('Information', x + srW + particularsW + 8, y + 6, { width: infoW - 16, lineBreak: false });
+  doc.font('Helvetica-Bold').fontSize(10).fillColor(LC_BLUE)
+    .text('Sr. No.', x, y + 6.5, { width: srW, align: 'center', lineBreak: false });
+  doc.text('Particulars', x + srW + 8, y + 6.5, { width: particularsW - 16, lineBreak: false });
+  doc.text('Information', x + srW + particularsW + 8, y + 6.5, { width: infoW - 16, lineBreak: false });
 
+  // Particulars column is bold now too (was plain weight before, while
+  // Information was already bold) — per request, and bumped from 9pt to 10pt.
   rows.forEach(([label, value], i) => {
     const rowY = y + headerH + i * rowH;
     if (i > 0) {
       doc.save().lineWidth(0.5).strokeColor(LC_BLUE_BG).moveTo(x, rowY).lineTo(x + width, rowY).stroke().restore();
     }
-    const textY = rowY + rowH / 2 - 4.5;
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT)
+    const textY = rowY + rowH / 2 - 5;
+    doc.font('Helvetica-Bold').fontSize(10).fillColor(TEXT)
       .text(String(i + 1), x, textY, { width: srW, align: 'center', lineBreak: false });
-    doc.font('Helvetica').fontSize(9).fillColor(TEXT)
+    doc.font('Helvetica-Bold').fontSize(10).fillColor(TEXT)
       .text(sentenceCase(label), x + srW + 8, textY, { width: particularsW - 16, lineBreak: false });
-    fitSingleLineText(doc, sentenceCase(value, '-'), x + srW + particularsW + 8, textY, infoW - 16, 9, TEXT, true, 6.5);
+    fitSingleLineText(doc, sentenceCase(value, '-'), x + srW + particularsW + 8, textY, infoW - 16, 10, TEXT, true, 7);
   });
 
   doc.save().lineWidth(0.8).strokeColor(LC_BORDER).moveTo(x, y + headerH).lineTo(x + width, y + headerH).stroke().restore();
@@ -571,7 +577,7 @@ async function generateLcPdf({
       // the same size as the school logo (62pt) on request.
       const boxW     = 100;
       const certIdX  = doc.page.width - 52 - boxW;
-      const metaTop  = 34;
+      const metaTop  = 30;
       const qrSize   = 62;
       const logoSize = 62;
       const logoX    = 46;
@@ -615,7 +621,7 @@ async function generateLcPdf({
         ? true
         : Boolean(Number(school.lc_show_photo));
       if (showLcPhoto) {
-        rightColBottom = drawPhotoPanel(doc, certIdX, rightColBottom + 2, safePhotoPath, boxW, 58);
+        rightColBottom = drawPhotoPanel(doc, certIdX, rightColBottom + 2, safePhotoPath, boxW, 52);
       }
 
       // The QR+Certificate-No. column (logo-matched QR size, stacked above
@@ -661,7 +667,7 @@ async function generateLcPdf({
         ['Student PEN ID', sentenceCase(student.pen_no, '-'), 'LOC No.', sentenceCase(student.loc_no, '-')],
       ]);
       drawPanelBorder(doc, 46, panel1Y, contentWidth, y);
-      y += 10;
+      y += 8;
 
       // ── "Student Details" panel: bordered Sr.No/Particulars/Information table
       // (labeled "School Details" in the first pass — renamed since every row
@@ -692,7 +698,7 @@ async function generateLcPdf({
       y = drawPanelTitleBar(doc, 46, y, contentWidth, 'Student Details');
       y = drawSchoolDetailsTable(doc, 46, y, contentWidth, rows);
       drawPanelBorder(doc, 46, panel2Y, contentWidth, y);
-      y += 14;
+      y += 12;
 
       // ── School-configured footer text (School Settings > Certificate
       // Footer) — additive, empty by default.
@@ -720,7 +726,7 @@ async function generateLcPdf({
       doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT).text(`Date  : ${leavingDate || fmtDate(new Date())}`, 46, y);
       doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT).text(`Place : ${sentenceCase(school.city || school.village || school.taluka)}`, 46, y + 14);
 
-      const sigLineY = y + 56;
+      const sigLineY = y + 52;
       const C1 = 46, C1W = contentWidth * 0.42;
       const C3 = 46 + contentWidth * 0.58, C3W = contentWidth * 0.42;
 
@@ -728,7 +734,7 @@ async function generateLcPdf({
       // Principal's signature itself is intentionally NOT drawn here — LC
       // and Bonafide are meant to be hand-signed on the printed hard copy;
       // only the ID Card carries a printed/uploaded signature.
-      drawStampIfAvailable(doc, safeStampPath, 46 + contentWidth / 2 - 22, sigLineY - 52, 44);
+      drawStampIfAvailable(doc, safeStampPath, 46 + contentWidth / 2 - 22, sigLineY - 48, 44);
 
       doc.moveTo(C1, sigLineY).lineTo(C1 + C1W, sigLineY).lineWidth(0.7).strokeColor('#9ca3af').stroke();
       doc.moveTo(C3, sigLineY).lineTo(C3 + C3W, sigLineY).lineWidth(0.7).strokeColor('#9ca3af').stroke();
