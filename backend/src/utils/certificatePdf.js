@@ -18,8 +18,6 @@ const TEXT = '#1a1a1a';
 const LC_BLUE = '#123C82';
 const LC_BLUE_BG = '#E8F1FC';
 const LC_BORDER = '#B7CDEE';
-const BONAFIDE_FRAME_PATH = process.env.BONAFIDE_FRAME_PATH ||
-  path.resolve(__dirname, '../../../attached_assets/bonafide_student_copy_white.png');
 
 // School Settings > Certificate Header/Footer stores raw contentEditable
 // HTML (bold/italic/underline + div/br line breaks from the browser) —
@@ -472,6 +470,42 @@ function drawCenteredBoldParagraph(doc, x, y, width, maxHeight, segments, initia
       const font = w.bold ? 'Helvetica-Bold' : 'Helvetica';
       doc.font(font).fillColor(color).fontSize(fontSize).text(w.text, curX, curY, { lineBreak: false });
       curX += doc.widthOfString(w.text) + spaceWidth;
+    });
+    curY += lineHeight;
+  });
+  return curY;
+}
+
+// Same bold-segment word-wrapping as drawCenteredBoldParagraph above, but
+// full-justified (both edges align) instead of centered — the formal-
+// document look the Bonafide redesign asked for. Distributes the line's
+// slack evenly between word gaps; the last line (and any single-word line)
+// is left as natural left-aligned spacing, matching standard justify
+// convention — stretching it to the full width reads as a rendering bug,
+// not a deliberate typographic choice.
+function drawJustifiedBoldParagraph(doc, x, y, width, maxHeight, segments, initialSize, color, lineGap = 2) {
+  const words = splitIntoBoldWords(segments);
+  let fontSize = initialSize;
+  let lines, lineHeight, totalHeight;
+  do {
+    lines = wrapBoldWords(doc, words, fontSize, width);
+    lineHeight = fontSize * 1.15 + lineGap;
+    totalHeight = lines.length * lineHeight - lineGap;
+    if (totalHeight <= maxHeight || fontSize <= 7) break;
+    fontSize -= 0.5;
+  } while (true);
+
+  const spaceWidth = doc.fontSize(fontSize).font('Helvetica').widthOfString(' ');
+  let curY = y;
+  lines.forEach((line, i) => {
+    const isLastLine = i === lines.length - 1;
+    const gapCount = line.words.length - 1;
+    const extraPerGap = (!isLastLine && gapCount > 0) ? (width - line.width) / gapCount : 0;
+    let curX = x;
+    line.words.forEach(w => {
+      const font = w.bold ? 'Helvetica-Bold' : 'Helvetica';
+      doc.font(font).fillColor(color).fontSize(fontSize).text(w.text, curX, curY, { lineBreak: false });
+      curX += doc.widthOfString(w.text) + spaceWidth + extraPerGap;
     });
     curY += lineHeight;
   });
@@ -1000,161 +1034,139 @@ function renderBonafideCopy(doc, ctx, qrBuffer, yOffset, copyLabel) {
   drawFrameIfAvailable(doc, framePath, 0, yOffset, PAGE_W, COPY_H);
 }
 
-// Small filled check mark, drawn as a path rather than relying on a font
-// glyph (Helvetica's WinAnsi encoding doesn't reliably include ✓).
-function drawCheckGlyph(doc, cx, cy, size, color) {
-  const s = size / 2;
-  doc.save().lineWidth(Math.max(1, size / 5)).strokeColor(color).lineCap('round').lineJoin('round')
-    .moveTo(cx - s, cy).lineTo(cx - s / 4, cy + s * 0.7).lineTo(cx + s, cy - s * 0.6)
-    .stroke().restore();
+// Formal "label on the left, value on the right" table — one field per row,
+// consistent column widths/borders/padding throughout — used by the
+// Bonafide redesign's student-reference-numbers section. Distinct from
+// drawIdInfoTable (which LC and the older Bonafide layout use, two label:
+// value pairs side by side per row) since this redesign specifically asked
+// for a plain two-column table instead.
+function drawLabelValueRows(doc, x, y, width, rows, borderColor) {
+  const rowH = 20, labelW = width * 0.42;
+  const tableH = rowH * rows.length;
+  doc.save().lineWidth(0.8).strokeColor(borderColor).rect(x, y, width, tableH).stroke().restore();
+  doc.save().lineWidth(0.8).strokeColor(borderColor).moveTo(x + labelW, y).lineTo(x + labelW, y + tableH).stroke().restore();
+  rows.forEach(([label, value], i) => {
+    const rowY = y + i * rowH;
+    if (i > 0) {
+      doc.save().lineWidth(0.6).strokeColor(borderColor).moveTo(x, rowY).lineTo(x + width, rowY).stroke().restore();
+    }
+    const textY = rowY + rowH / 2 - 5;
+    doc.font('Helvetica-Bold').fontSize(9.5).fillColor(GREY).text(label, x + 10, textY, { width: labelW - 20, lineBreak: false });
+    fitSingleLineText(doc, value, x + labelW + 10, textY, width - labelW - 20, 9.5, TEXT, true, 7);
+  });
+  return y + tableH;
 }
 
-// Small padlock, drawn from a rounded body + a stroked shackle arc — same
-// reasoning as the check mark above (no dependable lock glyph in Helvetica).
-function drawLockGlyph(doc, cx, topY, size, color) {
-  const bodyW = size, bodyH = size * 0.8;
-  const bodyX = cx - bodyW / 2, bodyY = topY + size * 0.35;
-  doc.save().strokeColor(color).lineWidth(1.2)
-    .path(`M ${bodyX + 2} ${bodyY} A ${bodyW / 2 - 2} ${size * 0.35} 0 0 1 ${bodyX + bodyW - 2} ${bodyY}`)
-    .stroke().restore();
-  doc.save().roundedRect(bodyX, bodyY, bodyW, bodyH, 1.5).fillColor(color).fill().restore();
-}
-
-// Small ornamental divider used either side of the board-name line —
-// a short gold hairline with a diamond at its outer end.
-function drawFlourish(doc, x, y, lineW, towardRight) {
-  const dx = towardRight ? lineW : -lineW;
-  doc.save().moveTo(x, y).lineTo(x + dx, y).lineWidth(0.6).strokeColor(GOLD).stroke().restore();
-  const dCx = x + dx;
-  doc.save().translate(dCx, y).rotate(45).rect(-2.5, -2.5, 5, 5).fillColor(GOLD).fill().restore();
-}
-
-// Renders one portrait bonafide certificate. Layout modeled directly on a
-// reference design the school provided: board/school identity + circular
-// emblem + certificate-ID/QR block up top, a labeled ID row, a navy title
-// banner, a centered certificate body, a photo with a "digitally signed"
-// badge, a 3-box Date/Place/Verified strip, and a 3-column signature row
-// with a seal in the middle.
+// Renders one portrait bonafide certificate — a clean, restrained
+// navy/white/light-grey formal-document layout (redesigned per request):
+// logo (left) | school identity (centre) | QR + certificate ID (right) in
+// the header, a single divider, a "BONAFIDE CERTIFICATE" title bar, a
+// plain label:value reference-numbers table, a fully-justified certifying
+// paragraph, a shaded key-facts panel (name/class/year) with the student
+// photo beside it, and a footer of Date of Issue / Place / two signature
+// lines. The QR code and certificate serial number are real, live data —
+// only the decorative gold accents, ornamental flourishes and the
+// redundant "digitally verified" badge/lock icon from the previous design
+// were removed, not the certificate's actual verification mechanism.
 function renderSingleBonafide(doc, ctx, qrBuffer) {
-  const { school, student, certificate, purpose, photoPath, logoPath, signaturePath, stampPath, templatePath } = ctx;
+  const { school, student, certificate, purpose, photoPath, logoPath, stampPath, templatePath } = ctx;
   const W = doc.page.width;
   const H = doc.page.height;
   const black = TEXT;
   const muted = GREY;
-  const left = 36;
-  const right = W - 36;
+  const left = 40;
+  const right = W - 40;
   const contentW = right - left;
+  const REF_BORDER = '#CBD5E1';
+  const HILITE_BG = '#F1F5F9';
 
   if (canDraw(templatePath)) {
     try { doc.image(templatePath, 0, 0, { width: W, height: H }); } catch (e) {}
   } else {
+    // Single restrained navy rule, not the old gold double-border — this
+    // redesign is deliberately a plain navy/white/light-grey palette.
     doc.rect(0, 0, W, H).fill('#FFFFFF');
-    drawDoubleBorder(doc, 8, H - 8);
+    doc.save().lineWidth(1).strokeColor(NAVY).rect(18, 18, W - 36, H - 36).stroke().restore();
   }
 
-  // ── "STUDENT COPY" pill, top centre ──────────────────────────────────────
-  const pillW = 110;
-  doc.save().roundedRect((W - pillW) / 2, 16, pillW, 15, 7).fillColor(NAVY).fill().restore();
-  doc.fillColor('#fff').font('Helvetica-Bold').fontSize(7.5)
-    .text('STUDENT COPY', (W - pillW) / 2, 20, { width: pillW, align: 'center', lineBreak: false });
-
-  // ── Header: emblem (left) | board/school identity (centre) | cert-ID + QR (right) ──
-  // Everything here starts below the "STUDENT COPY" pill (bottom edge y=31)
-  // with a clear gap, so nothing overlaps it.
-  const logoSz = 60;
-  const logoCx = left + 46, logoCy = 80;
+  // ── Header: logo (left) | school identity (centre) | QR + cert ID (right) ──
+  const logoCx = left + 26, logoCy = 68, logoR = 26;
   if (canDraw(logoPath)) {
-    try { doc.save().circle(logoCx, logoCy, logoSz / 2).clip().image(logoPath, logoCx - logoSz / 2, logoCy - logoSz / 2, { width: logoSz, height: logoSz }).restore(); } catch (e) {}
+    try { doc.save().circle(logoCx, logoCy, logoR).clip().image(logoPath, logoCx - logoR, logoCy - logoR, { width: logoR * 2, height: logoR * 2 }).restore(); } catch (e) {}
   }
-  doc.save().circle(logoCx, logoCy, logoSz / 2).lineWidth(1.5).strokeColor(NAVY).stroke()
-    .circle(logoCx, logoCy, logoSz / 2 - 3).lineWidth(0.6).strokeColor(GOLD).stroke().restore();
+  doc.save().circle(logoCx, logoCy, logoR).lineWidth(1.2).strokeColor(NAVY).stroke().restore();
 
-  // QR sits at the very top, flush with the school logo's top edge and close
-  // to its size — matching the LC layout's logo/QR alignment — instead of
-  // being pushed down below a label+number stack sitting above it, which is
-  // what made it read as visually mis-aligned against the logo.
-  const idBoxW = 130, idBoxX = right - idBoxW;
-  const qrSize = 58, qrX = idBoxX + (idBoxW - qrSize) / 2, qrY = logoCy - logoSz / 2;
+  const idBoxW = 115, idBoxX = right - idBoxW;
+  const qrSize = 56, qrX = idBoxX + (idBoxW - qrSize) / 2, qrY = logoCy - logoR;
   if (qrBuffer) {
     try { doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize }); } catch (e) {}
   }
-  const idPillY = qrY + qrSize + 6;
-  doc.save().roundedRect(idBoxX, idPillY, idBoxW, 14, 3).fillColor(NAVY).fill().restore();
-  doc.fillColor('#fff').font('Helvetica-Bold').fontSize(7)
-    .text('CERTIFICATE ID', idBoxX, idPillY + 4, { width: idBoxW, align: 'center', lineBreak: false });
-  let idSz = 11;
+  const certIdLabelY = qrY + qrSize + 6;
+  doc.font('Helvetica-Bold').fontSize(6.5).fillColor(muted)
+    .text('CERTIFICATE ID', idBoxX, certIdLabelY, { width: idBoxW, align: 'center', lineBreak: false });
+  let idSz = 10;
   doc.font('Helvetica-Bold');
   while (idSz > 6.5 && doc.fontSize(idSz).widthOfString(safe(certificate.serial_number, '-')) > idBoxW - 6) idSz -= 0.5;
-  doc.fontSize(idSz).fillColor('#D6272B')
-    .text(safe(certificate.serial_number, '-'), idBoxX, idPillY + 17, { width: idBoxW, align: 'center', lineBreak: false });
-  // Bottom of this whole right-hand column (QR + pill + serial number) —
-  // used below to keep the ID info table clear of it regardless of layout.
-  const idBoxBottomY = idPillY + 14 + 20;
+  doc.fontSize(idSz).fillColor(NAVY)
+    .text(safe(certificate.serial_number, '-'), idBoxX, certIdLabelY + 9, { width: idBoxW, align: 'center', lineBreak: false });
+  const rightColBottomY = certIdLabelY + 9 + idSz + 4;
 
-  const textX = logoCx + logoSz / 2 + 16;
+  const textX = logoCx + logoR + 16;
   const textW = idBoxX - 16 - textX;
-  // Sanstha name is a small, optional line above the board name — pushes
-  // everything below it down by the same fixed amount so it never overlaps.
-  const sanshaOffset = school.sanstha_name ? 11 : 0;
-  const boardY = 38 + sanshaOffset;
-  // fitCenteredText (shrink-font-then-ellipsis) instead of a plain .text()
-  // with {lineBreak:false, ellipsis:true} — this column got much narrower
-  // when Bonafide switched to portrait, and plain ellipsis handling doesn't
-  // reliably stop pdfkit from wrapping (and overlapping the line below) once
-  // text substantially exceeds the box at a fixed font size.
+  let y = 40;
   if (school.sanstha_name) {
-    fitCenteredText(doc, safe(school.sanstha_name).toUpperCase(), textX, 38, textW, 8, muted, true, 6);
+    y = fitCenteredText(doc, safe(school.sanstha_name).toUpperCase(), textX, y, textW, 8.5, muted, false, 6.5) + 2;
   }
-  fitCenteredText(doc, safe(school.board_name, 'Maharashtra State Education Board').toUpperCase(), textX, boardY, textW, 13, NAVY, true, 8);
-  drawFlourish(doc, textX + 2, boardY + 6, 8, false);
-  drawFlourish(doc, textX + textW - 2, boardY + 6, 8, true);
-  // School name is the line most likely to wrap to 2 lines in this narrower
-  // (portrait) column — chain off its real returned height instead of a
-  // fixed offset, so the Taluka/U-DISE lines below can never overlap it
-  // regardless of how long the name is or where it happens to wrap.
-  let afterNameY = fitCenteredText(doc, safe(school.name, 'SCHOOL NAME').toUpperCase(), textX, boardY + 18, textW, 17, NAVY, true, 9) + 2;
-  afterNameY = fitCenteredText(doc, `Taluka: ${safe(school.taluka, '-')}, District: ${safe(school.district, '-')}, Maharashtra`,
-    textX, afterNameY, textW, 8.5, black, false, 6) + 1;
-  afterNameY = fitCenteredText(doc, `U-DISE: ${safe(school.udise_code, '-')}   |   RECOG NO: ${safe(school.recog_no, '-')}`,
-    textX, afterNameY, textW, 7.5, muted, false, 6);
+  if (school.board_name) {
+    y = fitCenteredText(doc, safe(school.board_name).toUpperCase(), textX, y, textW, 9.5, muted, false, 7) + 2;
+  }
+  // School name is the line most likely to wrap to 2 lines in this narrow
+  // centre column — chain off its real returned height instead of a fixed
+  // offset, so the address line below it can never overlap regardless of
+  // how long the name is or where it wraps.
+  y = fitCenteredText(doc, safe(school.name, 'SCHOOL NAME').toUpperCase(), textX, y, textW, 16, NAVY, true, 10) + 3;
+  y = fitCenteredText(doc, `Taluka: ${safe(school.taluka, '-')}, District: ${safe(school.district, '-')}`,
+    textX, y, textW, 9, black, false, 6.5) + 2;
+  if (school.udise_code || school.recog_no) {
+    y = fitCenteredText(doc, `U-DISE: ${safe(school.udise_code, '-')}   |   RECOG NO: ${safe(school.recog_no, '-')}`,
+      textX, y, textW, 7.5, muted, false, 6);
+  }
 
   // School-configured header text (School Settings > Certificate Header) —
-  // additive, empty by default. Chained off afterNameY (not a fixed offset)
-  // for the same reason as the lines above — must stay clear of the school
-  // name even when it wraps to 2 lines.
+  // additive, empty by default. Chained off the address block above.
   const bonafideHeaderText = stripHtmlToText(school.cert_header).replace(/\n+/g, ' ');
-  let headerBottomY = afterNameY;
   if (bonafideHeaderText) {
-    headerBottomY = fitCenteredText(doc, bonafideHeaderText, textX, afterNameY + 1, textW, 7, muted, false, 5.5);
+    y = fitCenteredText(doc, bonafideHeaderText, textX, y + 1, textW, 7, muted, false, 5.5);
   }
 
-  // ── Student ID info table (bordered, 2 columns x 3 rows) ─────────────────
-  // Started below whichever header column is taller — the left text block
-  // (which can wrap to 2 lines on a long school name) or the right QR/ID
-  // column — instead of a fixed Y, so it can never overlap either.
-  const idTableY = Math.max(headerBottomY + 8, idBoxBottomY);
-  const idTableBottomY = drawIdInfoTable(doc, left, idTableY, contentW, [
-    ['General Register No.', sentenceCase(student.register_number, '-'), 'Student Aadhar No', maskAadhaar(student.aadhaar)],
-    ['Student Saral Id', sentenceCase(student.serial_id, '-'), 'Student Apar Id', sentenceCase(student.apaar_id, '-')],
-    ['Student PEN ID', sentenceCase(student.pen_no, '-'), 'LOC No.', sentenceCase(student.loc_no, '-')],
-  ]);
+  // Below whichever header column is taller — text centre or QR/ID right —
+  // instead of a fixed Y, so a long school name or address can never
+  // overlap the divider that follows.
+  const headerBottomY = Math.max(y, rightColBottomY, logoCy + logoR);
+  const dividerY = headerBottomY + 10;
+  doc.save().moveTo(left, dividerY).lineTo(right, dividerY).lineWidth(0.75).strokeColor(REF_BORDER).stroke().restore();
 
-  // ── Title banner ───────────────────────────────────────────────────────
-  // The "This is to certify that" intro line and the standalone student-name
-  // heading both moved into the paragraph itself (per request: the opening
-  // statement should read as the first words of the description, with the
-  // name bold inline, not as separate elements above it) — freeing this
-  // space for the banner to sit right after the ID table. Chained off the
-  // table's real returned Y instead of a fixed offset, same reasoning as
-  // the header text above.
-  const bannerY = idTableBottomY + 8, bannerH = 22;
-  doc.save().roundedRect(left, bannerY, contentW, bannerH, 5).fillColor(NAVY).fill()
-    .lineWidth(1).strokeColor(GOLD).roundedRect(left, bannerY, contentW, bannerH, 5).stroke()
-    .restore();
+  // ── Title bar ──────────────────────────────────────────────────────────
+  const bannerY = dividerY + 14, bannerH = 26;
+  doc.save().roundedRect(left, bannerY, contentW, bannerH, 3).fillColor(NAVY).fill().restore();
   doc.fillColor('#fff').font('Helvetica-Bold').fontSize(14)
-    .text('BONAFIDE CERTIFICATE', left, bannerY + 6, { width: contentW, align: 'center', lineBreak: false });
+    .text('BONAFIDE CERTIFICATE', left, bannerY + 7, { width: contentW, align: 'center', lineBreak: false });
 
-  // ── Body paragraph (centered, shrink-to-fit above the footer strip) ──────
+  // ── Student reference numbers — plain label:value table ───────────────────
+  const afterBannerY = bannerY + bannerH + 16;
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor(NAVY)
+    .text('STUDENT REFERENCE NUMBERS', left, afterBannerY, { width: contentW, lineBreak: false });
+  const tableY = afterBannerY + 14;
+  const tableBottomY = drawLabelValueRows(doc, left, tableY, contentW, [
+    ['General Register No.', sentenceCase(student.register_number, '-')],
+    ['Student Aadhaar No.', maskAadhaar(student.aadhaar)],
+    ['Student SARAL ID', sentenceCase(student.serial_id, '-')],
+    ['Student APAAR ID', sentenceCase(student.apaar_id, '-')],
+    ['Student PEN No.', sentenceCase(student.pen_no, '-')],
+    ['LOC No.', sentenceCase(student.loc_no, '-')],
+  ], REF_BORDER);
+
+  // ── Body paragraph — fully justified, not centered ────────────────────────
   const heShe = student.gender === 'Male' ? 'He' : student.gender === 'Female' ? 'She' : 'He/She';
   const hisHer = student.gender === 'Male' ? 'His' : student.gender === 'Female' ? 'Her' : 'His/Her';
   const birthPlace = [
@@ -1195,83 +1207,86 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
     paraSegments.push({ text: '.' });
   }
 
-  // Chained off the banner's real bottom (itself chained off the ID table)
-  // instead of a fixed offset, for the same overlap-safety reason as above.
-  const bodyY = bannerY + bannerH + 10;
-  const photoResW = 66, photoResX = right - photoResW - 4;
-  const bodyW = contentW - photoResW - 16;
-  const bodyBottom = 360;
-  drawCenteredBoldParagraph(doc, left, bodyY, bodyW, bodyBottom - bodyY, paraSegments, 10.5, black, 2);
+  const bodyY = tableBottomY + 18;
+  const bodyBottomY = drawJustifiedBoldParagraph(doc, left, bodyY, contentW, 150, paraSegments, 10.5, black, 3);
 
-  // ── Student photo + digitally-signed badge, right of the body text ───────
-  const photoResH = 78, photoResY = bodyY;
-  doc.save().roundedRect(photoResX, photoResY, photoResW, photoResH, 3).lineWidth(1).strokeColor(GOLD).stroke().restore();
+  // ── Highlighted key-facts panel + student photo ───────────────────────────
+  // A dedicated shaded area for the certificate's most load-bearing facts
+  // (name, class, academic year), separate from the plain reference table
+  // above and the narrative paragraph — chained off the paragraph's real
+  // bottom, never a fixed offset, for the same overlap-safety reason as
+  // everywhere else in this layout.
+  const panelY = bodyBottomY + 16;
+  const photoW = 64, photoH = 84, panelH = photoH;
+  const panelW = contentW - photoW - 16;
+
+  doc.save().roundedRect(left, panelY, panelW, panelH, 4).fillColor(HILITE_BG).fill().restore();
+  doc.save().rect(left, panelY, 4, panelH).fillColor(NAVY).fill().restore();
+
+  const pcx = left + 18, pcw = panelW - 30;
+  let py = panelY + 12;
+  doc.font('Helvetica-Bold').fontSize(7.5).fillColor(muted)
+    .text('STUDENT', pcx, py, { width: pcw, lineBreak: false });
+  py += 11;
+  fitSingleLineText(doc, safe(student.full_name, '-').toUpperCase(), pcx, py, pcw, 13, NAVY, true, 9);
+  py += 17;
+
+  const half = pcw / 2;
+  doc.font('Helvetica-Bold').fontSize(7.5).fillColor(muted).text('CLASS', pcx, py, { width: half - 10, lineBreak: false });
+  doc.font('Helvetica-Bold').fontSize(7.5).fillColor(muted).text('ACADEMIC YEAR', pcx + half, py, { width: half - 10, lineBreak: false });
+  py += 11;
+  fitSingleLineText(doc, standardValue, pcx, py, half - 10, 10.5, black, true, 8);
+  fitSingleLineText(doc, academicYearStr, pcx + half, py, half - 10, 10.5, black, true, 8);
+
+  const photoX = right - photoW;
+  doc.save().rect(photoX, panelY, photoW, photoH).lineWidth(1).strokeColor(NAVY).stroke().restore();
   if (canDraw(photoPath)) {
-    try { doc.image(photoPath, photoResX + 1, photoResY + 1, { width: photoResW - 2, height: photoResH - 2 }); } catch (e) {}
+    try { doc.image(photoPath, photoX + 1, panelY + 1, { width: photoW - 2, height: photoH - 2 }); } catch (e) {}
   } else {
     doc.fillColor(muted).font('Helvetica').fontSize(7)
-      .text('PHOTO', photoResX, photoResY + photoResH / 2 - 4, { width: photoResW, align: 'center', lineBreak: false });
+      .text('PHOTO', photoX, panelY + photoH / 2 - 4, { width: photoW, align: 'center', lineBreak: false });
   }
-  const badgeY = photoResY + photoResH + 6, badgeH = 14;
-  doc.save().roundedRect(photoResX, badgeY, photoResW, badgeH, 6).fillColor('#ECFDF5').fill()
-    .lineWidth(0.6).strokeColor('#10B981').roundedRect(photoResX, badgeY, photoResW, badgeH, 6).stroke().restore();
-  drawCheckGlyph(doc, photoResX + 10, badgeY + badgeH / 2, 7, '#10B981');
-  doc.fillColor('#047857').font('Helvetica-Bold').fontSize(6.2)
-    .text('QR Verified', photoResX + 16, badgeY + 4, { width: photoResW - 18, lineBreak: false });
 
-  // ── Footer strip: Date of Issue | Place | Verified ───────────────────────
-  const stripY = 370, stripH = 44, stripSeg = contentW / 3;
-  doc.save().moveTo(left, stripY - 8).lineTo(right, stripY - 8).lineWidth(0.6).strokeColor(GOLD).stroke().restore();
-
-  doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(7.5)
-    .text('DATE OF ISSUE', left, stripY, { width: stripSeg, align: 'center', lineBreak: false });
-  doc.fillColor(black).font('Helvetica').fontSize(9)
-    .text(fmtDate(new Date()), left, stripY + 12, { width: stripSeg, align: 'center', lineBreak: false });
-
-  doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(7.5)
-    .text('PLACE', left + stripSeg, stripY, { width: stripSeg, align: 'center', lineBreak: false });
-  doc.fillColor(black).font('Helvetica').fontSize(9)
+  // ── Footer: Date of Issue / Place, then Class Teacher / Principal signatures ──
+  const footerY = panelY + panelH + 24;
+  const footerColW = contentW / 2;
+  doc.font('Helvetica-Bold').fontSize(8).fillColor(NAVY).text('DATE OF ISSUE', left, footerY, { lineBreak: false });
+  doc.font('Helvetica').fontSize(9.5).fillColor(black).text(fmtDate(new Date()), left, footerY + 11, { lineBreak: false });
+  doc.font('Helvetica-Bold').fontSize(8).fillColor(NAVY).text('PLACE', left + footerColW, footerY, { lineBreak: false });
+  doc.font('Helvetica').fontSize(9.5).fillColor(black)
     .text(`${safe(school.city || school.village || school.taluka, '-')}, Dist. ${safe(school.district, '-')}`,
-      left + stripSeg, stripY + 12, { width: stripSeg, align: 'center', lineBreak: false, ellipsis: true });
-
-  const verX = left + stripSeg * 2;
-  drawLockGlyph(doc, verX + stripSeg / 2, stripY - 2, 11, NAVY);
-  doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(7.5)
-    .text('VERIFIED', verX, stripY + 12, { width: stripSeg, align: 'center', lineBreak: false });
-  doc.fillColor(muted).font('Helvetica').fontSize(6)
-    .text('Scan the QR code above to verify this certificate is genuine.',
-      verX + 6, stripY + 23, { width: stripSeg - 12, align: 'center', lineGap: 1 });
+      left + footerColW, footerY + 11, { width: footerColW - 4, lineBreak: false, ellipsis: true });
 
   // School-configured footer text (School Settings > Certificate Footer) —
-  // additive, empty by default. Single line in the gap above the signature
-  // row rather than reflowing this fixed-coordinate layout.
+  // additive, empty by default.
+  let afterDateRowY = footerY + 32;
   const bonafideFooterText = stripHtmlToText(school.cert_footer).replace(/\n+/g, ' ');
   if (bonafideFooterText) {
-    doc.fillColor(muted).font('Helvetica-Oblique').fontSize(7)
-      .text(bonafideFooterText, left, 410, { width: contentW, align: 'center', lineBreak: false, ellipsis: true });
+    doc.font('Helvetica-Oblique').fontSize(7.5).fillColor(muted)
+      .text(bonafideFooterText, left, afterDateRowY, { width: contentW, align: 'center', lineBreak: false, ellipsis: true });
+    afterDateRowY += 14;
   }
 
-  // ── Signature row: Class Teacher | seal | Principal ──────────────────────
-  // Signature images are intentionally NOT drawn here — Bonafide (like LC)
-  // is meant to be hand-signed on the printed hard copy; only the ID Card
-  // carries a printed/uploaded signature. The stamp/seal is unaffected.
-  const sigY = 430, lineY = sigY + 32;
+  // Signature images are intentionally NOT drawn here — Bonafide is meant to
+  // be hand-signed on the printed hard copy; only the ID Card carries a
+  // printed/uploaded signature. The stamp/seal (a school's own upload, not
+  // an invented government seal) is unaffected.
+  const sigLineY = afterDateRowY + 40;
   const sigColW = contentW / 3;
 
-  doc.save().moveTo(left + 15, lineY).lineTo(left + sigColW - 25, lineY).lineWidth(0.7).strokeColor('#999').stroke().restore();
-  doc.fillColor(black).font('Helvetica-Bold').fontSize(8)
-    .text('Class Teacher', left + 15, lineY + 4, { width: sigColW - 40, align: 'center', lineBreak: false });
+  doc.save().moveTo(left + 10, sigLineY).lineTo(left + sigColW - 15, sigLineY).lineWidth(0.8).strokeColor('#94A3B8').stroke().restore();
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor(black)
+    .text('Class Teacher', left + 10, sigLineY + 4, { width: sigColW - 25, align: 'center', lineBreak: false });
 
-  const sealCx = W / 2, sealCy = lineY - 10, sealR = 26;
+  const sealCx = W / 2, sealCy = sigLineY - 14, sealR = 20;
   if (canDraw(stampPath)) {
     try { doc.save().circle(sealCx, sealCy, sealR).clip().image(stampPath, sealCx - sealR, sealCy - sealR, { width: sealR * 2, height: sealR * 2 }).restore(); } catch (e) {}
   }
-  doc.save().circle(sealCx, sealCy, sealR).lineWidth(1.2).strokeColor(NAVY).stroke()
-    .circle(sealCx, sealCy, sealR - 4).lineWidth(0.6).strokeColor(GOLD).stroke().restore();
+  doc.save().circle(sealCx, sealCy, sealR).lineWidth(1).strokeColor(REF_BORDER).stroke().restore();
 
-  doc.save().moveTo(right - sigColW + 25, lineY).lineTo(right - 15, lineY).lineWidth(0.7).strokeColor('#999').stroke().restore();
-  doc.fillColor(black).font('Helvetica-Bold').fontSize(8)
-    .text(safe(school.bonafide_signature_label, 'Principal'), right - sigColW + 25, lineY + 4, { width: sigColW - 40, align: 'center', lineBreak: false });
+  doc.save().moveTo(right - sigColW + 15, sigLineY).lineTo(right - 10, sigLineY).lineWidth(0.8).strokeColor('#94A3B8').stroke().restore();
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor(black)
+    .text(safe(school.bonafide_signature_label, 'Principal'), right - sigColW + 15, sigLineY + 4, { width: sigColW - 25, align: 'center', lineBreak: false });
 }
 
 async function generateBonafidePdf({ school, student, certificate, outputPath, photoPath, logoPath, purpose, signaturePath, stampPath }) {
@@ -1296,11 +1311,17 @@ async function generateBonafidePdf({ school, student, certificate, outputPath, p
       const stream = fs.createWriteStream(outputPath);
       doc.pipe(stream);
 
+      // No shared default frame image fallback here (there used to be one,
+      // BONAFIDE_FRAME_PATH) — that silently overrode this whole redesign
+      // with an old ornamental PNG background for every school that hasn't
+      // uploaded their own custom Bonafide template, which is most of them.
+      // Only a school's own real upload takes over the layout now; every
+      // other school gets the new programmatic navy/white/light-grey design.
       const ctx = {
         school, student, certificate, purpose,
         photoPath: safePhotoPath, logoPath: safeLogoPath,
         signaturePath: safeSignaturePath, stampPath: safeStampPath,
-        templatePath: templatePath || BONAFIDE_FRAME_PATH,
+        templatePath,
       };
 
       renderSingleBonafide(doc, ctx, qrBuffer);
