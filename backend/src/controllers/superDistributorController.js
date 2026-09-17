@@ -441,6 +441,88 @@ async function getDashboard(req, res) {
   }
 }
 
+// GET /api/super-distributors/me/commission
+// A Super Distributor's commission is a flat rate (their own commission_rate,
+// stored on their own row in the distributors table — see the dashboard's
+// flatCommission comment above) applied to the price of every certificate
+// issued under their hierarchy, NOT the commission_ledger split used for
+// Distributors — SDs have no per-certificate ledger amount of their own to
+// read here. This mirrors distributorController.getMyCommission's response
+// shape (monthly + a per-entity breakdown) so the two Commission pages can
+// share the same frontend structure.
+async function getMyCommission(req, res) {
+  try {
+    const sdId = req.user.id;
+    const [[sdProfile]] = await pool.query(
+      `SELECT commission_rate FROM distributors WHERE user_id = ? AND super_distributor_id IS NULL AND deleted_at IS NULL LIMIT 1`,
+      [sdId]
+    );
+    const flatRate = sdProfile ? Number(sdProfile.commission_rate) || 0 : 0;
+
+    const [[totals]] = await pool.query(
+      `SELECT COALESCE(SUM(c.price),0) as total_revenue, COUNT(c.id) as total_certificates
+       FROM certificates c
+       JOIN schools s ON s.id = c.school_id
+       LEFT JOIN distributors d ON d.id = s.distributor_id
+       WHERE s.deleted_at IS NULL AND (s.super_distributor_id = ? OR d.super_distributor_id = ?)`,
+      [sdId, sdId]
+    );
+    const totalRevenue = Number(totals.total_revenue);
+    const totalCertificates = Number(totals.total_certificates);
+
+    const [monthlyRows] = await pool.query(
+      `SELECT ${monthExpr('c.created_at')} as month, COALESCE(SUM(c.price),0) as revenue, COUNT(c.id) as certificate_count
+       FROM certificates c
+       JOIN schools s ON s.id = c.school_id
+       LEFT JOIN distributors d ON d.id = s.distributor_id
+       WHERE s.deleted_at IS NULL AND (s.super_distributor_id = ? OR d.super_distributor_id = ?)
+       GROUP BY month ORDER BY month DESC LIMIT 12`,
+      [sdId, sdId]
+    );
+    const monthly = monthlyRows.map(row => ({
+      month: row.month,
+      revenue: Number(row.revenue),
+      certificateCount: Number(row.certificate_count),
+      commission: Number((Number(row.revenue) * flatRate / 100).toFixed(2)),
+    }));
+
+    // Grouped by the distributor who owns the school (LEFT JOIN, not the
+    // commission_ledger INNER JOIN the dashboard's ledger-based breakdown
+    // uses) so schools assigned directly to this SD — with no distributor —
+    // still show up, labeled "Direct", instead of being silently dropped.
+    const [perDistributorRows] = await pool.query(
+      `SELECT d.id as distributor_id, u.name as distributor_name,
+              COALESCE(SUM(c.price),0) as revenue, COUNT(c.id) as certificate_count
+       FROM schools s
+       LEFT JOIN certificates c ON c.school_id = s.id
+       LEFT JOIN distributors d ON d.id = s.distributor_id
+       LEFT JOIN users u ON u.id = d.user_id
+       WHERE s.deleted_at IS NULL AND (s.super_distributor_id = ? OR d.super_distributor_id = ?)
+       GROUP BY d.id, u.name ORDER BY revenue DESC`,
+      [sdId, sdId]
+    );
+    const perDistributor = perDistributorRows.map(row => ({
+      distributorId: row.distributor_id,
+      distributorName: row.distributor_name || 'Direct',
+      revenue: Number(row.revenue),
+      certificateCount: Number(row.certificate_count),
+      commission: Number((Number(row.revenue) * flatRate / 100).toFixed(2)),
+    }));
+
+    res.json({
+      commissionRate: flatRate,
+      totalRevenue,
+      totalCertificates,
+      totalCommission: Number((totalRevenue * flatRate / 100).toFixed(2)),
+      monthly,
+      perDistributor,
+    });
+  } catch (err) {
+    console.error('SD getMyCommission error:', err.message);
+    res.status(500).json({ error: 'Server error calculating commission' });
+  }
+}
+
 // GET /api/super-distributors/:id (superAdmin) — full profile + commission
 // earned till date, for the Employee Detail page.
 async function getSuperDistributorDetail(req, res) {
@@ -817,7 +899,7 @@ module.exports = {
   listSuperDistributors, createSuperDistributor, updateSuperDistributorByAdmin, deleteSuperDistributor,
   uploadSuperDistributorAvatarByAdmin, getSuperDistributorDetail,
   // SD own
-  getMyProfile, updateMyProfile, uploadMyAvatar, changeMyPassword, getDashboard,
+  getMyProfile, updateMyProfile, uploadMyAvatar, changeMyPassword, getDashboard, getMyCommission,
   listMyDistributors, createMyDistributor, getMyDistributor, updateMyDistributor, deleteMyDistributor,
   uploadMyDistributorAvatar,
   listMySchools, addMySchool, updateMySchool, deleteMySchool

@@ -42,6 +42,7 @@ import SdSchools from './pages/SdSchools';
 import SdSchoolForm from './pages/SdSchoolForm';
 import SdDistributors from './pages/SdDistributors';
 import SdDistributorDetail from './pages/SdDistributorDetail';
+import SdCommission from './pages/SdCommission';
 import SdSettings from './pages/SdSettings';
 import SdCampRequests from './pages/SdCampRequests';
 import SdIdCardRequests from './pages/SdIdCardRequests';
@@ -118,6 +119,7 @@ export default function App() {
             <Route path="/sd-schools/:id/edit" element={<ProtectedRoute role="superDistributor"><SdSchoolForm /></ProtectedRoute>} />
             <Route path="/sd-distributors" element={<ProtectedRoute role="superDistributor"><SdDistributors /></ProtectedRoute>} />
             <Route path="/sd-distributors/:id" element={<ProtectedRoute role="superDistributor"><SdDistributorDetail /></ProtectedRoute>} />
+            <Route path="/sd-commission" element={<ProtectedRoute role="superDistributor"><SdCommission /></ProtectedRoute>} />
             <Route path="/sd-settings" element={<ProtectedRoute role="superDistributor"><SdSettings /></ProtectedRoute>} />
             <Route path="/sd-camp-requests" element={<ProtectedRoute role="superDistributor"><SdCampRequests /></ProtectedRoute>} />
             <Route path="/sd-id-card-requests" element={<ProtectedRoute role="superDistributor"><SdIdCardRequests /></ProtectedRoute>} />

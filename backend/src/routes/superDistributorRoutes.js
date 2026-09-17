@@ -18,6 +18,7 @@ router.put('/me/password', authenticate, requireRole('superDistributor'),
 );
 
 router.get('/me/dashboard', authenticate, requireRole('superDistributor'), c.getDashboard);
+router.get('/me/commission', authenticate, requireRole('superDistributor'), c.getMyCommission);
 
 // Distributor management under SD
 router.get('/me/distributors',     authenticate, requireRole('superDistributor'), c.listMyDistributors);

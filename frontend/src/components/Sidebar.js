@@ -72,7 +72,8 @@ const NAV_CONFIG = {
       { label: 'MAIN', items: [
         { to: '/sd-dashboard',    icon: 'fa-tachometer-alt', label: 'Dashboard' },
         { to: '/sd-schools',      icon: 'fa-school',         label: 'Schools' },
-        { to: '/sd-distributors', icon: 'fa-users',          label: 'Distributors' }
+        { to: '/sd-distributors', icon: 'fa-users',          label: 'Distributors' },
+        { to: '/sd-commission',   icon: 'fa-rupee-sign',     label: 'Commission' }
       ]},
       { label: 'CAMPS & ID CARDS', items: [
         { to: '/sd-camp-requests',    icon: 'fa-campground', label: 'Camp Requests' },
