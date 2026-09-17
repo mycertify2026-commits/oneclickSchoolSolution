@@ -4,7 +4,7 @@ const { pool, monthExpr } = require('../config/db');
 const { createAndSendPasswordToken } = require('./authController');
 const { createNotification } = require('./notificationController');
 const { logAudit } = require('../utils/audit');
-const { sendDistributorCreatedEmail } = require('../utils/email');
+const { sendDistributorCreatedEmail, sendSchoolAssignedEmail } = require('../utils/email');
 const { sendExport } = require('../utils/importExport');
 const { stripSchoolBlobFields } = require('../utils/stripBlobFields');
 
@@ -105,13 +105,52 @@ async function createDistributor(req, res) {
   }
 }
 
+// PUT /api/schools/:id/assign-distributor (superAdmin) — reassigns a
+// school's Distributor and/or Super Distributor independently (either can
+// be cleared to null for a direct/self assignment). Whichever party is
+// newly set (changed from what it was before) gets an in-app notification
+// + email so they know to look for the school in their own panel; the
+// previously assigned party needs no notification — the school simply no
+// longer matches their list query (distributor_id / super_distributor_id
+// filters), so it disappears from their panel automatically.
 async function assignDistributor(req, res) {
   try {
-    const { distributorId } = req.body;
-    await pool.query('UPDATE schools SET distributor_id = ? WHERE id = ?', [distributorId || null, req.params.id]);
+    const { distributorId, superDistributorId } = req.body;
+    const [beforeRows] = await pool.query('SELECT * FROM schools WHERE id = ?', [req.params.id]);
+    const before = beforeRows[0];
+    if (!before) return res.status(404).json({ error: 'School not found' });
+
+    await pool.query(
+      'UPDATE schools SET distributor_id = ?, super_distributor_id = ? WHERE id = ?',
+      [distributorId || null, superDistributorId || null, req.params.id]
+    );
     const [rows] = await pool.query('SELECT * FROM schools WHERE id = ?', [req.params.id]);
-    if (rows.length === 0) return res.status(404).json({ error: 'School not found' });
-    res.json({ school: stripSchoolBlobFields(rows[0]) });
+    const school = rows[0];
+
+    if (distributorId && distributorId !== before.distributor_id) {
+      const [distRows] = await pool.query(
+        `SELECT u.id, u.name, u.email FROM distributors d JOIN users u ON u.id = d.user_id WHERE d.id = ?`,
+        [distributorId]
+      );
+      if (distRows[0]) {
+        await createNotification(distRows[0].id, `You have been assigned a new school: ${school.name}.`);
+        sendSchoolAssignedEmail(distRows[0].email, distRows[0].name, school.name, 'Distributor', school.id)
+          .catch(e => console.error('School-assigned email (distributor) failed:', e.message));
+      }
+    }
+    if (superDistributorId && superDistributorId !== before.super_distributor_id) {
+      const [sdRows] = await pool.query(
+        `SELECT id, name, email FROM users WHERE id = ? AND role = 'superDistributor' AND deleted_at IS NULL`,
+        [superDistributorId]
+      );
+      if (sdRows[0]) {
+        await createNotification(sdRows[0].id, `You have been assigned a new school: ${school.name}.`);
+        sendSchoolAssignedEmail(sdRows[0].email, sdRows[0].name, school.name, 'Super Distributor', school.id)
+          .catch(e => console.error('School-assigned email (super distributor) failed:', e.message));
+      }
+    }
+
+    res.json({ school: stripSchoolBlobFields(school) });
   } catch (err) {
     console.error('assignDistributor error:', err.message);
     res.status(500).json({ error: 'Server error assigning distributor' });

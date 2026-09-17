@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import api from '../api/client';
 
-const BLANK = { name: '', udise_code: '', village: '', city: '', taluka: '', district: '', phone: '', email: '', pin_code: '', medium: 'Marathi', board: 'Maharashtra SSC', distributorId: '', adminName: '', adminMobile: '', adminEmail: '', class_from: '', class_to: '', school_section: '' };
+const BLANK = { name: '', udise_code: '', village: '', city: '', taluka: '', district: '', phone: '', email: '', pin_code: '', medium: 'Marathi', board: 'Maharashtra SSC', distributorId: '', superDistributorId: '', adminName: '', adminMobile: '', adminEmail: '', class_from: '', class_to: '', school_section: '' };
 
 const LOWER_CLASS_OPTIONS = ['Nursery', 'Junior KG', 'Senior KG', '1st Standard', '4th Standard', '5th Standard'];
 const UPPER_CLASS_OPTIONS = ['4th Standard', '5th Standard', '6th Standard', '7th Standard', '8th Standard', '9th Standard', '10th Standard', '11th Standard', '12th Standard'];
@@ -15,6 +15,7 @@ export default function SaSchoolForm() {
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const [distributors, setDistributors] = useState([]);
+  const [superDistributors, setSuperDistributors] = useState([]);
   const [form, setForm] = useState(BLANK);
   const [schoolName, setSchoolName] = useState('');
   const [error, setError] = useState('');
@@ -23,6 +24,7 @@ export default function SaSchoolForm() {
 
   useEffect(() => {
     api.get('/distributors').then(res => setDistributors(res.data.distributors)).catch(() => {});
+    api.get('/super-distributors').then(res => setSuperDistributors(res.data.superDistributors)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -31,6 +33,8 @@ export default function SaSchoolForm() {
       const s = res.data.school;
       const initial = { ...BLANK };
       EDIT_FIELDS.forEach(f => { initial[f] = s[f] || ''; });
+      initial.distributorId = s.distributor_id || '';
+      initial.superDistributorId = s.super_distributor_id || '';
       setForm(initial);
       setSchoolName(s.name);
     }).catch(() => setError('Failed to load school'))
@@ -53,6 +57,13 @@ export default function SaSchoolForm() {
         const payload = {};
         EDIT_FIELDS.forEach(f => { payload[f] = form[f]; });
         await api.put(`/schools/${id}`, payload);
+        // Distributor/Super Distributor assignment has its own endpoint (it
+        // triggers a notification + email to whoever is newly assigned, and
+        // the backend itself no-ops when neither value actually changed).
+        await api.put(`/schools/${id}/assign-distributor`, {
+          distributorId: form.distributorId || null,
+          superDistributorId: form.superDistributorId || null,
+        });
       } else {
         await api.post('/schools', form);
       }
@@ -104,6 +115,27 @@ export default function SaSchoolForm() {
                 <Field label="Medium" value={form.medium} onChange={v => handleChange('medium', v)} />
                 <Field label="Board" value={form.board} onChange={v => handleChange('board', v)} />
               </div>
+              <div className="form-row form-row-2">
+                <div className="form-group">
+                  <label className="form-label">Assign Distributor</label>
+                  <select className="form-select" value={form.distributorId} onChange={e => handleChange('distributorId', e.target.value)}>
+                    <option value="">Self (Super Admin — Direct, no distributor)</option>
+                    {distributors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Assign Super Distributor</label>
+                  <select className="form-select" value={form.superDistributorId} onChange={e => handleChange('superDistributorId', e.target.value)}>
+                    <option value="">None (Super Admin — Direct)</option>
+                    {superDistributors.map(sd => <option key={sd.id} value={sd.id}>{sd.name}</option>)}
+                  </select>
+                </div>
+              </div>
+              {!form.distributorId && !form.superDistributorId && (
+                <div className="form-hint">
+                  No distributor or super distributor assigned — 100% of the platform commission for this school goes to Super Admin.
+                </div>
+              )}
             </>
           ) : (
             <>

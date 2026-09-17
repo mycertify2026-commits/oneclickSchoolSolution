@@ -240,6 +240,15 @@ async function sendSchoolApprovedEmail(to, name, schoolName, loginId, relatedSch
   return sendMail({ to, subject: 'School approved - One Click School Solutions', html, emailType: 'school_approved', relatedSchoolId });
 }
 
+// roleLabel is 'Distributor' or 'Super Distributor' — same template either way.
+async function sendSchoolAssignedEmail(to, name, schoolName, roleLabel, relatedSchoolId) {
+  const html = wrapTemplate(`A school has been assigned to you`, `
+    <p>Hi ${escapeHtml(name)},</p>
+    <p>The Super Admin has assigned <strong>${escapeHtml(schoolName)}</strong> to you as its ${roleLabel}. It will now appear in your Schools list.</p>
+  `);
+  return sendMail({ to, subject: `School assigned: ${schoolName} - One Click School Solutions`, html, emailType: 'school_assigned', relatedSchoolId });
+}
+
 async function sendWalletSubmittedEmail(to, name, { schoolName, amount, utr, date }) {
   const html = wrapTemplate('New wallet recharge request', `
     <p>Hi ${name},</p>
@@ -391,7 +400,7 @@ async function sendNotificationEmail(to, name, { title, message, relatedUserId, 
 
 module.exports = {
   sendMail, sendPasswordSetupEmail, sendPasswordResetEmail, sendWalletTopupEmail,
-  sendDistributorCreatedEmail, sendSchoolApprovedEmail,
+  sendDistributorCreatedEmail, sendSchoolApprovedEmail, sendSchoolAssignedEmail,
   sendSuperDistributorCreatedEmail, sendSchoolWelcomeEmail, sendWelcomeEmail,
   sendWalletSubmittedEmail, sendWalletApprovedEmail, sendWalletRejectedEmail,
   sendQrChangedEmail, sendLowBalanceEmail, sendCertificateGeneratedEmail,

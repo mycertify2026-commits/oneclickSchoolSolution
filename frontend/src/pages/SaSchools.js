@@ -17,12 +17,14 @@ export default function SaSchools() {
   const [schools, setSchools] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1 });
   const [distributors, setDistributors] = useState([]);
+  const [superDistributors, setSuperDistributors] = useState([]);
   const [search, setSearch] = useState('');
   const [districtFilter, setDistrictFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assigningSchool, setAssigningSchool] = useState(null);
   const [assignDistributorId, setAssignDistributorId] = useState('');
+  const [assignSuperDistributorId, setAssignSuperDistributorId] = useState('');
   const navigate = useNavigate();
 
   const load = useCallback(async (page = 1) => {
@@ -34,8 +36,12 @@ export default function SaSchools() {
     const res = await api.get('/distributors');
     setDistributors(res.data.distributors);
   }, []);
+  const loadSuperDistributors = useCallback(async () => {
+    const res = await api.get('/super-distributors');
+    setSuperDistributors(res.data.superDistributors);
+  }, []);
 
-  useEffect(() => { load(1); loadDistributors(); }, [load, loadDistributors]);
+  useEffect(() => { load(1); loadDistributors(); loadSuperDistributors(); }, [load, loadDistributors, loadSuperDistributors]);
 
   async function handleExport() {
     try {
@@ -63,12 +69,16 @@ export default function SaSchools() {
   function openAssignModal(school) {
     setAssigningSchool(school);
     setAssignDistributorId(school.distributor_id || '');
+    setAssignSuperDistributorId(school.super_distributor_id || '');
     setShowAssignModal(true);
   }
 
   async function handleAssignDistributor() {
     try {
-      await api.put(`/schools/${assigningSchool.id}/assign-distributor`, { distributorId: assignDistributorId || null });
+      await api.put(`/schools/${assigningSchool.id}/assign-distributor`, {
+        distributorId: assignDistributorId || null,
+        superDistributorId: assignSuperDistributorId || null,
+      });
       setShowAssignModal(false);
       load(pagination.page);
     } catch (err) {
@@ -136,6 +146,9 @@ export default function SaSchools() {
                     <span style={{ cursor: 'pointer', color: s.distributor_name ? 'inherit' : 'var(--text-light)' }} onClick={() => openAssignModal(s)} title="Click to reassign">
                       {s.distributor_name || 'Unassigned'} <i className="fas fa-pen" style={{ fontSize: 10, marginLeft: 4, opacity: 0.5 }}></i>
                     </span>
+                    {s.super_distributor_name && (
+                      <div style={{ fontSize: 11, color: 'var(--text-light)' }}>SD: {s.super_distributor_name}</div>
+                    )}
                   </td>
                   <td>₹{Number(s.wallet_balance || 0).toLocaleString('en-IN')}</td>
                   <td><StatusBadge status={s.status} /></td>
@@ -174,7 +187,7 @@ export default function SaSchools() {
         <div className="modal-overlay show" style={{ display: 'flex' }} onClick={() => setShowAssignModal(false)}>
           <div className="modal-box modal-sm" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Assign Distributor</h3>
+              <h3>Assign Distributor / Super Distributor</h3>
               <button className="modal-close" onClick={() => setShowAssignModal(false)}>×</button>
             </div>
             <div className="modal-body">
@@ -185,12 +198,22 @@ export default function SaSchools() {
                   <option value="">Self (Super Admin — Direct, no distributor)</option>
                   {distributors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
-                {!assignDistributorId && (
-                  <div className="form-hint" style={{ marginTop: 4 }}>
-                    No distributor assigned — 100% of the platform commission for this school goes to Super Admin.
-                  </div>
-                )}
               </div>
+              <div className="form-group">
+                <label className="form-label">Super Distributor</label>
+                <select className="form-select" value={assignSuperDistributorId} onChange={e => setAssignSuperDistributorId(e.target.value)}>
+                  <option value="">None (Super Admin — Direct)</option>
+                  {superDistributors.map(sd => <option key={sd.id} value={sd.id}>{sd.name}</option>)}
+                </select>
+                <div className="form-hint" style={{ marginTop: 4 }}>
+                  Only used when the assigned Distributor (above) doesn't already report to a Super Distributor, or when no Distributor is assigned at all.
+                </div>
+              </div>
+              {!assignDistributorId && !assignSuperDistributorId && (
+                <div className="form-hint" style={{ marginTop: 4 }}>
+                  No distributor or super distributor assigned — 100% of the platform commission for this school goes to Super Admin.
+                </div>
+              )}
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowAssignModal(false)}>Cancel</button>

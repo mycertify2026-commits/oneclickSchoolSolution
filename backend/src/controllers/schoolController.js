@@ -55,12 +55,14 @@ async function listSchools(req, res) {
     const sortDir = String(req.query.sortDir).toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
     const [rows] = await pool.query(
-      `SELECT s.*, u.name as admin_name, u.email as admin_email, w.balance as wallet_balance, du.name as distributor_name
+      `SELECT s.*, u.name as admin_name, u.email as admin_email, w.balance as wallet_balance,
+              du.name as distributor_name, sdu.name as super_distributor_name
        FROM schools s
        LEFT JOIN users u ON u.id = s.admin_user_id
        LEFT JOIN wallets w ON w.school_id = s.id
        LEFT JOIN distributors d ON d.id = s.distributor_id
        LEFT JOIN users du ON du.id = d.user_id
+       LEFT JOIN users sdu ON sdu.id = s.super_distributor_id
        WHERE s.deleted_at IS NULL
        ORDER BY ${sortBy} ${sortDir} LIMIT ? OFFSET ?`,
       [limit, offset]
@@ -557,7 +559,10 @@ async function listStudentsForSchool(req, res) {
   }
 }
 
-const SCHOOL_EDITABLE_BY_ADMIN_FIELDS = ['name', 'udise_code', 'village', 'city', 'district', 'taluka', 'pin_code', 'phone', 'email', 'medium', 'board'];
+// class_from/class_to/school_section were always sent by the Edit School
+// form but never actually in this whitelist, so Super Admin edits to a
+// school's class range/section silently never saved.
+const SCHOOL_EDITABLE_BY_ADMIN_FIELDS = ['name', 'udise_code', 'village', 'city', 'district', 'taluka', 'pin_code', 'phone', 'email', 'medium', 'board', 'class_from', 'class_to', 'school_section'];
 
 // PUT /api/schools/:id (superAdmin) - full profile edit, unlike updateSchoolStatus which only
 // changes the approval status. Closes the gap where a typo in name/address could
