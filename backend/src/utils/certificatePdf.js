@@ -1078,7 +1078,6 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
   const right = W - 40;
   const contentW = right - left;
   const REF_BORDER = '#CBD5E1';
-  const HILITE_BG = '#F1F5F9';
 
   if (canDraw(templatePath)) {
     try { doc.image(templatePath, 0, 0, { width: W, height: H }); } catch (e) {}
@@ -1210,46 +1209,18 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
   const bodyY = tableBottomY + 18;
   const bodyBottomY = drawJustifiedBoldParagraph(doc, left, bodyY, contentW, 150, paraSegments, 10.5, black, 3);
 
-  // ── Highlighted key-facts panel + student photo ───────────────────────────
-  // A dedicated shaded area for the certificate's most load-bearing facts
-  // (name, class, academic year), separate from the plain reference table
-  // above and the narrative paragraph — chained off the paragraph's real
-  // bottom, never a fixed offset, for the same overlap-safety reason as
-  // everywhere else in this layout.
-  const panelY = bodyBottomY + 16;
-  const photoW = 64, photoH = 84, panelH = photoH;
-  const panelW = contentW - photoW - 16;
-
-  doc.save().roundedRect(left, panelY, panelW, panelH, 4).fillColor(HILITE_BG).fill().restore();
-  doc.save().rect(left, panelY, 4, panelH).fillColor(NAVY).fill().restore();
-
-  const pcx = left + 18, pcw = panelW - 30;
-  let py = panelY + 12;
-  doc.font('Helvetica-Bold').fontSize(7.5).fillColor(muted)
-    .text('STUDENT', pcx, py, { width: pcw, lineBreak: false });
-  py += 11;
-  fitSingleLineText(doc, safe(student.full_name, '-').toUpperCase(), pcx, py, pcw, 13, NAVY, true, 9);
-  py += 17;
-
-  const half = pcw / 2;
-  doc.font('Helvetica-Bold').fontSize(7.5).fillColor(muted).text('CLASS', pcx, py, { width: half - 10, lineBreak: false });
-  doc.font('Helvetica-Bold').fontSize(7.5).fillColor(muted).text('ACADEMIC YEAR', pcx + half, py, { width: half - 10, lineBreak: false });
-  py += 11;
-  fitSingleLineText(doc, standardValue, pcx, py, half - 10, 10.5, black, true, 8);
-  fitSingleLineText(doc, academicYearStr, pcx + half, py, half - 10, 10.5, black, true, 8);
-
+  // ── Footer: Date of Issue / Place (left) + student photo (right) in one
+  // row, then Class Teacher / Principal signatures below — chained off the
+  // paragraph's real bottom, never a fixed offset, same reasoning as
+  // everywhere else in this layout. The name/class/year highlight panel
+  // that used to sit here was dropped — that information is already in the
+  // paragraph above, so it was pure repetition.
+  const footerY = bodyBottomY + 20;
+  const photoW = 64, photoH = 84;
   const photoX = right - photoW;
-  doc.save().rect(photoX, panelY, photoW, photoH).lineWidth(1).strokeColor(NAVY).stroke().restore();
-  if (canDraw(photoPath)) {
-    try { doc.image(photoPath, photoX + 1, panelY + 1, { width: photoW - 2, height: photoH - 2 }); } catch (e) {}
-  } else {
-    doc.fillColor(muted).font('Helvetica').fontSize(7)
-      .text('PHOTO', photoX, panelY + photoH / 2 - 4, { width: photoW, align: 'center', lineBreak: false });
-  }
+  const dateAreaW = contentW - photoW - 16;
+  const footerColW = dateAreaW / 2;
 
-  // ── Footer: Date of Issue / Place, then Class Teacher / Principal signatures ──
-  const footerY = panelY + panelH + 24;
-  const footerColW = contentW / 2;
   doc.font('Helvetica-Bold').fontSize(8).fillColor(NAVY).text('DATE OF ISSUE', left, footerY, { lineBreak: false });
   doc.font('Helvetica').fontSize(9.5).fillColor(black).text(fmtDate(new Date()), left, footerY + 11, { lineBreak: false });
   doc.font('Helvetica-Bold').fontSize(8).fillColor(NAVY).text('PLACE', left + footerColW, footerY, { lineBreak: false });
@@ -1257,9 +1228,17 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
     .text(`${safe(school.city || school.village || school.taluka, '-')}, Dist. ${safe(school.district, '-')}`,
       left + footerColW, footerY + 11, { width: footerColW - 4, lineBreak: false, ellipsis: true });
 
+  doc.save().rect(photoX, footerY, photoW, photoH).lineWidth(1).strokeColor(NAVY).stroke().restore();
+  if (canDraw(photoPath)) {
+    try { doc.image(photoPath, photoX + 1, footerY + 1, { width: photoW - 2, height: photoH - 2 }); } catch (e) {}
+  } else {
+    doc.fillColor(muted).font('Helvetica').fontSize(7)
+      .text('PHOTO', photoX, footerY + photoH / 2 - 4, { width: photoW, align: 'center', lineBreak: false });
+  }
+
   // School-configured footer text (School Settings > Certificate Footer) —
   // additive, empty by default.
-  let afterDateRowY = footerY + 32;
+  let afterDateRowY = footerY + photoH + 16;
   const bonafideFooterText = stripHtmlToText(school.cert_footer).replace(/\n+/g, ' ');
   if (bonafideFooterText) {
     doc.font('Helvetica-Oblique').fontSize(7.5).fillColor(muted)
