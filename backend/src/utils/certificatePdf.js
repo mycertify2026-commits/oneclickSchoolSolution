@@ -698,43 +698,58 @@ async function generateLcPdf({
       y = drawPanelTitleBar(doc, 46, y, contentWidth, 'Student Details');
       y = drawSchoolDetailsTable(doc, 46, y, contentWidth, rows);
       drawPanelBorder(doc, 46, panel2Y, contentWidth, y);
-      y += 12;
 
       // ── School-configured footer text (School Settings > Certificate
       // Footer) — additive, empty by default.
       const footerText = stripHtmlToText(school.cert_footer).replace(/\n+/g, ' ');
       if (footerText) {
-        y = fitCenteredText(doc, footerText, 46, y, contentWidth, 8, TEXT, false, 6) + 6;
+        y = fitCenteredText(doc, footerText, 46, y + 10, contentWidth, 8, TEXT, false, 6) + 4;
       }
 
+      // Minimum space the Date/Place + signature block needs no matter what:
+      // gap after the tables, the Date/Place lines, a gap down to the
+      // signature line, then the line plus its two label lines below it.
+      const minGapAfterPanels = 14, dateBlockH = 28, minGapToSig = 44, sigTailH = 30;
+      const minFooterH = minGapAfterPanels + dateBlockH + minGapToSig + sigTailH;
+
       // An unusually tall combination above (long sanstha/board/school names,
-      // a full custom header/footer, every optional field filled) can leave
-      // too little room for the whole Date/Place + signatures + note block.
+      // a full custom header/footer, every optional field filled, photo +
+      // Duplicate marker) can leave too little room for this whole block.
       // Rather than let pdfkit auto-paginate mid-block (splitting it across
       // pages in a broken-looking way), move the whole block onto a fresh,
       // still-bordered page together.
-      const footerBlockH = 105;
-      if (y + footerBlockH > doc.page.height - 30) {
+      if (y + minFooterH > doc.page.height - 30) {
         doc.addPage();
         drawLcPageBorder();
         y = 40;
       }
 
+      // On a shorter certificate there's real leftover space between the
+      // tables and the note (anchored near the physical bottom margin) —
+      // spread part of it into these two gaps instead of clustering
+      // Date/Place tight against the tables and leaving all that space
+      // empty just above the note (the "cluttered on top, empty at the
+      // bottom" complaint). Capped so a near-empty page doesn't stretch the
+      // footer into something silly — the rest just stays as bottom margin.
+      const noteTargetY = doc.page.height - 45;
+      const slack = Math.max(0, Math.min(90, (noteTargetY - 18) - y - minFooterH));
+      const gapToSig = minGapToSig + slack * 0.7;
+      y += minGapAfterPanels + slack * 0.3;
+
       // ── Footer: Date/Place (left) | seal (centre) | Checked-by / Head
-      // Master signature lines — chained off the panels above instead of a
-      // fixed offset, since the header/photo column height varies.
+      // Master signature lines ──
       doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT).text(`Date  : ${leavingDate || fmtDate(new Date())}`, 46, y);
       doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT).text(`Place : ${sentenceCase(school.city || school.village || school.taluka)}`, 46, y + 14);
 
-      const sigLineY = y + 52;
+      const sigLineY = y + dateBlockH + gapToSig;
       const C1 = 46, C1W = contentWidth * 0.42;
       const C3 = 46 + contentWidth * 0.58, C3W = contentWidth * 0.42;
 
-      // School stamp, centred between the two signature lines. The
+      // School stamp, sitting just above the signature line. The
       // Principal's signature itself is intentionally NOT drawn here — LC
       // and Bonafide are meant to be hand-signed on the printed hard copy;
       // only the ID Card carries a printed/uploaded signature.
-      drawStampIfAvailable(doc, safeStampPath, 46 + contentWidth / 2 - 22, sigLineY - 48, 44);
+      drawStampIfAvailable(doc, safeStampPath, 46 + contentWidth / 2 - 22, sigLineY - 44, 44);
 
       doc.moveTo(C1, sigLineY).lineTo(C1 + C1W, sigLineY).lineWidth(0.7).strokeColor('#9ca3af').stroke();
       doc.moveTo(C3, sigLineY).lineTo(C3 + C3W, sigLineY).lineWidth(0.7).strokeColor('#9ca3af').stroke();
