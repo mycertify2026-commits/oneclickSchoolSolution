@@ -270,6 +270,11 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
       .text(contactText, 66, 48 + idSanshaOffset, { width: 118, lineBreak: false });
   }
 
+  // Separator between the school-identity block above and the student
+  // information block below — both sit on the plain white left side with
+  // no other visual boundary between them.
+  doc.save().moveTo(13, 60.5).lineTo(160, 60.5).lineWidth(0.6).strokeColor('#d0d5dd').stroke().restore();
+
   // Student photo — slightly smaller than the original reference to make
   // room for a real Principal Signature image lower on the card.
   const PH_X = 16, PH_Y = 62, PH_W = 44, PH_H = 54;
@@ -420,6 +425,11 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
     doc.font('Helvetica').fontSize(5).fillColor('#dbe4f5')
       .text(subtitle, nameX, CARD_TOP + 10 + nameLines.slice(0, 2).length * 8.4 + 1, { width: nameW, align: 'center', lineBreak: false });
   }
+
+  // Separator between the school-identity header band and the student
+  // information below it — the header already has its own fill color, but
+  // a thin line in the white gap makes the boundary explicit too.
+  doc.save().moveTo(10, CARD_TOP + HDR_H + 4).lineTo(W - 10, CARD_TOP + HDR_H + 4).lineWidth(0.6).strokeColor('#d0d5dd').stroke().restore();
 
   // ── Student photo, centered ───────────────────────────────────────────────
   // Slightly smaller than the original reference to make room for a real
