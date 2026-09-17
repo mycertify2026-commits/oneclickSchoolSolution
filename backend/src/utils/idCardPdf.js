@@ -272,8 +272,10 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
 
   // Separator between the school-identity block above and the student
   // information block below — both sit on the plain white left side with
-  // no other visual boundary between them.
-  doc.save().moveTo(13, 60.5).lineTo(160, 60.5).lineWidth(0.6).strokeColor('#d0d5dd').stroke().restore();
+  // no other visual boundary between them. Moved up from the photo's edge
+  // (was 1.5pt below it, reading as glued-on) so there's real padding on
+  // both sides of the line instead of nearly all of it stacked above it.
+  doc.save().moveTo(13, 53).lineTo(160, 53).lineWidth(0.6).strokeColor('#d0d5dd').stroke().restore();
 
   // Student photo — slightly smaller than the original reference to make
   // room for a real Principal Signature image lower on the card.
@@ -429,12 +431,12 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   // Separator between the school-identity header band and the student
   // information below it — the header already has its own fill color, but
   // a thin line in the white gap makes the boundary explicit too.
-  doc.save().moveTo(10, CARD_TOP + HDR_H + 4).lineTo(W - 10, CARD_TOP + HDR_H + 4).lineWidth(0.6).strokeColor('#d0d5dd').stroke().restore();
+  doc.save().moveTo(10, CARD_TOP + HDR_H + 5).lineTo(W - 10, CARD_TOP + HDR_H + 5).lineWidth(0.6).strokeColor('#d0d5dd').stroke().restore();
 
   // ── Student photo, centered ───────────────────────────────────────────────
   // Slightly smaller than the original reference to make room for a real
   // Principal Signature image lower on the card.
-  const PH_W = 54, PH_H = 58, PH_X = (W - PH_W) / 2, PH_Y = CARD_TOP + HDR_H + 8;
+  const PH_W = 54, PH_H = 58, PH_X = (W - PH_W) / 2, PH_Y = CARD_TOP + HDR_H + 10;
   doc.save().roundedRect(PH_X, PH_Y, PH_W, PH_H, 2).lineWidth(0.8).strokeColor(headerColor).stroke().restore();
   if (canDraw(photoPath)) {
     try { doc.image(photoPath, PH_X + 1, PH_Y + 1, { width: PH_W - 2, height: PH_H - 2 }); }
