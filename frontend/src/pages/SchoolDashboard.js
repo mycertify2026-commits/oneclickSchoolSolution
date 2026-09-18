@@ -168,14 +168,7 @@ export default function SchoolDashboard() {
           marginBottom: 14,
         }}>Quick Actions</div>
 
-        <div style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          justifyContent: 'center',
-          gap: 14,
-          maxWidth: 1120,
-          margin: '0 auto',
-        }}>
+        <div className="quick-actions-grid">
           {ACTIONS.map(a => (
             <button
               key={a.label}
@@ -193,9 +186,7 @@ export default function SchoolDashboard() {
                 boxShadow: `0 8px 24px ${a.shadow}`,
                 transition: 'transform 0.18s, box-shadow 0.18s',
                 textAlign: 'center',
-                 flex: '1 1 145px',
-                 maxWidth: 190,
-                 minWidth: 145,
+                width: '100%',
               }}
               onMouseEnter={e => {
                 e.currentTarget.style.transform = 'translateY(-4px)';
