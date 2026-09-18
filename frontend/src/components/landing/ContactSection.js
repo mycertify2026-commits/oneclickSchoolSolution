@@ -66,7 +66,7 @@ export default function ContactSection() {
           </p>
           <div className="lp-contact-detail">
             <span className="lp-card-icon" aria-hidden="true"><i className="fa-solid fa-envelope"></i></span>
-            <a href="mailto:mycertify2026@gmail.com">mycertify2026@gmail.com</a>
+            <a href="mailto:info@smartindiasolution.com">info@smartindiasolution.com</a>
           </div>
         </div>
 

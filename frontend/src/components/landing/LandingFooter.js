@@ -50,7 +50,7 @@ export default function LandingFooter() {
             <h4>Support</h4>
             <ul>
               <li><button onClick={() => scrollToSection('lp-contact')}>Contact</button></li>
-              <li><a href="mailto:mycertify2026@gmail.com">Help</a></li>
+              <li><a href="mailto:info@smartindiasolution.com">Help</a></li>
             </ul>
           </div>
         </div>
