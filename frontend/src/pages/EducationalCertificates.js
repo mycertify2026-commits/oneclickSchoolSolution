@@ -26,7 +26,7 @@ export default function EducationalCertificates() {
           <button className="btn btn-sm btn-outline" style={{ marginBottom: 10 }} onClick={() => navigate('/school-dashboard')}>
             <i className="fas fa-arrow-left" style={{ marginRight: 6 }} aria-hidden="true"></i>Back to Dashboard
           </button>
-          <h1 className="page-title">Educational Certificates</h1>
+          <h1 className="page-title mr-text">विद्यार्थ्यांना लागणारे शैक्षणिक कागदपपत्रे</h1>
           <p className="page-subtitle">View the documents required for applying for student certificates.</p>
         </div>
       </div>

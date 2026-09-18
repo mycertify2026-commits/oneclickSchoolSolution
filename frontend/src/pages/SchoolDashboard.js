@@ -440,8 +440,8 @@ function EducationalCertificatesCard({ onClick }) {
         <i className="fas fa-graduation-cap" style={{ fontSize: 22, color: '#fff' }}></i>
       </div>
       <div style={{ flex: 1, minWidth: 0, position: 'relative', zIndex: 1 }}>
-        <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', lineHeight: 1.2 }}>Educational Certificates</div>
-        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.88)', marginTop: 3 }}>Get documents required for student certificates</div>
+        <div className="mr-text" style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>विद्यार्थ्यांना लागणारे शैक्षणिक कागदपपत्रे</div>
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.88)', marginTop: 4 }}>Get documents required for student certificates</div>
         <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', marginTop: 10 }}>
           Explore Certificates <i className="fas fa-arrow-right" style={{ fontSize: 10, marginLeft: 4 }}></i>
         </div>
