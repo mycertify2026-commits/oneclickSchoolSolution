@@ -39,7 +39,7 @@ const NAV_CONFIG = {
         { to: '/school-dashboard', icon: 'fa-tachometer-alt', labelKey: 'dashboard',    label: 'Dashboard' },
         { to: '/students',         icon: 'fa-user-graduate',  labelKey: 'students',     label: 'Students' },
         { to: '/certificates',     icon: 'fa-certificate',    labelKey: 'certificates', label: 'Certificates' },
-        { to: '/educational-certificates', icon: 'fa-graduation-cap',                   label: 'Educational Certificates' },
+        { to: '/educational-certificates', icon: 'fa-graduation-cap', marathi: true,     label: 'विद्यार्थ्यांना लागणारे शैक्षणिक कागदपपत्रे' },
         { to: '/camp-requests',    icon: 'fa-campground',                               label: 'Camp Requests' }
       ]},
       { label: 'SCHOOL', items: [
@@ -125,7 +125,7 @@ export default function Sidebar({ role, pendingCount = 0 }) {
               return (
                 <Link key={item.to} to={item.to} className={`nav-item ${isActive ? 'active' : ''}`}>
                   <i className={`fas ${item.icon}`}></i>
-                  <span>{t(item.labelKey) || item.label}</span>
+                  <span className={item.marathi ? 'mr-text' : ''}>{t(item.labelKey) || item.label}</span>
                   {item.to === '/sa-requested' && pendingCount > 0 && (
                     <span style={{ background: '#EF4444', color: 'white', fontSize: 10, padding: '1px 6px', borderRadius: 10, marginLeft: 'auto' }}>{pendingCount}</span>
                   )}
