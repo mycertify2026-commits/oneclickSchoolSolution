@@ -41,6 +41,14 @@ const ACTIONS = [
     shadow: 'rgba(139,92,246,.35)',
   },
   {
+    icon: 'fa-graduation-cap',
+    label: 'Edu Certificates',
+    desc: 'Required documents',
+    path: '/educational-certificates',
+    gradient: 'linear-gradient(135deg,#7C3AED,#5b21b6)',
+    shadow: 'rgba(124,58,237,.35)',
+  },
+  {
     icon: 'fa-campground',
     label: 'Request Camp',
     desc: 'Health / Scholarship camp',
