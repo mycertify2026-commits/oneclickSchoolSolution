@@ -29,6 +29,7 @@ import Certificates from './pages/Certificates';
 import SchoolSettings from './pages/SchoolSettings';
 import CertificateTemplates from './pages/CertificateTemplates';
 import CertificateTemplateEditor from './pages/CertificateTemplateEditor';
+import EducationalCertificates from './pages/EducationalCertificates';
 import Notifications from './pages/Notifications';
 
 import DistDashboard from './pages/DistDashboard';
@@ -97,6 +98,7 @@ export default function App() {
             <Route path="/school-settings" element={<ProtectedRoute role="schoolAdmin"><SchoolSettings /></ProtectedRoute>} />
             <Route path="/certificate-templates" element={<ProtectedRoute role="schoolAdmin"><CertificateTemplates /></ProtectedRoute>} />
             <Route path="/certificate-templates/:id/edit" element={<ProtectedRoute role="schoolAdmin"><CertificateTemplateEditor /></ProtectedRoute>} />
+            <Route path="/educational-certificates" element={<ProtectedRoute role="schoolAdmin"><EducationalCertificates /></ProtectedRoute>} />
             <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
 
             {/* School Admin — Camp */}

@@ -39,6 +39,7 @@ const NAV_CONFIG = {
         { to: '/school-dashboard', icon: 'fa-tachometer-alt', labelKey: 'dashboard',    label: 'Dashboard' },
         { to: '/students',         icon: 'fa-user-graduate',  labelKey: 'students',     label: 'Students' },
         { to: '/certificates',     icon: 'fa-certificate',    labelKey: 'certificates', label: 'Certificates' },
+        { to: '/educational-certificates', icon: 'fa-graduation-cap',                   label: 'Educational Certificates' },
         { to: '/camp-requests',    icon: 'fa-campground',                               label: 'Camp Requests' }
       ]},
       { label: 'SCHOOL', items: [

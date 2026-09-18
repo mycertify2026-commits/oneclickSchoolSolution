@@ -218,12 +218,11 @@ export default function SchoolDashboard() {
       </div>
 
       {/* ── Stat Cards ────────────────────────────────────────────── */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3,1fr)',
-        gap: 16,
-        marginBottom: 24,
-      }}>
+      {/* 2 columns (was a fixed 3) so the new Educational Certificates card
+          can sit directly beside Wallet Balance on the second row, without
+          touching wallet balance/state/API/routing at all — see
+          EducationalCertificatesCard below. */}
+      <div className="edu-dashboard-grid">
         <StatCard
           icon="fa-user-graduate"
           value={students.length}
@@ -250,6 +249,7 @@ export default function SchoolDashboard() {
           onAction={() => navigate('/school-settings')}
           actionLabel="Recharge →"
         />
+        <EducationalCertificatesCard onClick={() => navigate('/educational-certificates')} />
       </div>
 
       {/* ── Charts ────────────────────────────────────────────────── */}
@@ -384,5 +384,68 @@ function StatCard({ icon, value, label, gradient, iconBg, sub, onAction, actionL
         )}
       </div>
     </div>
+  );
+}
+
+// Deliberately more eye-catching than the plain StatCards above (richer
+//3-stop gradient, floating icon, drifting particle dots, a stronger hover
+// lift) — this is the entry point to a brand-new feature (Educational
+// Certificates, see /educational-certificates) and is meant to draw the
+// eye, not blend in as another stat. Purely presentational/navigational:
+// no wallet state, no wallet API, no wallet route touched by this component.
+function EducationalCertificatesCard({ onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="edu-cert-card"
+      style={{
+        background: 'linear-gradient(135deg,#4338CA,#7C3AED 55%,#C026D3)',
+        borderRadius: 16,
+        padding: '22px 24px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 18,
+        boxShadow: '0 4px 20px rgba(124,58,237,.35)',
+        transition: 'transform 0.18s ease, box-shadow 0.18s ease',
+        width: '100%',
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.transform = 'translateY(-4px) scale(1.015)';
+        e.currentTarget.style.boxShadow = '0 14px 34px rgba(124,58,237,.5)';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.transform = 'translateY(0) scale(1)';
+        e.currentTarget.style.boxShadow = '0 4px 20px rgba(124,58,237,.35)';
+      }}
+    >
+      <div className="edu-cert-card__glow" style={{
+        position: 'absolute', right: -30, top: -30, width: 140, height: 140, borderRadius: '50%',
+        background: 'rgba(255,255,255,0.28)', pointerEvents: 'none', filter: 'blur(6px)',
+      }} />
+      <div className="edu-cert-card__particle" style={{
+        position: 'absolute', left: '58%', top: 16, width: 6, height: 6, borderRadius: '50%',
+        background: 'rgba(255,255,255,.55)', pointerEvents: 'none',
+      }} />
+      <div className="edu-cert-card__particle" style={{
+        position: 'absolute', left: '76%', bottom: 18, width: 4, height: 4, borderRadius: '50%',
+        background: 'rgba(255,255,255,.4)', pointerEvents: 'none', animationDelay: '1.4s',
+      }} />
+
+      <div className="edu-cert-card__icon" style={{
+        width: 52, height: 52, borderRadius: 14,
+        background: 'rgba(255,255,255,0.22)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0, backdropFilter: 'blur(4px)', position: 'relative', zIndex: 1,
+      }}>
+        <i className="fas fa-graduation-cap" style={{ fontSize: 22, color: '#fff' }}></i>
+      </div>
+      <div style={{ flex: 1, minWidth: 0, position: 'relative', zIndex: 1 }}>
+        <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', lineHeight: 1.2 }}>Educational Certificates</div>
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.88)', marginTop: 3 }}>Get documents required for student certificates</div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', marginTop: 10 }}>
+          Explore Certificates <i className="fas fa-arrow-right" style={{ fontSize: 10, marginLeft: 4 }}></i>
+        </div>
+      </div>
+    </button>
   );
 }
