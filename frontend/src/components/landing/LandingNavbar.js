@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import LandingLogo from './LandingLogo';
 
 const NAV_ITEMS = [
   { id: 'lp-home', label: 'Home' },
@@ -33,8 +34,7 @@ export default function LandingNavbar({ onLoginClick }) {
           className="lp-brand"
           onClick={(e) => { e.preventDefault(); scrollToSection('lp-home'); }}
         >
-          <span className="lp-brand-icon" aria-hidden="true"><i className="fa-solid fa-graduation-cap"></i></span>
-          One Click School Solutions
+          <LandingLogo variant="nav" />
         </a>
 
         <ul className="lp-nav-links">
@@ -46,6 +46,9 @@ export default function LandingNavbar({ onLoginClick }) {
         </ul>
 
         <div className="lp-nav-actions">
+          <button className="lp-btn lp-btn-outline" onClick={() => scrollToSection('lp-contact')}>
+            Request Demo
+          </button>
           <button className="lp-btn lp-btn-primary" onClick={onLoginClick}>
             Login
           </button>
@@ -64,6 +67,7 @@ export default function LandingNavbar({ onLoginClick }) {
         {NAV_ITEMS.map((item) => (
           <button key={item.id} onClick={() => scrollToSection(item.id)}>{item.label}</button>
         ))}
+        <button onClick={() => scrollToSection('lp-contact')}>Request Demo</button>
         <button onClick={() => { setMobileOpen(false); onLoginClick(); }}>Login</button>
       </div>
     </nav>

@@ -1,5 +1,16 @@
 import Reveal from './Reveal';
 
+// A distinct color per card (cycled) gives the grid the same colorful,
+// scannable look as the reference design instead of one flat brand color
+// repeated eight times.
+const PALETTE = [
+  { color: '#7C3AED', bg: 'rgba(124,58,237,.12)' },
+  { color: '#10B981', bg: 'rgba(16,185,129,.12)' },
+  { color: '#F59E0B', bg: 'rgba(245,158,11,.14)' },
+  { color: '#3B82F6', bg: 'rgba(59,130,246,.12)' },
+  { color: '#EC4899', bg: 'rgba(236,72,153,.12)' },
+];
+
 const FEATURES = [
   { icon: 'fa-solid fa-file-signature', title: 'Digital Certificate Generation', text: 'Generate professional school certificates in seconds, ready to download or share.' },
   { icon: 'fa-solid fa-swatchbook', title: 'Smart Templates', text: 'Use customized PNG borders and certificate templates matched to your school.' },
@@ -21,13 +32,16 @@ export default function FeaturesSection() {
           <p>A complete toolkit for certificate generation, verification and school administration.</p>
         </div>
         <div className="lp-grid lp-grid-4">
-          {FEATURES.map((f, i) => (
-            <Reveal key={f.title} delay={i * 60} className="lp-card">
-              <span className="lp-card-icon" aria-hidden="true"><i className={f.icon}></i></span>
-              <h3>{f.title}</h3>
-              <p>{f.text}</p>
-            </Reveal>
-          ))}
+          {FEATURES.map((f, i) => {
+            const c = PALETTE[i % PALETTE.length];
+            return (
+              <Reveal key={f.title} delay={i * 60} className="lp-card">
+                <span className="lp-card-icon" style={{ background: c.bg, color: c.color }} aria-hidden="true"><i className={f.icon}></i></span>
+                <h3>{f.title}</h3>
+                <p>{f.text}</p>
+              </Reveal>
+            );
+          })}
         </div>
       </div>
     </section>

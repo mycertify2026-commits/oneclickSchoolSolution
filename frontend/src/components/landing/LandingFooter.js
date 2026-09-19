@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import ROLES from './rolesData';
+import LandingLogo from './LandingLogo';
 
 const PLATFORM_LINKS = [
   { id: 'lp-home', label: 'Home' },
@@ -21,10 +22,7 @@ export default function LandingFooter() {
       <div className="lp-container">
         <div className="lp-footer-grid">
           <div className="lp-footer-brand">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#fff', fontWeight: 800, fontSize: 17 }}>
-              <span className="lp-brand-icon" aria-hidden="true"><i className="fa-solid fa-graduation-cap"></i></span>
-              One Click School Solutions
-            </div>
+            <LandingLogo variant="footer" />
             <p>School Certificate Management Platform — digital certificate generation and document management for schools, distributors and administrators.</p>
           </div>
 
@@ -51,6 +49,14 @@ export default function LandingFooter() {
             <ul>
               <li><button onClick={() => scrollToSection('lp-contact')}>Contact</button></li>
               <li><a href="mailto:info@smartindiasolution.com">Help</a></li>
+            </ul>
+          </div>
+
+          <div>
+            <h4>Contact Us</h4>
+            <ul>
+              <li><a href="mailto:info@smartindiasolution.com"><i className="fa-solid fa-envelope" style={{ marginRight: 8, opacity: 0.7 }}></i>info@smartindiasolution.com</a></li>
+              <li><button onClick={() => scrollToSection('lp-contact')}>Send us a message</button></li>
             </ul>
           </div>
         </div>

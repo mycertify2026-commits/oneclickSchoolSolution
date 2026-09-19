@@ -8,6 +8,23 @@
 
 .landing-page {
   --lp-max: 1240px;
+  /* Brand accent palette for THIS PAGE ONLY. Overriding --primary/
+     --primary-light/--primary-gradient here (rather than editing every
+     individual rule below) means every existing rule in this file that
+     already reads those tokens picks up the new purple/blue look
+     automatically, while main.css's :root values — and every dashboard in
+     the authenticated app that reads the same token names — are completely
+     unaffected, since CSS custom properties only cascade to descendants of
+     the element that redefines them. */
+  --primary: #7C3AED;
+  --primary-dark: #5B21B6;
+  --primary-light: rgba(124, 58, 237, 0.1);
+  --primary-gradient: linear-gradient(135deg, #7C3AED 0%, #3B82F6 100%);
+  --lp-pink: #EC4899;
+  --lp-blue: #3B82F6;
+  --lp-green: #10B981;
+  --lp-orange: #F59E0B;
+  --lp-gradient-text: linear-gradient(90deg, #EC4899 0%, #7C3AED 55%, #2563EB 100%);
   font-family: 'Inter', sans-serif;
   color: var(--text-primary);
   background: var(--white);
@@ -83,12 +100,27 @@
 .lp-navbar.lp-scrolled { box-shadow: var(--shadow-sm); }
 .lp-navbar-inner { display: flex; align-items: center; justify-content: space-between; height: 72px; }
 .lp-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text-primary); font-weight: 800; font-size: 18px; }
-.lp-brand-icon {
-  width: 38px; height: 38px; border-radius: 10px;
+
+/* ---------- Logo lockup (icon + wordmark + tagline) ---------- */
+.lp-logo { display: flex; align-items: center; gap: 10px; }
+.lp-logo-mark {
+  width: 40px; height: 40px; border-radius: 11px; flex-shrink: 0;
   background: var(--primary-gradient);
   display: flex; align-items: center; justify-content: center;
-  color: var(--white); font-size: 17px; flex-shrink: 0;
+  color: var(--white); font-size: 18px; box-shadow: var(--shadow-sm);
 }
+.lp-logo-text { display: flex; flex-direction: column; line-height: 1.15; }
+.lp-logo-word { font-size: 19px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.01em; }
+.lp-logo-word-accent {
+  background: var(--lp-gradient-text);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.lp-logo-caption {
+  font-size: 8.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--text-light); margin-top: 1px;
+}
+.lp-logo-footer .lp-logo-word { color: var(--white); }
+.lp-logo-footer .lp-logo-caption { color: rgba(203,213,225,0.7); }
 .lp-nav-links { display: flex; align-items: center; gap: 4px; list-style: none; margin: 0; padding: 0; }
 .lp-nav-links button {
   background: none; border: none; cursor: pointer;
@@ -137,7 +169,7 @@
   text-wrap: balance;
 }
 .lp-hero-text .lp-highlight {
-  background: var(--primary-gradient);
+  background: var(--lp-gradient-text);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -148,46 +180,37 @@
 .lp-hero-trustline i { color: var(--success); }
 
 .lp-hero-visual { position: relative; }
-.lp-mock-frame {
+.lp-dash-frame {
   background: var(--card-bg);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
   border: 1px solid var(--border);
   overflow: hidden;
 }
-.lp-mock-bar { display: flex; align-items: center; gap: 6px; padding: 12px 16px; background: var(--bg); border-bottom: 1px solid var(--border); }
-.lp-mock-bar span { width: 10px; height: 10px; border-radius: 50%; background: var(--border); }
-.lp-mock-bar span:nth-child(1) { background: #EF4444; }
-.lp-mock-bar span:nth-child(2) { background: #F59E0B; }
-.lp-mock-bar span:nth-child(3) { background: #10B981; }
-.lp-mock-body { padding: 22px; }
-.lp-mock-title { font-size: 13px; font-weight: 700; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 14px; }
-.lp-mock-row {
-  display: flex; align-items: center; gap: 12px;
-  padding: 12px; border-radius: var(--radius); background: var(--bg);
-  margin-bottom: 10px;
-}
-.lp-mock-row .lp-mock-icon {
-  width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  background: var(--primary-light); color: var(--primary); font-size: 14px;
-}
-.lp-mock-row .lp-mock-info { flex: 1; min-width: 0; }
-.lp-mock-row .lp-mock-info strong { display: block; font-size: 14px; color: var(--text-primary); }
-.lp-mock-row .lp-mock-info span { font-size: 12px; color: var(--text-light); }
-.lp-mock-row .lp-mock-pill {
-  font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
-  background: rgba(16,185,129,0.12); color: var(--success);
-  display: flex; align-items: center; gap: 4px; flex-shrink: 0;
-}
-.lp-mock-qr {
-  width: 34px; height: 34px; border-radius: 6px; flex-shrink: 0;
-  background:
-    linear-gradient(90deg, var(--text-primary) 25%, transparent 25%) 0 0/8px 8px,
-    linear-gradient(var(--text-primary) 25%, transparent 25%) 0 0/8px 8px;
-  background-color: var(--white);
-  border: 1px solid var(--border);
-}
+.lp-dash-topbar { display: flex; align-items: center; gap: 6px; padding: 12px 16px; background: var(--bg); border-bottom: 1px solid var(--border); }
+.lp-dash-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.lp-dash-topbar-title { margin-left: 8px; font-size: 12px; font-weight: 700; color: var(--text-light); }
+.lp-dash-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+
+.lp-dash-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.lp-dash-stat { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: var(--radius); background: var(--bg); }
+.lp-dash-stat-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+.lp-dash-stat strong { display: block; font-size: 15px; font-weight: 800; color: var(--text-primary); line-height: 1.25; }
+.lp-dash-stat span { font-size: 10.5px; color: var(--text-light); font-weight: 600; }
+
+.lp-dash-charts { display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; }
+.lp-dash-chart-card { background: var(--bg); border-radius: var(--radius); padding: 12px; display: flex; flex-direction: column; }
+.lp-dash-chart-title { font-size: 10px; font-weight: 700; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 8px; }
+.lp-dash-line-chart { width: 100%; height: 62px; display: block; }
+.lp-dash-donut-card { align-items: center; }
+.lp-dash-donut { width: 62px; height: 62px; margin: 2px auto 8px; }
+.lp-dash-donut-legend { display: flex; gap: 10px; font-size: 9.5px; font-weight: 600; color: var(--text-secondary); }
+.lp-dash-donut-legend span { display: flex; align-items: center; gap: 4px; }
+.lp-dash-donut-legend i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+
+.lp-dash-bars { background: var(--bg); border-radius: var(--radius); padding: 12px; }
+.lp-dash-bar-row { display: flex; align-items: flex-end; gap: 8px; height: 52px; }
+.lp-dash-bar { flex: 1; border-radius: 4px 4px 0 0; min-height: 6px; }
 
 .lp-float-card {
   position: absolute;
@@ -202,15 +225,16 @@
 }
 .lp-float-card i { color: var(--success); }
 .lp-float-1 { top: -14px; right: -18px; animation-delay: 0s; }
-.lp-float-2 { bottom: 40px; left: -28px; animation-delay: 1.4s; }
-.lp-float-3 { bottom: -18px; right: 30px; animation-delay: 0.7s; }
 @keyframes lpFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
 
 /* ---------- Trust strip ---------- */
 .lp-trust { padding: 44px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--bg); }
 .lp-trust-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 40px; }
 .lp-trust-item { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--text-secondary); font-size: 15px; }
-.lp-trust-item i { color: var(--primary); font-size: 18px; }
+.lp-trust-icon {
+  width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 14px;
+}
 
 /* ---------- Cards grid (features/services/why) ---------- */
 .lp-grid { display: grid; gap: 24px; }
@@ -309,7 +333,16 @@
   margin: 0 24px;
   max-width: var(--lp-max);
   margin-inline: auto;
+  position: relative;
+  overflow: hidden;
 }
+.lp-cta::before, .lp-cta::after {
+  content: ''; position: absolute; border-radius: 50%;
+  background: rgba(255,255,255,0.12); pointer-events: none;
+}
+.lp-cta::before { width: 260px; height: 260px; top: -120px; left: -80px; }
+.lp-cta::after { width: 200px; height: 200px; bottom: -110px; right: -60px; background: rgba(255,255,255,0.08); }
+.lp-cta > * { position: relative; z-index: 1; }
 .lp-cta h2 { font-size: clamp(26px, 3.2vw, 36px); font-weight: 800; margin: 0 0 14px; text-wrap: balance; }
 .lp-cta p { font-size: 16px; opacity: 0.92; max-width: 560px; margin: 0 auto 32px; line-height: 1.6; }
 .lp-cta-ctas { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
@@ -349,7 +382,7 @@
 
 /* ---------- Footer ---------- */
 .lp-footer { background: var(--sidebar-bg); color: var(--sidebar-text); padding: 64px 0 28px; }
-.lp-footer-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 40px; margin-bottom: 48px; }
+.lp-footer-grid { display: grid; grid-template-columns: 1.3fr 0.85fr 0.85fr 0.85fr 0.95fr; gap: 32px; margin-bottom: 48px; }
 .lp-footer-brand p { font-size: 14px; line-height: 1.65; color: rgba(203,213,225,0.75); margin: 14px 0 0; max-width: 280px; }
 .lp-footer h4 { color: var(--white); font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 18px; }
 .lp-footer ul { list-style: none; margin: 0; padding: 0; }
@@ -423,6 +456,13 @@
   .lp-contact-wrap { grid-template-columns: 1fr; }
   .lp-nav-links { display: none; }
   .lp-hamburger { display: flex; }
+  /* Request Demo moves into the hamburger dropdown at this width — showing
+     it next to Login here left no room and clipped the Login button. */
+  .lp-nav-actions > .lp-btn-outline { display: none; }
+  /* The tagline under the wordmark is nice-to-have on a full desktop navbar
+     but its width was pushing Login/the hamburger off-screen once the
+     hamburger appears — drop it here (footer's caption is unaffected). */
+  .lp-navbar .lp-logo-caption { display: none; }
 }
 
 @media (max-width: 768px) {
