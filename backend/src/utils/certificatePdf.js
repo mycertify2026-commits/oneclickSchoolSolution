@@ -814,9 +814,9 @@ async function generateLcPdf({
 
       // Combined note at bottom — school-configurable (School Settings >
       // Footer Line), falling back to the original fixed wording when a
-      // school hasn't set one. Drawn inside a full 4-sided border (was a
-      // single top rule before) with the school name always appended as its
-      // own final line, per request.
+      // school hasn't set one. No border around it (per request — an
+      // earlier pass added a full box here, since removed), with the school
+      // name always appended as its own final line.
       const notePadX = 10, notePadY = 7, noteGapToName = 3;
       const noteBodyText = stripHtmlToText(school.cert_footer_line).replace(/\n+/g, ' ') ||
         'No change in any entry in this certificate shall be made except by the authority issuing it. ' +
@@ -832,7 +832,6 @@ async function generateLcPdf({
       // tall header/table combination (long names, every optional field
       // filled) can't push the signature block into/past it.
       const noteY = Math.max(doc.page.height - 18 - noteBoxH, sigLineY + 32);
-      doc.save().lineWidth(1).strokeColor(LC_BLUE).rect(46, noteY, contentWidth, noteBoxH).stroke().restore();
       doc.font('Helvetica-Bold').fontSize(noteFontSize).fillColor(TEXT)
         .text(noteBodyText, 46 + notePadX, noteY + notePadY, { width: contentWidth - notePadX * 2, align: 'justify' });
       doc.font('Helvetica-Bold').fontSize(noteNameFontSize).fillColor(LC_BLUE)
@@ -1232,17 +1231,20 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
   doc.font('Helvetica-Bold').fontSize(8.5).fillColor(black)
     .text('Class Teacher', left + 10, sigLineY + 4, { width: sigColW - 25, align: 'center', lineBreak: false });
 
-  // Student photo now sits in the circle right after the Class Teacher
-  // signature — this replaces the school seal/stamp that used to be drawn
-  // here, per request.
-  const photoCx = W / 2, photoCy = sigLineY - 14, photoR = 20;
+  // Student photo sits right after the Class Teacher signature — this
+  // replaces the school seal/stamp that used to be drawn here, per request.
+  // Rendered at actual passport-photo proportions (35mm:45mm ≈ 0.78), not a
+  // circle — a circular crop isn't how a passport photo is ever printed.
+  const photoW = 42, photoH = 54;
+  const photoX = W / 2 - photoW / 2;
+  const photoY = sigLineY - 6 - photoH;
+  doc.save().rect(photoX, photoY, photoW, photoH).lineWidth(1).strokeColor(NAVY).stroke().restore();
   if (canDraw(photoPath)) {
-    try { doc.save().circle(photoCx, photoCy, photoR).clip().image(photoPath, photoCx - photoR, photoCy - photoR, { width: photoR * 2, height: photoR * 2 }).restore(); } catch (e) {}
+    try { doc.image(photoPath, photoX + 1, photoY + 1, { width: photoW - 2, height: photoH - 2 }); } catch (e) {}
   } else {
     doc.fillColor(muted).font('Helvetica').fontSize(6.5)
-      .text('PHOTO', photoCx - photoR, photoCy - 3, { width: photoR * 2, align: 'center', lineBreak: false });
+      .text('PHOTO', photoX, photoY + photoH / 2 - 3, { width: photoW, align: 'center', lineBreak: false });
   }
-  doc.save().circle(photoCx, photoCy, photoR).lineWidth(1).strokeColor(REF_BORDER).stroke().restore();
 
   doc.save().moveTo(right - sigColW + 15, sigLineY).lineTo(right - 10, sigLineY).lineWidth(0.8).strokeColor('#94A3B8').stroke().restore();
   doc.font('Helvetica-Bold').fontSize(8.5).fillColor(black)
