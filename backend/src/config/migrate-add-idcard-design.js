@@ -10,6 +10,7 @@ require('dotenv').config();
 const NEW_COLUMNS = [
   { name: 'cert_header', definition: 'TEXT' },
   { name: 'cert_footer', definition: 'TEXT' },
+  { name: 'cert_footer_line', definition: 'TEXT' },
   { name: 'id_card_primary_color', definition: "VARCHAR(100) DEFAULT 'linear-gradient(135deg,#1a6fd4,#1557b0)'" },
   { name: 'id_card_school_name', definition: 'VARCHAR(200)' },
   { name: 'id_card_subtitle', definition: "VARCHAR(200) DEFAULT 'Student ID Card'" },

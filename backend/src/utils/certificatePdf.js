@@ -215,11 +215,11 @@ function drawHeader(doc, school, textX, textW, startY) {
   if (school.sanstha_name) {
     y = fitCenteredText(doc, safe(school.sanstha_name), textX, y, textW, 11, LC_BLUE, false, 8) + 2;
   }
-  // Board name and school name are the two large, bold headline lines —
-  // each shrink-then-real-height chained off the one above it (never a
-  // fixed offset) since either can wrap to 2 lines for a long name.
-  y = fitCenteredText(doc, safe(school.board_name, 'Maharashtra State Education Board'), textX, y, textW, 19, LC_BLUE, true, 12) + 3;
-  y = fitCenteredText(doc, sentenceCase(school.name, 'School name'), textX, y, textW, 18, LC_BLUE, true, 11) + 5;
+  // School name is the large, bold headline line — shrink-then-real-height
+  // chained off the sanstha name above it (never a fixed offset) since it
+  // can wrap to 2 lines for a long name. The board name line (previously
+  // hardcoded "Maharashtra State Education Board") was removed per request.
+  y = fitCenteredText(doc, sentenceCase(school.name, 'School name'), textX, y, textW, 19, LC_BLUE, true, 12) + 5;
   y = fitCenteredText(doc, `Taluka: ${safe(school.taluka)}, District: ${safe(school.district)}`, textX, y, textW, 10, TEXT, false, 7.5) + 2;
 
   // U-DISE sits next to RECOG NO here in the header, not in the ID info bar
@@ -750,8 +750,9 @@ async function generateLcPdf({
 
       // Minimum space the Date/Place + signature block needs no matter what:
       // gap after the tables, the Date/Place lines, a gap down to the
-      // signature line, then the line plus its two label lines below it.
-      const minGapAfterPanels = 8, dateBlockH = 28, minGapToSig = 28, sigTailH = 30;
+      // signature line, the line plus its two label lines below it, then the
+      // now-bordered note box (text + school name line + padding) below that.
+      const minGapAfterPanels = 8, dateBlockH = 28, minGapToSig = 28, sigTailH = 55;
       const minFooterH = minGapAfterPanels + dateBlockH + minGapToSig + sigTailH;
 
       // An unusually tall combination above (long sanstha/board/school names,
@@ -773,7 +774,7 @@ async function generateLcPdf({
       // empty just above the note (the "cluttered on top, empty at the
       // bottom" complaint). Capped so a near-empty page doesn't stretch the
       // footer into something silly — the rest just stays as bottom margin.
-      const noteTargetY = doc.page.height - 45;
+      const noteTargetY = doc.page.height - 70;
       const slack = Math.max(0, Math.min(90, (noteTargetY - 18) - y - minFooterH));
       const gapToSig = minGapToSig + slack * 0.7;
       y += minGapAfterPanels + slack * 0.3;
@@ -797,7 +798,7 @@ async function generateLcPdf({
       doc.moveTo(C3, sigLineY).lineTo(C3 + C3W, sigLineY).lineWidth(0.7).strokeColor('#9ca3af').stroke();
 
       doc.font('Helvetica').fontSize(9).fillColor(TEXT)
-        .text('Checked by / Approved by', C1, sigLineY + 5, { width: C1W, align: 'center', lineBreak: false });
+        .text('Checked by', C1, sigLineY + 5, { width: C1W, align: 'center', lineBreak: false });
       // Designation label only (Principal / Mukhyadhyapak / Headmaster / a
       // custom title) — the Principal's name itself is shown on the ID Card
       // only, never printed here even when school.principal_name is set.
@@ -811,19 +812,32 @@ async function generateLcPdf({
       // overflow, even with margin:0).
       fitSingleLineText(doc, sentenceCase(school.name), C3, sigLineY + 17, C3W, 8, GREY, false, 6);
 
-      // Combined note at bottom — anchored near the physical bottom margin
-      // for the normal case (matching the ~46pt margin used everywhere else
-      // on this certificate), but never less than sigLineY + 32 so an
-      // unusually tall header/table combination (long names, every optional
-      // field filled) can't push the signature block into/past it.
-      const noteY = Math.max(doc.page.height - 45, sigLineY + 32);
-      doc.save().moveTo(46, noteY).lineTo(46 + contentWidth, noteY).lineWidth(1).strokeColor(LC_BLUE).stroke().restore();
-      doc.font('Helvetica-Bold').fontSize(7.5).fillColor(TEXT)
-        .text(
-          'No change in any entry in this certificate shall be made except by the authority issuing it. ' +
-          'Certified that the above information is true to the best of our knowledge as per school records.',
-          46, noteY + 6, { width: contentWidth, align: 'center' }
-        );
+      // Combined note at bottom — school-configurable (School Settings >
+      // Footer Line), falling back to the original fixed wording when a
+      // school hasn't set one. Drawn inside a full 4-sided border (was a
+      // single top rule before) with the school name always appended as its
+      // own final line, per request.
+      const notePadX = 10, notePadY = 7, noteGapToName = 3;
+      const noteBodyText = stripHtmlToText(school.cert_footer_line).replace(/\n+/g, ' ') ||
+        'No change in any entry in this certificate shall be made except by the authority issuing it. ' +
+        'Certified that the above information is true to the best of our knowledge as per school records.';
+      const noteFontSize = 7.5, noteNameFontSize = 8;
+      doc.font('Helvetica-Bold').fontSize(noteFontSize);
+      const noteTextH = doc.heightOfString(noteBodyText, { width: contentWidth - notePadX * 2, align: 'justify' });
+      const noteBoxH = notePadY + noteTextH + noteGapToName + noteNameFontSize + notePadY;
+
+      // Anchored near the physical bottom margin for the normal case
+      // (matching the ~46pt margin used everywhere else on this
+      // certificate), but never less than sigLineY + 32 so an unusually
+      // tall header/table combination (long names, every optional field
+      // filled) can't push the signature block into/past it.
+      const noteY = Math.max(doc.page.height - 18 - noteBoxH, sigLineY + 32);
+      doc.save().lineWidth(1).strokeColor(LC_BLUE).rect(46, noteY, contentWidth, noteBoxH).stroke().restore();
+      doc.font('Helvetica-Bold').fontSize(noteFontSize).fillColor(TEXT)
+        .text(noteBodyText, 46 + notePadX, noteY + notePadY, { width: contentWidth - notePadX * 2, align: 'justify' });
+      doc.font('Helvetica-Bold').fontSize(noteNameFontSize).fillColor(LC_BLUE)
+        .text(sentenceCase(school.name).toUpperCase(), 46, noteY + notePadY + noteTextH + noteGapToName,
+          { width: contentWidth, align: 'center', lineBreak: false });
 
       doc.end();
       stream.on('finish', () => resolve(outputPath));
@@ -1034,29 +1048,6 @@ function renderBonafideCopy(doc, ctx, qrBuffer, yOffset, copyLabel) {
   drawFrameIfAvailable(doc, framePath, 0, yOffset, PAGE_W, COPY_H);
 }
 
-// Formal "label on the left, value on the right" table — one field per row,
-// consistent column widths/borders/padding throughout — used by the
-// Bonafide redesign's student-reference-numbers section. Distinct from
-// drawIdInfoTable (which LC and the older Bonafide layout use, two label:
-// value pairs side by side per row) since this redesign specifically asked
-// for a plain two-column table instead.
-function drawLabelValueRows(doc, x, y, width, rows, borderColor) {
-  const rowH = 20, labelW = width * 0.42;
-  const tableH = rowH * rows.length;
-  doc.save().lineWidth(0.8).strokeColor(borderColor).rect(x, y, width, tableH).stroke().restore();
-  doc.save().lineWidth(0.8).strokeColor(borderColor).moveTo(x + labelW, y).lineTo(x + labelW, y + tableH).stroke().restore();
-  rows.forEach(([label, value], i) => {
-    const rowY = y + i * rowH;
-    if (i > 0) {
-      doc.save().lineWidth(0.6).strokeColor(borderColor).moveTo(x, rowY).lineTo(x + width, rowY).stroke().restore();
-    }
-    const textY = rowY + rowH / 2 - 5;
-    doc.font('Helvetica-Bold').fontSize(9.5).fillColor(GREY).text(label, x + 10, textY, { width: labelW - 20, lineBreak: false });
-    fitSingleLineText(doc, value, x + labelW + 10, textY, width - labelW - 20, 9.5, TEXT, true, 7);
-  });
-  return y + tableH;
-}
-
 // Renders one portrait bonafide certificate — a clean, restrained
 // navy/white/light-grey formal-document layout (redesigned per request):
 // logo (left) | school identity (centre) | QR + certificate ID (right) in
@@ -1069,7 +1060,7 @@ function drawLabelValueRows(doc, x, y, width, rows, borderColor) {
 // redundant "digitally verified" badge/lock icon from the previous design
 // were removed, not the certificate's actual verification mechanism.
 function renderSingleBonafide(doc, ctx, qrBuffer) {
-  const { school, student, certificate, purpose, photoPath, logoPath, stampPath, templatePath } = ctx;
+  const { school, student, certificate, purpose, photoPath, logoPath, templatePath } = ctx;
   const W = doc.page.width;
   const H = doc.page.height;
   const black = TEXT;
@@ -1116,9 +1107,6 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
   if (school.sanstha_name) {
     y = fitCenteredText(doc, safe(school.sanstha_name).toUpperCase(), textX, y, textW, 8.5, muted, false, 6.5) + 2;
   }
-  if (school.board_name) {
-    y = fitCenteredText(doc, safe(school.board_name).toUpperCase(), textX, y, textW, 9.5, muted, false, 7) + 2;
-  }
   // School name is the line most likely to wrap to 2 lines in this narrow
   // centre column — chain off its real returned height instead of a fixed
   // offset, so the address line below it can never overlap regardless of
@@ -1151,19 +1139,18 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
   doc.fillColor('#fff').font('Helvetica-Bold').fontSize(14)
     .text('BONAFIDE CERTIFICATE', left, bannerY + 7, { width: contentW, align: 'center', lineBreak: false });
 
-  // ── Student reference numbers — plain label:value table ───────────────────
-  const afterBannerY = bannerY + bannerH + 16;
-  doc.font('Helvetica-Bold').fontSize(8.5).fillColor(NAVY)
-    .text('STUDENT REFERENCE NUMBERS', left, afterBannerY, { width: contentW, lineBreak: false });
-  const tableY = afterBannerY + 14;
-  const tableBottomY = drawLabelValueRows(doc, left, tableY, contentW, [
-    ['General Register No.', sentenceCase(student.register_number, '-')],
-    ['Student Aadhaar No.', maskAadhaar(student.aadhaar)],
-    ['Student SARAL ID', sentenceCase(student.serial_id, '-')],
-    ['Student APAAR ID', sentenceCase(student.apaar_id, '-')],
-    ['Student PEN No.', sentenceCase(student.pen_no, '-')],
-    ['LOC No.', sentenceCase(student.loc_no, '-')],
-  ], REF_BORDER);
+  // ── Student Information — same bordered panel style as the Leaving
+  // Certificate's "Student Information" table (title bar + 2x3 grid),
+  // reusing drawPanelTitleBar/drawStudentInfoTable/drawPanelBorder as-is so
+  // both certificate types present this data identically, per request.
+  const panelY = bannerY + bannerH + 14;
+  let tableBottomY = drawPanelTitleBar(doc, left, panelY, contentW, 'Student Information');
+  tableBottomY = drawStudentInfoTable(doc, left, tableBottomY, contentW, [
+    ['General Register No.', sentenceCase(student.register_number, '-'), 'Student Aadhar No', maskAadhaar(student.aadhaar)],
+    ['Student Saral Id', sentenceCase(student.serial_id, '-'), 'Student Apar Id', sentenceCase(student.apaar_id, '-')],
+    ['Student PEN ID', sentenceCase(student.pen_no, '-'), 'LOC No.', sentenceCase(student.loc_no, '-')],
+  ]);
+  drawPanelBorder(doc, left, panelY, contentW, tableBottomY);
 
   // ── Body paragraph — fully justified, not centered ────────────────────────
   const heShe = student.gender === 'Male' ? 'He' : student.gender === 'Female' ? 'She' : 'He/She';
@@ -1209,36 +1196,25 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
   const bodyY = tableBottomY + 18;
   const bodyBottomY = drawJustifiedBoldParagraph(doc, left, bodyY, contentW, 150, paraSegments, 10.5, black, 3);
 
-  // ── Footer: Date of Issue / Place (left) + student photo (right) in one
-  // row, then Class Teacher / Principal signatures below — chained off the
-  // paragraph's real bottom, never a fixed offset, same reasoning as
+  // ── Footer: Date of Issue, then Place directly below it (stacked, single
+  // left column — was a two-column Date/Place row with the photo boxed at
+  // the right), then Class Teacher / Principal signatures below — chained
+  // off the paragraph's real bottom, never a fixed offset, same reasoning as
   // everywhere else in this layout. The name/class/year highlight panel
   // that used to sit here was dropped — that information is already in the
   // paragraph above, so it was pure repetition.
   const footerY = bodyBottomY + 20;
-  const photoW = 64, photoH = 84;
-  const photoX = right - photoW;
-  const dateAreaW = contentW - photoW - 16;
-  const footerColW = dateAreaW / 2;
 
   doc.font('Helvetica-Bold').fontSize(8).fillColor(NAVY).text('DATE OF ISSUE', left, footerY, { lineBreak: false });
   doc.font('Helvetica').fontSize(9.5).fillColor(black).text(fmtDate(new Date()), left, footerY + 11, { lineBreak: false });
-  doc.font('Helvetica-Bold').fontSize(8).fillColor(NAVY).text('PLACE', left + footerColW, footerY, { lineBreak: false });
+  doc.font('Helvetica-Bold').fontSize(8).fillColor(NAVY).text('PLACE', left, footerY + 26, { lineBreak: false });
   doc.font('Helvetica').fontSize(9.5).fillColor(black)
     .text(`${safe(school.city || school.village || school.taluka, '-')}, Dist. ${safe(school.district, '-')}`,
-      left + footerColW, footerY + 11, { width: footerColW - 4, lineBreak: false, ellipsis: true });
-
-  doc.save().rect(photoX, footerY, photoW, photoH).lineWidth(1).strokeColor(NAVY).stroke().restore();
-  if (canDraw(photoPath)) {
-    try { doc.image(photoPath, photoX + 1, footerY + 1, { width: photoW - 2, height: photoH - 2 }); } catch (e) {}
-  } else {
-    doc.fillColor(muted).font('Helvetica').fontSize(7)
-      .text('PHOTO', photoX, footerY + photoH / 2 - 4, { width: photoW, align: 'center', lineBreak: false });
-  }
+      left, footerY + 37, { width: contentW - 10, lineBreak: false, ellipsis: true });
 
   // School-configured footer text (School Settings > Certificate Footer) —
   // additive, empty by default.
-  let afterDateRowY = footerY + photoH + 16;
+  let afterDateRowY = footerY + 37 + 22;
   const bonafideFooterText = stripHtmlToText(school.cert_footer).replace(/\n+/g, ' ');
   if (bonafideFooterText) {
     doc.font('Helvetica-Oblique').fontSize(7.5).fillColor(muted)
@@ -1248,8 +1224,7 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
 
   // Signature images are intentionally NOT drawn here — Bonafide is meant to
   // be hand-signed on the printed hard copy; only the ID Card carries a
-  // printed/uploaded signature. The stamp/seal (a school's own upload, not
-  // an invented government seal) is unaffected.
+  // printed/uploaded signature.
   const sigLineY = afterDateRowY + 40;
   const sigColW = contentW / 3;
 
@@ -1257,11 +1232,17 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
   doc.font('Helvetica-Bold').fontSize(8.5).fillColor(black)
     .text('Class Teacher', left + 10, sigLineY + 4, { width: sigColW - 25, align: 'center', lineBreak: false });
 
-  const sealCx = W / 2, sealCy = sigLineY - 14, sealR = 20;
-  if (canDraw(stampPath)) {
-    try { doc.save().circle(sealCx, sealCy, sealR).clip().image(stampPath, sealCx - sealR, sealCy - sealR, { width: sealR * 2, height: sealR * 2 }).restore(); } catch (e) {}
+  // Student photo now sits in the circle right after the Class Teacher
+  // signature — this replaces the school seal/stamp that used to be drawn
+  // here, per request.
+  const photoCx = W / 2, photoCy = sigLineY - 14, photoR = 20;
+  if (canDraw(photoPath)) {
+    try { doc.save().circle(photoCx, photoCy, photoR).clip().image(photoPath, photoCx - photoR, photoCy - photoR, { width: photoR * 2, height: photoR * 2 }).restore(); } catch (e) {}
+  } else {
+    doc.fillColor(muted).font('Helvetica').fontSize(6.5)
+      .text('PHOTO', photoCx - photoR, photoCy - 3, { width: photoR * 2, align: 'center', lineBreak: false });
   }
-  doc.save().circle(sealCx, sealCy, sealR).lineWidth(1).strokeColor(REF_BORDER).stroke().restore();
+  doc.save().circle(photoCx, photoCy, photoR).lineWidth(1).strokeColor(REF_BORDER).stroke().restore();
 
   doc.save().moveTo(right - sigColW + 15, sigLineY).lineTo(right - 10, sigLineY).lineWidth(0.8).strokeColor('#94A3B8').stroke().restore();
   doc.font('Helvetica-Bold').fontSize(8.5).fillColor(black)

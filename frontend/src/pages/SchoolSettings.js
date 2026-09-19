@@ -59,6 +59,7 @@ export default function SchoolSettings() {
   const [templateFiles, setTemplateFiles] = useState({ bonafide: null, lc: null, idcard: null });
   const [certHeader, setCertHeader] = useState('');
   const [certFooter, setCertFooter] = useState('');
+  const [certFooterLine, setCertFooterLine] = useState('');
   const [idCardForm, setIdCardForm] = useState(ID_CARD_BLANK);
   const [bgVersion, setBgVersion] = useState(0);
   const [balance, setBalance] = useState(null);
@@ -77,6 +78,7 @@ export default function SchoolSettings() {
     setForm({ ...BLANK, ...res.data.school });
     setCertHeader(res.data.school.cert_header || '');
     setCertFooter(res.data.school.cert_footer || '');
+    setCertFooterLine(res.data.school.cert_footer_line || '');
     setIdCardForm({
       id_card_primary_color: normaliseColor(res.data.school.id_card_primary_color) || ID_CARD_BLANK.id_card_primary_color,
       id_card_school_name: res.data.school.id_card_school_name || res.data.school.name || '',
@@ -195,6 +197,7 @@ export default function SchoolSettings() {
       const data = new FormData();
       data.append('cert_header', certHeader);
       data.append('cert_footer', certFooter);
+      data.append('cert_footer_line', certFooterLine);
       const res = await api.put('/schools/me', data, { headers: { 'Content-Type': 'multipart/form-data' } });
       setSchool(res.data.school);
       setSuccess('Text saved');
@@ -414,6 +417,15 @@ export default function SchoolSettings() {
                 <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>Text shown above the signature/stamp (e.g. terms, notes).</p>
                 <RichTextEditor value={certFooter} onChange={setCertFooter} placeholder="Enter the school footer here..." />
                 <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={handleSaveCertText} disabled={saving}>{saving ? 'Saving...' : 'Save Footer'}</button>
+              </div>
+
+              <div className="card" style={{ padding: 20, marginTop: 20 }}>
+                <h4 style={{ marginBottom: 6 }}>Footer Line (Leaving Certificate)</h4>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
+                  The bordered notice line shown at the very bottom of the Leaving Certificate, just above the signatures. Your school name is added automatically as the last line — you don't need to type it. Leave blank to use the default notice text.
+                </p>
+                <RichTextEditor value={certFooterLine} onChange={setCertFooterLine} placeholder="No change in any entry in this certificate shall be made except by the authority issuing it. Certified that the above information is true to the best of our knowledge as per school records." />
+                <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={handleSaveCertText} disabled={saving}>{saving ? 'Saving...' : 'Save Footer Line'}</button>
               </div>
             </div>
           )}

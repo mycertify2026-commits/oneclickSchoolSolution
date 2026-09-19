@@ -373,6 +373,7 @@ CREATE TABLE `schools` (
   `id_card_template_data` MEDIUMBLOB,
   `cert_header` TEXT,
   `cert_footer` TEXT,
+  `cert_footer_line` TEXT,
   `id_card_primary_color` VARCHAR(100) DEFAULT 'linear-gradient(135deg,#1a6fd4,#1557b0)',
   `id_card_school_name` VARCHAR(200),
   `id_card_subtitle` VARCHAR(200) DEFAULT 'Student ID Card',

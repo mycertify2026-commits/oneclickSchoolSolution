@@ -413,13 +413,18 @@ async function migrate() {
     console.log('  + schools.lc_show_photo ensured');
   });
 
+  await step(23, 'schools — LC footer note line (bordered notice box, editable in School Settings)', async () => {
+    await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS cert_footer_line TEXT`);
+    console.log('  + schools.cert_footer_line ensured');
+  });
+
   await client.end();
 
   if (failures > 0) {
     console.error(`\nPostgreSQL catch-up migration finished with ${failures} failed section(s) — see ✗ lines above. Every other section still applied.`);
     process.exitCode = 1;
   } else {
-    console.log('\nPostgreSQL catch-up migration completed successfully — all 22 sections applied.');
+    console.log('\nPostgreSQL catch-up migration completed successfully — all 23 sections applied.');
   }
 }
 

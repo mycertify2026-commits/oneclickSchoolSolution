@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS schools (
   village VARCHAR(100), city VARCHAR(100), district VARCHAR(100), taluka VARCHAR(100),
   pin_code VARCHAR(10), phone VARCHAR(15), email VARCHAR(150), medium VARCHAR(30), board VARCHAR(50),
   logo_url VARCHAR(500), signature_url VARCHAR(500), stamp_url VARCHAR(500),
-  cert_header TEXT, cert_footer TEXT,
+  cert_header TEXT, cert_footer TEXT, cert_footer_line TEXT,
   id_card_primary_color VARCHAR(100) DEFAULT 'linear-gradient(135deg,#1a6fd4,#1557b0)',
   id_card_school_name VARCHAR(200), id_card_subtitle VARCHAR(200) DEFAULT 'Student ID Card',
   id_card_footer_text VARCHAR(255) DEFAULT 'If found, please contact the school office.',

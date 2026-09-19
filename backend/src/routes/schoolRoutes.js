@@ -20,7 +20,7 @@ router.get('/me', authenticate, requireRole('schoolAdmin'), attachSchool, school
 router.put(
   '/me', authenticate, requireRole('schoolAdmin'), attachSchool,
   uploadBranding.fields([{ name: 'logo', maxCount: 1 }, { name: 'signature', maxCount: 1 }, { name: 'stamp', maxCount: 1 }]),
-  sanitizeBodyExcept(['cert_header', 'cert_footer']),
+  sanitizeBodyExcept(['cert_header', 'cert_footer', 'cert_footer_line']),
   schoolController.updateMySchool
 );
 router.put('/me/id-card-design', authenticate, requireRole('schoolAdmin'), attachSchool, sanitizeBody, schoolController.updateIdCardDesign);
