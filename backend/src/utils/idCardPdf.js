@@ -247,11 +247,10 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
       .text(sanstha, 66, 19, { width: 118, lineBreak: false });
   }
   const schoolName = safe(school.id_card_school_name || school.name, 'School name');
-  const schoolFont = 9.2;
-  const schoolNameLines = splitSchoolName(doc, schoolName.toUpperCase(), 117, 'Helvetica-Bold', schoolFont);
+  const { lines: schoolNameLines, fontSize: schoolNameSize } = splitSchoolName(doc, schoolName.toUpperCase(), 117, 'Helvetica-Bold', 9.2, 5.5);
   schoolNameLines.forEach((line, index) => {
-    doc.font('Helvetica-Bold').fontSize(schoolFont).fillColor(headerColor)
-      .text(line, 66, 19 + idSanshaOffset + index * 9.2, { width: 117, lineBreak: false });
+    doc.font('Helvetica-Bold').fontSize(schoolNameSize).fillColor(headerColor)
+      .text(line, 66, 19 + idSanshaOffset + index * schoolNameSize, { width: 117, lineBreak: false });
   });
   const defaultSubtitle = school.recog_no ? `CBSE Affiliation No. ${school.recog_no}` : '';
   const configuredSubtitle = safe(school.id_card_subtitle);
@@ -416,16 +415,17 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   const nameX = 10 + logoSz + 6;
   const nameW = W - 8 - nameX;
   const schoolName = safe(school.id_card_school_name || school.name, 'School name').toUpperCase();
-  const nameLines = splitSchoolName(doc, schoolName, nameW, 'Helvetica-Bold', 7.2);
+  const { lines: nameLines, fontSize: nameSize } = splitSchoolName(doc, schoolName, nameW, 'Helvetica-Bold', 7.2, 5.5);
+  const namePitch = nameSize * (8.4 / 7.2);
   nameLines.slice(0, 2).forEach((line, index) => {
-    doc.font('Helvetica-Bold').fontSize(7.2).fillColor(WHITE)
-      .text(line, nameX, CARD_TOP + 10 + index * 8.4, { width: nameW, align: 'center', lineBreak: false });
+    doc.font('Helvetica-Bold').fontSize(nameSize).fillColor(WHITE)
+      .text(line, nameX, CARD_TOP + 10 + index * namePitch, { width: nameW, align: 'center', lineBreak: false });
   });
   const subtitleValue = safe(school.id_card_subtitle) || (school.recog_no ? `Recog. No. ${school.recog_no}` : '');
   if (subtitleValue) {
     const subtitle = fitSingleLine(doc, subtitleValue, nameW, 'Helvetica', 5);
     doc.font('Helvetica').fontSize(5).fillColor('#dbe4f5')
-      .text(subtitle, nameX, CARD_TOP + 10 + nameLines.slice(0, 2).length * 8.4 + 1, { width: nameW, align: 'center', lineBreak: false });
+      .text(subtitle, nameX, CARD_TOP + 10 + nameLines.slice(0, 2).length * namePitch + 1, { width: nameW, align: 'center', lineBreak: false });
   }
 
   // Separator between the school-identity header band and the student
@@ -586,25 +586,56 @@ function fitSingleLine(doc, value, maxWidth, font, fontSize) {
   return `${shortened}...`;
 }
 
-function splitSchoolName(doc, value, maxWidth, font, fontSize) {
+// Splits a school name across up to 2 lines at the best word boundary,
+// shrinking the font size (like every shrink-to-fit block in certificatePdf.js)
+// until both lines actually fit at that size — a long name used to keep the
+// caller's fixed font size and fall straight to per-line ellipsis truncation
+// (e.g. "JAY GURUDEV MADHYA...") instead of ever trying a smaller size first.
+// Returns { lines, fontSize } since the size may have shrunk from what was
+// requested — the caller must draw at the returned size, not the one it
+// passed in, or the wrapping this computed would no longer be valid.
+function splitSchoolName(doc, value, maxWidth, font, fontSize, minFontSize = 6) {
   const original = safe(value, 'SCHOOL NAME');
-  doc.font(font).fontSize(fontSize);
-  if (doc.widthOfString(original) <= maxWidth) return [original];
+  doc.font(font);
+
+  const bestSplit = (words) => {
+    let best = null;
+    for (let split = 1; split < words.length; split += 1) {
+      const first = words.slice(0, split).join(' ');
+      const second = words.slice(split).join(' ');
+      const score = Math.max(doc.widthOfString(first), doc.widthOfString(second));
+      if (!best || score < best.score) best = { first, second };
+    }
+    return best;
+  };
 
   const words = original.split(/\s+/).filter(Boolean);
-  if (words.length < 2) return [fitSingleLine(doc, original, maxWidth, font, fontSize)];
+  let size = fontSize;
 
-  let best = null;
-  for (let split = 1; split < words.length; split += 1) {
-    const first = words.slice(0, split).join(' ');
-    const second = words.slice(split).join(' ');
-    const score = Math.max(doc.widthOfString(first), doc.widthOfString(second));
-    if (!best || score < best.score) best = { first, second, score };
+  if (words.length < 2) {
+    while (size > minFontSize && doc.fontSize(size).widthOfString(original) > maxWidth) size -= 0.5;
+    return { lines: [fitSingleLine(doc, original, maxWidth, font, size)], fontSize: size };
   }
-  return [
-    fitSingleLine(doc, best.first, maxWidth, font, fontSize),
-    fitSingleLine(doc, best.second, maxWidth, font, fontSize),
-  ];
+
+  while (size > minFontSize) {
+    doc.fontSize(size);
+    if (doc.widthOfString(original) <= maxWidth) return { lines: [original], fontSize: size };
+    const { first, second } = bestSplit(words);
+    if (doc.widthOfString(first) <= maxWidth && doc.widthOfString(second) <= maxWidth) {
+      return { lines: [first, second], fontSize: size };
+    }
+    size -= 0.5;
+  }
+
+  // Even at the minimum size one line still doesn't fit (an unrealistically
+  // long single word with no spaces) — fall back to the same per-line
+  // ellipsis truncation as a last resort, at the minimum size.
+  doc.fontSize(size);
+  const { first, second } = bestSplit(words);
+  return {
+    lines: [fitSingleLine(doc, first, maxWidth, font, size), fitSingleLine(doc, second, maxWidth, font, size)],
+    fontSize: size,
+  };
 }
 
 function drawLegacyFront(doc, { W, H, MARGIN, headerColor, accentColor, school, student, certificate, photoPath, logoPath, signaturePath, stampPath, qrBuffer, bgBuf, GOLD, ORANGE, NAVY, GREY, TEXT, WHITE }) {
