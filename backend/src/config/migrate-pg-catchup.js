@@ -418,13 +418,18 @@ async function migrate() {
     console.log('  + schools.cert_footer_line ensured');
   });
 
+  await step(24, 'schools — ID card school name font size override (blank = auto-fit)', async () => {
+    await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS id_card_school_name_font_size DECIMAL(4,1)`);
+    console.log('  + schools.id_card_school_name_font_size ensured');
+  });
+
   await client.end();
 
   if (failures > 0) {
     console.error(`\nPostgreSQL catch-up migration finished with ${failures} failed section(s) — see ✗ lines above. Every other section still applied.`);
     process.exitCode = 1;
   } else {
-    console.log('\nPostgreSQL catch-up migration completed successfully — all 23 sections applied.');
+    console.log('\nPostgreSQL catch-up migration completed successfully — all 24 sections applied.');
   }
 }
 

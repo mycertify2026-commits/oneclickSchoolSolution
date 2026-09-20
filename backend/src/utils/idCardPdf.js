@@ -247,7 +247,14 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
       .text(sanstha, 66, 19, { width: 118, lineBreak: false });
   }
   const schoolName = safe(school.id_card_school_name || school.name, 'School name');
-  const { lines: schoolNameLines, fontSize: schoolNameSize } = splitSchoolName(doc, schoolName.toUpperCase(), 117, 'Helvetica-Bold', 9.2, 5.5);
+  // School Admin can pin a starting font size (School Settings > ID Card
+  // Designer); blank/unset keeps the original 9.2pt default. Either way the
+  // shrink-to-fit loop below still applies on top, so a chosen size that's
+  // too big for a particular long name degrades gracefully instead of
+  // overflowing or getting silently ignored.
+  const requestedNameSize = Number(school.id_card_school_name_font_size);
+  const startNameSize = Number.isFinite(requestedNameSize) && requestedNameSize > 0 ? requestedNameSize : 9.2;
+  const { lines: schoolNameLines, fontSize: schoolNameSize } = splitSchoolName(doc, schoolName.toUpperCase(), 117, 'Helvetica-Bold', startNameSize, 5.5);
   schoolNameLines.forEach((line, index) => {
     doc.font('Helvetica-Bold').fontSize(schoolNameSize).fillColor(headerColor)
       .text(line, 66, 19 + idSanshaOffset + index * schoolNameSize, { width: 117, lineBreak: false });
@@ -415,7 +422,12 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   const nameX = 10 + logoSz + 6;
   const nameW = W - 8 - nameX;
   const schoolName = safe(school.id_card_school_name || school.name, 'School name').toUpperCase();
-  const { lines: nameLines, fontSize: nameSize } = splitSchoolName(doc, schoolName, nameW, 'Helvetica-Bold', 7.2, 5.5);
+  // Same School Settings override as the horizontal layout, scaled from its
+  // 9.2pt baseline down to this layout's 7.2pt baseline so one chosen value
+  // means the same relative size on either orientation.
+  const requestedVertNameSize = Number(school.id_card_school_name_font_size);
+  const startVertNameSize = Number.isFinite(requestedVertNameSize) && requestedVertNameSize > 0 ? requestedVertNameSize * (7.2 / 9.2) : 7.2;
+  const { lines: nameLines, fontSize: nameSize } = splitSchoolName(doc, schoolName, nameW, 'Helvetica-Bold', startVertNameSize, 5.5);
   const namePitch = nameSize * (8.4 / 7.2);
   nameLines.slice(0, 2).forEach((line, index) => {
     doc.font('Helvetica-Bold').fontSize(nameSize).fillColor(WHITE)

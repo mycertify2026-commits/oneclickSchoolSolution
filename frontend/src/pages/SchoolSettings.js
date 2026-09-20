@@ -39,7 +39,7 @@ function parseFeatureIcons(raw) {
   }
 }
 const ID_CARD_BLANK = {
-  id_card_primary_color: '#1a6fd4', id_card_school_name: '', id_card_subtitle: 'Student ID Card',
+  id_card_primary_color: '#1a6fd4', id_card_school_name: '', id_card_school_name_font_size: '', id_card_subtitle: 'Student ID Card',
   id_card_footer_text: 'If found, please contact the school office.',
   id_card_show_register_number: true, id_card_show_aadhaar: true, id_card_show_dob: true,
   id_card_show_address: false, id_card_show_emergency_contact: true,
@@ -82,6 +82,7 @@ export default function SchoolSettings() {
     setIdCardForm({
       id_card_primary_color: normaliseColor(res.data.school.id_card_primary_color) || ID_CARD_BLANK.id_card_primary_color,
       id_card_school_name: res.data.school.id_card_school_name || res.data.school.name || '',
+      id_card_school_name_font_size: res.data.school.id_card_school_name_font_size ?? '',
       id_card_subtitle: res.data.school.id_card_subtitle || ID_CARD_BLANK.id_card_subtitle,
       id_card_footer_text: res.data.school.id_card_footer_text || ID_CARD_BLANK.id_card_footer_text,
       id_card_show_register_number: Boolean(res.data.school.id_card_show_register_number ?? true),
@@ -471,6 +472,18 @@ export default function SchoolSettings() {
                   <div className="form-group">
                     <label className="form-label">School Name (on card)</label>
                     <input type="text" className="form-control" value={idCardForm.id_card_school_name} onChange={e => setIdCardForm(p => ({ ...p, id_card_school_name: e.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">School Name Font Size (optional)</label>
+                    <input
+                      type="number" min="6" max="14" step="0.5" className="form-control"
+                      placeholder="Auto-fit"
+                      value={idCardForm.id_card_school_name_font_size}
+                      onChange={e => setIdCardForm(p => ({ ...p, id_card_school_name_font_size: e.target.value }))}
+                    />
+                    <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
+                      Leave blank to auto-fit the name to the card. If a long name still doesn't fit at your chosen size, it shrinks further automatically. Range: 6–14pt.
+                    </p>
                   </div>
                   <div className="form-group">
                     <label className="form-label">Subtitle</label>
