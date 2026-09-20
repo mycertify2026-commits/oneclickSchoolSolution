@@ -292,6 +292,17 @@ const ID_CARD_DESIGN_FIELDS = [
 const MIN_ID_CARD_NAME_FONT = 6, MAX_ID_CARD_NAME_FONT = 14;
 const VALID_ID_CARD_ORIENTATIONS = ['horizontal', 'vertical'];
 
+// Shared by updateIdCardDesign (persists to the DB) and previewIdCard (an
+// in-memory override for the live preview only) — previewIdCard used to
+// duplicate this inline and hadn't been updated with this field's own
+// clamping/blank-means-auto rule, so the live preview silently ignored a
+// chosen font size instead of applying (a clamped version of) it like Save did.
+function normalizeIdCardFontSize(raw) {
+  if (raw === '' || raw === null || raw === undefined) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? Math.min(MAX_ID_CARD_NAME_FONT, Math.max(MIN_ID_CARD_NAME_FONT, n)) : null;
+}
+
 // Validates/normalizes the 5-slot per-icon feature-strip config so a
 // malformed value can never reach the database or the PDF renderer.
 function normalizeFeatureIcons(raw) {
@@ -467,12 +478,7 @@ async function updateIdCardDesign(req, res) {
       } else if (field === 'id_card_school_name_font_size') {
         // Blank/invalid means "auto-fit" (the PDF's own default shrink-to-fit
         // starting size), stored as NULL rather than 0 or a guessed number.
-        const raw = req.body[field];
-        if (raw === '' || raw === null || raw === undefined) { values.push(null); }
-        else {
-          const n = Number(raw);
-          values.push(Number.isFinite(n) ? Math.min(MAX_ID_CARD_NAME_FONT, Math.max(MIN_ID_CARD_NAME_FONT, n)) : null);
-        }
+        values.push(normalizeIdCardFontSize(req.body[field]));
       } else {
         values.push(req.body[field]);
       }
@@ -525,6 +531,8 @@ async function previewIdCard(req, res) {
       } else if (field === 'id_card_feature_icons') {
         const normalized = normalizeFeatureIcons(req.body[field]);
         if (normalized !== null) overrides[field] = normalized;
+      } else if (field === 'id_card_school_name_font_size') {
+        overrides[field] = normalizeIdCardFontSize(req.body[field]);
       } else {
         overrides[field] = req.body[field];
       }

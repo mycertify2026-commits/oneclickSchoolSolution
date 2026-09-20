@@ -985,7 +985,15 @@ function IdCardLivePreview({ formValues, refreshKey }) {
         await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
         if (!cancelled) setLoading(false);
       } catch (e) {
-        if (!cancelled) { setError(e.response?.data?.error || e.message); setLoading(false); }
+        if (!cancelled) {
+          // Clear the last successful render on failure — otherwise a stale
+          // preview from before this change stays on screen underneath the
+          // error message, making it look like the new value had no effect
+          // when really the update to reflect it never rendered at all.
+          if (containerRef.current) containerRef.current.innerHTML = '';
+          setError(e.response?.data?.error || e.message);
+          setLoading(false);
+        }
       }
     }, 500);
 
@@ -1002,7 +1010,7 @@ function IdCardLivePreview({ formValues, refreshKey }) {
         </div>
       )}
       {error && <div style={{ color: 'var(--danger)', fontSize: 12, padding: 10 }}>Could not render preview: {error}</div>}
-      <div ref={containerRef} style={{ display: loading ? 'none' : 'block' }} />
+      <div ref={containerRef} style={{ display: loading || error ? 'none' : 'block' }} />
     </div>
   );
 }
