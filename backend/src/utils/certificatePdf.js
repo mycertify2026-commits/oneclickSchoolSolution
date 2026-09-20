@@ -144,7 +144,7 @@ function fitCenteredText(doc, text, x, y, width, maxFontSize, color, bold = true
 // minFontSize first, and if it's still too wide even there, truncates with
 // an ellipsis — so a very long name/address/remark can never run into the
 // border, the next row, or another field, regardless of length.
-function fitSingleLineText(doc, text, x, y, width, maxFontSize, color, bold = true, minFontSize = 7) {
+function fitSingleLineText(doc, text, x, y, width, maxFontSize, color, bold = true, minFontSize = 7, align = 'left') {
   const fontName = bold ? 'Helvetica-Bold' : 'Helvetica';
   let fontSize = maxFontSize;
   doc.font(fontName);
@@ -152,7 +152,7 @@ function fitSingleLineText(doc, text, x, y, width, maxFontSize, color, bold = tr
     fontSize -= 0.5;
   }
   doc.fontSize(fontSize).fillColor(color)
-    .text(text, x, y, { width, lineBreak: false, ellipsis: true });
+    .text(text, x, y, { width, align, lineBreak: false, ellipsis: true });
   return fontSize;
 }
 
@@ -810,21 +810,20 @@ async function generateLcPdf({
       // total content past the page bottom and triggered an unwanted,
       // mostly-blank 2nd page (pdfkit auto-paginates flowed text that would
       // overflow, even with margin:0).
-      fitSingleLineText(doc, sentenceCase(school.name), C3, sigLineY + 17, C3W, 8, GREY, false, 6);
+      fitSingleLineText(doc, sentenceCase(school.name), C3, sigLineY + 17, C3W, 8, GREY, false, 6, 'center');
 
       // Combined note at bottom — school-configurable (School Settings >
       // Footer Line), falling back to the original fixed wording when a
-      // school hasn't set one. No border around it (per request — an
-      // earlier pass added a full box here, since removed), with the school
-      // name always appended as its own final line.
-      const notePadX = 10, notePadY = 7, noteGapToName = 3;
+      // school hasn't set one. No border around it, and no school name line
+      // (both were added in earlier passes, since removed per request).
+      const notePadX = 10, notePadY = 7;
       const noteBodyText = stripHtmlToText(school.cert_footer_line).replace(/\n+/g, ' ') ||
         'No change in any entry in this certificate shall be made except by the authority issuing it. ' +
         'Certified that the above information is true to the best of our knowledge as per school records.';
-      const noteFontSize = 7.5, noteNameFontSize = 8;
+      const noteFontSize = 7.5;
       doc.font('Helvetica-Bold').fontSize(noteFontSize);
       const noteTextH = doc.heightOfString(noteBodyText, { width: contentWidth - notePadX * 2, align: 'justify' });
-      const noteBoxH = notePadY + noteTextH + noteGapToName + noteNameFontSize + notePadY;
+      const noteBoxH = notePadY + noteTextH + notePadY;
 
       // Anchored near the physical bottom margin for the normal case
       // (matching the ~46pt margin used everywhere else on this
@@ -834,9 +833,6 @@ async function generateLcPdf({
       const noteY = Math.max(doc.page.height - 18 - noteBoxH, sigLineY + 32);
       doc.font('Helvetica-Bold').fontSize(noteFontSize).fillColor(TEXT)
         .text(noteBodyText, 46 + notePadX, noteY + notePadY, { width: contentWidth - notePadX * 2, align: 'justify' });
-      doc.font('Helvetica-Bold').fontSize(noteNameFontSize).fillColor(LC_BLUE)
-        .text(sentenceCase(school.name).toUpperCase(), 46, noteY + notePadY + noteTextH + noteGapToName,
-          { width: contentWidth, align: 'center', lineBreak: false });
 
       doc.end();
       stream.on('finish', () => resolve(outputPath));
@@ -1211,20 +1207,16 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
     .text(`${safe(school.city || school.village || school.taluka, '-')}, Dist. ${safe(school.district, '-')}`,
       left, footerY + 37, { width: contentW - 10, lineBreak: false, ellipsis: true });
 
-  // School-configured footer text (School Settings > Certificate Footer) —
-  // additive, empty by default.
-  let afterDateRowY = footerY + 37 + 22;
-  const bonafideFooterText = stripHtmlToText(school.cert_footer).replace(/\n+/g, ' ');
-  if (bonafideFooterText) {
-    doc.font('Helvetica-Oblique').fontSize(7.5).fillColor(muted)
-      .text(bonafideFooterText, left, afterDateRowY, { width: contentW, align: 'center', lineBreak: false, ellipsis: true });
-    afterDateRowY += 14;
-  }
-
+  // Signature row sits at a fixed gap below Date/Place — no longer
+  // dependent on whether the optional footer text below exists, since that
+  // text now renders AFTER this whole row (see below) instead of before it.
+  // It used to sit at a fixed offset here that, once the photo moved up
+  // into this row, ended up landing behind the photo.
+  //
   // Signature images are intentionally NOT drawn here — Bonafide is meant to
   // be hand-signed on the printed hard copy; only the ID Card carries a
   // printed/uploaded signature.
-  const sigLineY = afterDateRowY + 40;
+  const sigLineY = footerY + 37 + 40;
   const sigColW = contentW / 3;
 
   doc.save().moveTo(left + 10, sigLineY).lineTo(left + sigColW - 15, sigLineY).lineWidth(0.8).strokeColor('#94A3B8').stroke().restore();
@@ -1249,6 +1241,17 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
   doc.save().moveTo(right - sigColW + 15, sigLineY).lineTo(right - 10, sigLineY).lineWidth(0.8).strokeColor('#94A3B8').stroke().restore();
   doc.font('Helvetica-Bold').fontSize(8.5).fillColor(black)
     .text(safe(school.bonafide_signature_label, 'Principal'), right - sigColW + 15, sigLineY + 4, { width: sigColW - 25, align: 'center', lineBreak: false });
+
+  // School-configured footer text (School Settings > Certificate Footer) —
+  // additive, empty by default. Placed after the whole signature row (below
+  // both the photo and the Class Teacher/Principal labels, whichever is
+  // lower — the labels are ~15pt tall), with a clear 20pt gap, so it can
+  // never land behind the photo regardless of how tall the block above it is.
+  const bonafideFooterText = stripHtmlToText(school.cert_footer).replace(/\n+/g, ' ');
+  if (bonafideFooterText) {
+    doc.font('Helvetica-Oblique').fontSize(7.5).fillColor(muted)
+      .text(bonafideFooterText, left, sigLineY + 15 + 20, { width: contentW, align: 'center', lineBreak: false, ellipsis: true });
+  }
 }
 
 async function generateBonafidePdf({ school, student, certificate, outputPath, photoPath, logoPath, purpose, signaturePath, stampPath }) {

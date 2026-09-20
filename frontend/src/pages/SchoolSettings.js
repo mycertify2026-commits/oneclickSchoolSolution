@@ -422,7 +422,7 @@ export default function SchoolSettings() {
               <div className="card" style={{ padding: 20, marginTop: 20 }}>
                 <h4 style={{ marginBottom: 6 }}>Footer Line (Leaving Certificate)</h4>
                 <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
-                  The bordered notice line shown at the very bottom of the Leaving Certificate, just above the signatures. Your school name is added automatically as the last line — you don't need to type it. Leave blank to use the default notice text.
+                  The notice line shown at the very bottom of the Leaving Certificate, just above the signatures. Leave blank to use the default notice text.
                 </p>
                 <RichTextEditor value={certFooterLine} onChange={setCertFooterLine} placeholder="No change in any entry in this certificate shall be made except by the authority issuing it. Certified that the above information is true to the best of our knowledge as per school records." />
                 <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={handleSaveCertText} disabled={saving}>{saving ? 'Saving...' : 'Save Footer Line'}</button>
