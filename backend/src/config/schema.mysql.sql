@@ -197,6 +197,74 @@ CREATE TABLE `id_card_pricing` (
   UNIQUE KEY `id_card_pricing_copy_type_key` (`copy_type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+DROP TABLE IF EXISTS `educational_document_types`;
+CREATE TABLE `educational_document_types` (
+  `doc_type` VARCHAR(40) NOT NULL,
+  `name` VARCHAR(150) NOT NULL,
+  `price` DECIMAL(10,2) NOT NULL,
+  `distributor_pct` DECIMAL(5,2) NOT NULL DEFAULT 0,
+  `super_distributor_pct` DECIMAL(5,2) NOT NULL DEFAULT 0,
+  `active` TINYINT(1) NOT NULL DEFAULT 1,
+  `updated_by` VARCHAR(36),
+  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`doc_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS `edu_doc_requests`;
+CREATE TABLE `edu_doc_requests` (
+  `id` VARCHAR(36) NOT NULL,
+  `request_number` VARCHAR(50) NOT NULL,
+  `school_id` VARCHAR(36) NOT NULL,
+  `distributor_id` VARCHAR(36),
+  `super_distributor_id` VARCHAR(36),
+  `total_amount` DECIMAL(10,2) NOT NULL,
+  `wallet_transaction_id` VARCHAR(36),
+  `status` VARCHAR(20) NOT NULL DEFAULT 'submitted',
+  `otp_verification_id` VARCHAR(36),
+  `created_by` VARCHAR(36),
+  `submitted_at` DATETIME,
+  `closed_at` DATETIME,
+  `closed_by` VARCHAR(36),
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `edu_doc_requests_request_number_key` (`request_number`),
+  FOREIGN KEY (`school_id`) REFERENCES `schools`(`id`) ON DELETE CASCADE,
+  KEY `idx_edu_doc_requests_distributor` (`distributor_id`),
+  KEY `idx_edu_doc_requests_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS `edu_doc_request_students`;
+CREATE TABLE `edu_doc_request_students` (
+  `id` VARCHAR(36) NOT NULL,
+  `request_id` VARCHAR(36) NOT NULL,
+  `student_id` VARCHAR(36) NOT NULL,
+  `doc_type` VARCHAR(40) NOT NULL,
+  `price` DECIMAL(10,2) NOT NULL,
+  `distributor_amount` DECIMAL(10,2) NOT NULL DEFAULT 0,
+  `super_distributor_amount` DECIMAL(10,2) NOT NULL DEFAULT 0,
+  `pdf_path` VARCHAR(500) NOT NULL,
+  `pdf_data` MEDIUMBLOB,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  FOREIGN KEY (`request_id`) REFERENCES `edu_doc_requests`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`student_id`) REFERENCES `students`(`id`) ON DELETE CASCADE,
+  KEY `idx_edu_doc_request_students_request` (`request_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS `edu_doc_request_status_history`;
+CREATE TABLE `edu_doc_request_status_history` (
+  `id` VARCHAR(36) NOT NULL,
+  `request_id` VARCHAR(36) NOT NULL,
+  `old_status` VARCHAR(20),
+  `new_status` VARCHAR(20) NOT NULL,
+  `changed_by` VARCHAR(36),
+  `changed_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `remarks` TEXT,
+  PRIMARY KEY (`id`),
+  FOREIGN KEY (`request_id`) REFERENCES `edu_doc_requests`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 DROP TABLE IF EXISTS `master_data`;
 CREATE TABLE `master_data` (
   `id` VARCHAR(36) NOT NULL DEFAULT (UUID()),

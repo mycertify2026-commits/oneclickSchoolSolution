@@ -42,6 +42,13 @@ export default function SaSettings() {
   const [certPricingMsg, setCertPricingMsg] = useState('');
   const [certPricingErr, setCertPricingErr] = useState('');
 
+  // Educational Certificate ("Request from Distributor") pricing + the
+  // distributor/super-distributor commission split, per document type.
+  const [eduDocTypes, setEduDocTypes] = useState([]);
+  const [savingDocType, setSavingDocType] = useState(null);
+  const [eduDocMsg, setEduDocMsg] = useState('');
+  const [eduDocErr, setEduDocErr] = useState('');
+
   const load = useCallback(async (category) => {
     const res = await api.get('/master-data', { params: { category } });
     setItems(res.data.items);
@@ -58,7 +65,32 @@ export default function SaSettings() {
     api.get('/certificates/pricing').then(({ data }) => {
       setCertPricing({ lc: String(data.pricing?.lc ?? '50'), bonafide: String(data.pricing?.bonafide ?? '30') });
     }).catch(() => {});
+    api.get('/edu-doc-requests/types/admin').then(({ data }) => {
+      setEduDocTypes((data.types || []).map(t => ({ ...t, price: String(t.price), distributorPct: String(t.distributorPct), superDistributorPct: String(t.superDistributorPct) })));
+    }).catch(() => {});
   }, []);
+
+  function updateEduDocField(docType, field, value) {
+    setEduDocTypes(prev => prev.map(t => t.docType === docType ? { ...t, [field]: value } : t));
+  }
+
+  async function handleSaveEduDocType(docType) {
+    setEduDocMsg(''); setEduDocErr('');
+    const row = eduDocTypes.find(t => t.docType === docType);
+    if (!row.price || isNaN(row.price) || Number(row.price) < 0) { setEduDocErr(`${row.name}: price must be a non-negative number`); return; }
+    if (isNaN(row.distributorPct) || isNaN(row.superDistributorPct)) { setEduDocErr(`${row.name}: percentages must be numbers`); return; }
+    setSavingDocType(docType);
+    try {
+      await api.put(`/edu-doc-requests/types/${docType}`, {
+        price: Number(row.price), distributorPct: Number(row.distributorPct), superDistributorPct: Number(row.superDistributorPct),
+      });
+      setEduDocMsg(`${row.name} saved successfully!`);
+    } catch (e) {
+      setEduDocErr(e.response?.data?.error || 'Failed to save');
+    } finally {
+      setSavingDocType(null);
+    }
+  }
 
   async function handleSavePricing() {
     setPricingMsg(''); setPricingErr('');
@@ -361,6 +393,58 @@ export default function SaSettings() {
         <button className="btn btn-primary" onClick={handleSavePricing} disabled={pricingSaving}>
           <i className="fas fa-save"></i> {pricingSaving ? 'Saving...' : 'Save Pricing'}
         </button>
+      </div>
+
+      {/* Educational Certificate ("Request from Distributor") Pricing Section */}
+      <div className="card" style={{ marginTop: 24, padding: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          <i className="fas fa-file-signature" style={{ color: 'var(--primary)', fontSize: 18 }}></i>
+          <h3 style={{ margin: 0 }}>Educational Certificate Pricing</h3>
+        </div>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
+          Set the price schools pay for each "Request from Distributor" document, and what share of that price
+          is allocated to the Distributor and Super Distributor as commission. Changes apply to new requests only —
+          requests already submitted keep the price and split they were charged at.
+        </p>
+        {eduDocMsg && <div style={{ background: '#ECFDF5', color: '#15803d', padding: 10, borderRadius: 8, fontSize: 13, marginBottom: 12 }}>{eduDocMsg}</div>}
+        {eduDocErr && <div style={{ background: '#FEE2E2', color: 'var(--danger)', padding: 10, borderRadius: 8, fontSize: 13, marginBottom: 12 }}>{eduDocErr}</div>}
+        <div className="table-responsive">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Certificate</th>
+                <th style={{ width: 130 }}>Price (₹)</th>
+                <th style={{ width: 150 }}>Distributor %</th>
+                <th style={{ width: 170 }}>Super Distributor %</th>
+                <th style={{ width: 100 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {eduDocTypes.map(t => (
+                <tr key={t.docType}>
+                  <td style={{ fontWeight: 600 }}>{t.name}</td>
+                  <td>
+                    <input type="number" min="0" className="form-control" value={t.price}
+                      onChange={e => updateEduDocField(t.docType, 'price', e.target.value)} />
+                  </td>
+                  <td>
+                    <input type="number" min="0" max="100" step="0.5" className="form-control" value={t.distributorPct}
+                      onChange={e => updateEduDocField(t.docType, 'distributorPct', e.target.value)} />
+                  </td>
+                  <td>
+                    <input type="number" min="0" max="100" step="0.5" className="form-control" value={t.superDistributorPct}
+                      onChange={e => updateEduDocField(t.docType, 'superDistributorPct', e.target.value)} />
+                  </td>
+                  <td>
+                    <button className="btn btn-sm btn-primary" onClick={() => handleSaveEduDocType(t.docType)} disabled={savingDocType === t.docType}>
+                      {savingDocType === t.docType ? 'Saving...' : 'Save'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </Layout>
   );

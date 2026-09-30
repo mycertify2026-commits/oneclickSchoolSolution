@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
+import api from '../api/client';
 import EDUCATIONAL_CERTIFICATES from '../data/educationalCertificates';
 
-// The planned future workflow (section 12 of the spec) — shown purely as an
-// informational diagram. None of these steps do anything yet; there is no
-// API, no notification, no request record behind this page.
+// The workflow diagram shown under the banner — now a real, working flow
+// (Request from Distributor is live), kept purely as a visual step-by-step
+// guide rather than clickable navigation.
 const WORKFLOW_STEPS = [
   { icon: 'fa-user-shield', label: 'Select Certificate' },
   { icon: 'fa-user-graduate', label: 'Select Student' },
@@ -19,6 +20,17 @@ export default function EducationalCertificates() {
   const [selectedId, setSelectedId] = useState(null);
   const selected = EDUCATIONAL_CERTIFICATES.find(c => c.id === selectedId) || null;
 
+  // Prices are never hardcoded on the frontend — fetched from the same
+  // database-backed lookup the backend uses to recalculate every request.
+  const [prices, setPrices] = useState({});
+  useEffect(() => {
+    api.get('/edu-doc-requests/types').then(res => {
+      const map = {};
+      (res.data.types || []).forEach(t => { map[t.docType] = t.price; });
+      setPrices(map);
+    }).catch(() => {});
+  }, []);
+
   return (
     <Layout role="schoolAdmin">
       <div className="page-header">
@@ -31,14 +43,14 @@ export default function EducationalCertificates() {
         </div>
       </div>
 
-      <ComingSoonBanner />
+      <RequestBanner onRequest={() => navigate('/edu-doc-requests/new')} />
 
       {selected ? (
-        <CertificateDetail cert={selected} onBack={() => setSelectedId(null)} />
+        <CertificateDetail cert={selected} price={prices[selected.id]} onBack={() => setSelectedId(null)} onRequest={() => navigate(`/edu-doc-requests/new?type=${selected.id}`)} />
       ) : (
         <div className="edu-cert-grid">
           {EDUCATIONAL_CERTIFICATES.map(cert => (
-            <CertificateCard key={cert.id} cert={cert} onOpen={() => setSelectedId(cert.id)} />
+            <CertificateCard key={cert.id} cert={cert} price={prices[cert.id]} onOpen={() => setSelectedId(cert.id)} />
           ))}
         </div>
       )}
@@ -46,30 +58,7 @@ export default function EducationalCertificates() {
   );
 }
 
-// A real <button disabled> (not a styled div) so it's unmistakably
-// non-interactive to screen readers and keyboard users, per the
-// accessibility requirement that disabled Coming Soon controls be obvious.
-function ComingSoonButton({ label, big }) {
-  return (
-    <button
-      type="button"
-      disabled
-      aria-disabled="true"
-      title="This feature is coming soon"
-      className="btn edu-coming-soon-btn"
-      style={{
-        background: 'var(--primary)', color: '#fff', border: 'none',
-        fontSize: big ? 14 : 13, fontWeight: 700, padding: big ? '12px 24px' : '9px 16px',
-        borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 8,
-      }}
-    >
-      <i className="fas fa-lock" aria-hidden="true" style={{ fontSize: big ? 12 : 11 }}></i>
-      {label}
-    </button>
-  );
-}
-
-function ComingSoonBanner() {
+function RequestBanner({ onRequest }) {
   return (
     <div
       className="card"
@@ -85,20 +74,31 @@ function ComingSoonBanner() {
           fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase',
           padding: '4px 12px', borderRadius: 999, marginBottom: 14,
         }}>
-          <i className="fas fa-sparkles" aria-hidden="true"></i> Coming Soon
+          <i className="fas fa-paper-plane" aria-hidden="true"></i> Now Available
         </span>
 
         <h2 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>Request Documents from Your Distributor</h2>
         <p style={{ fontSize: 13.5, color: 'rgba(255,255,255,.82)', marginTop: 8, maxWidth: 640, lineHeight: 1.6 }}>
-          Coming Soon — soon you will be able to easily request all required student documents directly
-          from your assigned distributor, right from this page.
+          Request any of these certificates for a student directly from your assigned distributor —
+          upload the supporting documents, pay from your school wallet, and track the request right here.
         </p>
 
         <div style={{ marginTop: 18 }}>
-          <ComingSoonButton label="Request Documents — Coming Soon" big />
+          <button
+            type="button"
+            onClick={onRequest}
+            className="btn"
+            style={{
+              background: '#fff', color: 'var(--primary)', border: 'none',
+              fontSize: 14, fontWeight: 700, padding: '12px 24px',
+              borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+            }}
+          >
+            Request Documents <i className="fas fa-arrow-right" aria-hidden="true" style={{ fontSize: 12 }}></i>
+          </button>
         </div>
 
-        {/* Future workflow — informational only, nothing here is wired up. */}
+        {/* Informational step-by-step guide, not clickable navigation. */}
         <div style={{
           marginTop: 24, paddingTop: 20, borderTop: '1px solid rgba(255,255,255,.18)',
           display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10,
@@ -125,7 +125,7 @@ function ComingSoonBanner() {
   );
 }
 
-function CertificateCard({ cert, onOpen }) {
+function CertificateCard({ cert, price, onOpen }) {
   return (
     <button
       type="button"
@@ -134,11 +134,16 @@ function CertificateCard({ cert, onOpen }) {
       style={{ textAlign: 'left', cursor: 'pointer', border: '1px solid var(--border)', background: '#fff', font: 'inherit' }}
     >
       <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div style={{
-          width: 44, height: 44, borderRadius: 12, background: 'var(--primary-light)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <i className={`fas ${cert.icon}`} aria-hidden="true" style={{ fontSize: 18, color: 'var(--primary)' }}></i>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: 12, background: 'var(--primary-light)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <i className={`fas ${cert.icon}`} aria-hidden="true" style={{ fontSize: 18, color: 'var(--primary)' }}></i>
+          </div>
+          {price !== undefined && (
+            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--primary)' }}>₹{price}</div>
+          )}
         </div>
         <div>
           <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{cert.title}</div>
@@ -155,16 +160,21 @@ function CertificateCard({ cert, onOpen }) {
   );
 }
 
-function CertificateDetail({ cert, onBack }) {
+function CertificateDetail({ cert, price, onBack, onRequest }) {
   return (
     <div className="card">
       <div className="card-header">
-        <div>
-          <button className="btn btn-sm btn-outline" style={{ marginBottom: 10 }} onClick={onBack}>
-            <i className="fas fa-arrow-left" aria-hidden="true" style={{ marginRight: 6 }}></i>Back to all certificates
-          </button>
-          <h3 className="card-title" style={{ fontSize: 18 }}>{cert.title}</h3>
-          <div className="mr-text" style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 2 }}>{cert.marathiTitle}</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}>
+          <div>
+            <button className="btn btn-sm btn-outline" style={{ marginBottom: 10 }} onClick={onBack}>
+              <i className="fas fa-arrow-left" aria-hidden="true" style={{ marginRight: 6 }}></i>Back to all certificates
+            </button>
+            <h3 className="card-title" style={{ fontSize: 18 }}>{cert.title}</h3>
+            <div className="mr-text" style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 2 }}>{cert.marathiTitle}</div>
+          </div>
+          {price !== undefined && (
+            <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--primary)' }}>₹{price}</div>
+          )}
         </div>
       </div>
       <div className="card-body">
@@ -214,9 +224,16 @@ function CertificateDetail({ cert, onBack }) {
         )}
 
         <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid var(--border)', textAlign: 'center' }}>
-          <ComingSoonButton label="Request Documents from Distributor" big />
+          <button
+            type="button"
+            onClick={onRequest}
+            className="btn btn-primary"
+            style={{ fontSize: 14, fontWeight: 700, padding: '12px 24px', display: 'inline-flex', alignItems: 'center', gap: 8 }}
+          >
+            Request Documents from Distributor <i className="fas fa-arrow-right" aria-hidden="true" style={{ fontSize: 12 }}></i>
+          </button>
           <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 8 }}>
-            Soon you'll be able to request these documents directly from your assigned distributor.
+            You'll select a student, upload supporting documents, and confirm via OTP.
           </div>
         </div>
       </div>

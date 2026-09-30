@@ -21,7 +21,8 @@ const NAV_CONFIG = {
       ]},
       { label: 'CAMPS & ID CARDS', items: [
         { to: '/sa-camp-requests',     icon: 'fa-campground',  label: 'Camp Requests' },
-        { to: '/sa-id-card-requests',  icon: 'fa-id-card',     label: 'ID Card Requests' }
+        { to: '/sa-id-card-requests',  icon: 'fa-id-card',     label: 'ID Card Requests' },
+        { to: '/sa-edu-doc-requests',  icon: 'fa-file-signature', label: 'Certificate Requests' }
       ]},
       { label: 'SYSTEM', items: [
         { to: '/sa-settings',    icon: 'fa-cog',       labelKey: 'settings', label: 'Settings' },
@@ -40,6 +41,7 @@ const NAV_CONFIG = {
         { to: '/students',         icon: 'fa-user-graduate',  labelKey: 'students',     label: 'Students' },
         { to: '/certificates',     icon: 'fa-certificate',    labelKey: 'certificates', label: 'Certificates' },
         { to: '/educational-certificates', icon: 'fa-graduation-cap', marathi: true,     label: 'विद्यार्थ्यांना लागणारे शैक्षणिक कागदपपत्रे' },
+        { to: '/edu-doc-requests', icon: 'fa-file-signature',                            label: 'My Certificate Requests' },
         { to: '/camp-requests',    icon: 'fa-campground',                               label: 'Camp Requests' }
       ]},
       { label: 'SCHOOL', items: [
@@ -59,7 +61,8 @@ const NAV_CONFIG = {
       ]},
       { label: 'CAMPS & ID CARDS', items: [
         { to: '/dist-camp-requests',    icon: 'fa-campground', label: 'Camp Requests' },
-        { to: '/dist-id-card-requests', icon: 'fa-id-card',    label: 'ID Card Requests' }
+        { to: '/dist-id-card-requests', icon: 'fa-id-card',    label: 'ID Card Requests' },
+        { to: '/dist-edu-doc-requests', icon: 'fa-file-signature', label: 'Certificate Requests' }
       ]},
       { label: 'ACCOUNT', items: [
         { to: '/dist-settings', icon: 'fa-cog', labelKey: 'settings', label: 'Settings' }

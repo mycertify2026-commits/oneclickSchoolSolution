@@ -423,13 +423,103 @@ async function migrate() {
     console.log('  + schools.id_card_school_name_font_size ensured');
   });
 
+  await step(25, 'educational_document_types + edu_doc_requests + edu_doc_request_students + edu_doc_request_status_history ("Request from Distributor")', async () => {
+    // Two-level design: edu_doc_requests is the BATCH/parent (one row per
+    // Submit+OTP-verify action — one Request ID, one status, one total,
+    // covering however many students were in that submission);
+    // edu_doc_request_students is one row per student within that batch.
+    // This split is required because a single Request ID must be able to
+    // cover multiple students, which a single-table design with a UNIQUE
+    // request_number per row cannot express.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS educational_document_types (
+        doc_type VARCHAR(40) PRIMARY KEY,
+        name VARCHAR(150) NOT NULL,
+        price DECIMAL(10,2) NOT NULL,
+        distributor_pct DECIMAL(5,2) NOT NULL DEFAULT 0,
+        super_distributor_pct DECIMAL(5,2) NOT NULL DEFAULT 0,
+        active SMALLINT NOT NULL DEFAULT 1,
+        updated_by VARCHAR(36),
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    // Retrofit for a database where this table already existed before the
+    // commission-split columns were added.
+    await client.query(`ALTER TABLE educational_document_types ADD COLUMN IF NOT EXISTS distributor_pct DECIMAL(5,2) NOT NULL DEFAULT 0`);
+    await client.query(`ALTER TABLE educational_document_types ADD COLUMN IF NOT EXISTS super_distributor_pct DECIMAL(5,2) NOT NULL DEFAULT 0`);
+    await client.query(`
+      INSERT INTO educational_document_types (doc_type, name, price) VALUES
+        ('caste-certificate', 'Caste Certificate', 268.00),
+        ('income-certificate', 'Income Certificate', 189.00),
+        ('age-domicile-nationality', 'Age, Domicile and Nationality Certificate', 199.00),
+        ('non-creamy-layer', 'Non-Creamy Layer Certificate', 199.00)
+      ON CONFLICT (doc_type) DO NOTHING;
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS edu_doc_requests (
+        id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::VARCHAR,
+        request_number VARCHAR(50) NOT NULL UNIQUE,
+        school_id VARCHAR(36) NOT NULL,
+        distributor_id VARCHAR(36),
+        super_distributor_id VARCHAR(36),
+        total_amount DECIMAL(10,2) NOT NULL,
+        wallet_transaction_id VARCHAR(36),
+        status VARCHAR(20) NOT NULL DEFAULT 'submitted',
+        otp_verification_id VARCHAR(36),
+        created_by VARCHAR(36),
+        submitted_at TIMESTAMP,
+        closed_at TIMESTAMP,
+        closed_by VARCHAR(36),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_edudoc_school FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_edu_doc_requests_distributor ON edu_doc_requests (distributor_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_edu_doc_requests_status ON edu_doc_requests (status)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS edu_doc_request_students (
+        id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::VARCHAR,
+        request_id VARCHAR(36) NOT NULL,
+        student_id VARCHAR(36) NOT NULL,
+        doc_type VARCHAR(40) NOT NULL,
+        price DECIMAL(10,2) NOT NULL,
+        distributor_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+        super_distributor_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+        pdf_path VARCHAR(500) NOT NULL,
+        pdf_data BYTEA,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_edudocstu_request FOREIGN KEY (request_id) REFERENCES edu_doc_requests(id) ON DELETE CASCADE,
+        CONSTRAINT fk_edudocstu_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
+      );
+    `);
+    // Retrofit for a database where this table already existed before the
+    // commission-split snapshot columns were added.
+    await client.query(`ALTER TABLE edu_doc_request_students ADD COLUMN IF NOT EXISTS distributor_amount DECIMAL(10,2) NOT NULL DEFAULT 0`);
+    await client.query(`ALTER TABLE edu_doc_request_students ADD COLUMN IF NOT EXISTS super_distributor_amount DECIMAL(10,2) NOT NULL DEFAULT 0`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_edu_doc_request_students_request ON edu_doc_request_students (request_id)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS edu_doc_request_status_history (
+        id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::VARCHAR,
+        request_id VARCHAR(36) NOT NULL,
+        old_status VARCHAR(20),
+        new_status VARCHAR(20) NOT NULL,
+        changed_by VARCHAR(36),
+        changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        remarks TEXT,
+        CONSTRAINT fk_eduhist_request FOREIGN KEY (request_id) REFERENCES edu_doc_requests(id) ON DELETE CASCADE
+      );
+    `);
+    console.log('  + educational_document_types (seeded) / edu_doc_requests / edu_doc_request_students / edu_doc_request_status_history ensured');
+  });
+
   await client.end();
 
   if (failures > 0) {
     console.error(`\nPostgreSQL catch-up migration finished with ${failures} failed section(s) — see ✗ lines above. Every other section still applied.`);
     process.exitCode = 1;
   } else {
-    console.log('\nPostgreSQL catch-up migration completed successfully — all 24 sections applied.');
+    console.log('\nPostgreSQL catch-up migration completed successfully — all 25 sections applied.');
   }
 }
 

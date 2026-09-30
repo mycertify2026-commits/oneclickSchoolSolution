@@ -45,7 +45,7 @@ export default function DistSchools() {
         ))}
       </div>
 
-      <div className="school-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
+      <div className="school-grid" style={{ display: 'grid', gap: 16 }}>
         {schools.length === 0 ? (
           <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 60, color: 'var(--text-secondary)' }}>
             <i className="fas fa-school" style={{ fontSize: 48, marginBottom: 12, display: 'block', opacity: 0.3 }}></i>

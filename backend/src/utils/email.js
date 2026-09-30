@@ -383,6 +383,74 @@ async function sendCartInsufficientBalanceEmail(to, name, { cartTotal, walletBal
   return sendMail({ to, subject: 'Insufficient wallet balance - One Click School Solutions', html, emailType: 'cart_insufficient_balance', relatedSchoolId: schoolId });
 }
 
+// ── Educational Document Requests ("Request from Distributor") ─────────────
+
+async function sendEduDocOtpEmail(to, name, otp, { itemCount, cartTotal }) {
+  const html = wrapTemplate('Educational Certificate Request – OTP Verification', `
+    <p>Dear ${escapeHtml(name)},</p>
+    <p>You requested <strong>${itemCount}</strong> educational document${itemCount !== 1 ? 's' : ''} totalling <strong>₹${cartTotal}</strong>.</p>
+    <p>Your OTP for submitting the Educational Certificate Request is:</p>
+    <p style="text-align:center;margin:28px 0">
+      <span style="font-size:36px;font-weight:700;letter-spacing:10px;color:#1A6FD4">${otp}</span>
+    </p>
+    <p>This OTP is valid for 10 minutes.</p>
+    <p style="font-size:13px;color:#64748b">Do not share this OTP with anyone.</p>
+  `);
+  const result = await sendMail({ to, subject: `${otp} - Educational Certificate Request OTP Verification`, html, emailType: 'edu_doc_otp' });
+  if (!result.success) {
+    const error = new Error(result.error || 'OTP email could not be delivered');
+    error.code = 'EMAIL_DELIVERY_FAILED';
+    throw error;
+  }
+  return result;
+}
+
+async function sendEduDocDistributorEmail(to, distributorName, { requestNumber, schoolName, items }) {
+  const rows = items.map((it, i) => `
+    <tr>
+      <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0">${i + 1}. ${escapeHtml(it.studentName)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0">${escapeHtml(it.docTypeName)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;text-align:right">₹${it.price}</td>
+    </tr>`).join('');
+  const total = items.reduce((sum, it) => sum + Number(it.price), 0);
+  const html = wrapTemplate('New Educational Certificate Request', `
+    <p>Dear ${escapeHtml(distributorName)},</p>
+    <p>A new educational certificate request has been submitted by <strong>${escapeHtml(schoolName)}</strong>.</p>
+    <p><strong>Request ID:</strong> ${escapeHtml(requestNumber)}</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px">
+      <thead><tr><th style="text-align:left;padding:6px 10px;border-bottom:2px solid #1A6FD4">Student</th><th style="text-align:left;padding:6px 10px;border-bottom:2px solid #1A6FD4">Certificate</th><th style="text-align:right;padding:6px 10px;border-bottom:2px solid #1A6FD4">Amount</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p><strong>Total: ₹${total}</strong></p>
+    <p>Status: <strong>Submitted</strong></p>
+    <p>Please log in to your Distributor Dashboard to process this request.</p>
+  `);
+  return sendMail({ to, subject: `New Educational Certificate Request – ${requestNumber}`, html, emailType: 'edu_doc_distributor_notification' });
+}
+
+async function sendEduDocSuperAdminEmail(to, adminName, { requestNumber, schoolName, distributorName, items }) {
+  const rows = items.map((it, i) => `
+    <tr>
+      <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0">${i + 1}. ${escapeHtml(it.studentName)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0">${escapeHtml(it.docTypeName)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;text-align:right">₹${it.price}</td>
+    </tr>`).join('');
+  const total = items.reduce((sum, it) => sum + Number(it.price), 0);
+  const html = wrapTemplate('New Educational Certificate Request', `
+    <p>Dear ${escapeHtml(adminName)},</p>
+    <p><strong>Request ID:</strong> ${escapeHtml(requestNumber)}</p>
+    <p><strong>School:</strong> ${escapeHtml(schoolName)}</p>
+    <p><strong>Distributor:</strong> ${escapeHtml(distributorName || 'Not assigned')}</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px">
+      <thead><tr><th style="text-align:left;padding:6px 10px;border-bottom:2px solid #1A6FD4">Student</th><th style="text-align:left;padding:6px 10px;border-bottom:2px solid #1A6FD4">Certificate</th><th style="text-align:right;padding:6px 10px;border-bottom:2px solid #1A6FD4">Amount</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p><strong>Total: ₹${total}</strong></p>
+    <p>Status: <strong>Submitted</strong></p>
+  `);
+  return sendMail({ to, subject: `New Educational Certificate Request – ${requestNumber}`, html, emailType: 'edu_doc_super_admin_notification' });
+}
+
 // ---------------------------------------------------------------------------
 // EmailService surface — thin aliases over the functions above. No duplicate
 // SMTP/template logic: every alias calls straight into the already-tested
@@ -405,6 +473,7 @@ module.exports = {
   sendWalletSubmittedEmail, sendWalletApprovedEmail, sendWalletRejectedEmail,
   sendQrChangedEmail, sendLowBalanceEmail, sendCertificateGeneratedEmail,
   sendSessionExpiredEmail, sendCartOtpEmail, sendCartInsufficientBalanceEmail,
+  sendEduDocOtpEmail, sendEduDocDistributorEmail, sendEduDocSuperAdminEmail,
   // EmailService surface
   sendEmail, sendCertificateEmail, sendUserInvitationEmail,
   sendSchoolRegistrationEmail, sendNotificationEmail,

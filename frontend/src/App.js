@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { TranslationProvider } from './context/TranslationContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import ScrollToTop from './components/ScrollToTop';
 
 import Login from './pages/Login';
 import LandingPage from './pages/LandingPage';
@@ -30,6 +31,8 @@ import SchoolSettings from './pages/SchoolSettings';
 import CertificateTemplates from './pages/CertificateTemplates';
 import CertificateTemplateEditor from './pages/CertificateTemplateEditor';
 import EducationalCertificates from './pages/EducationalCertificates';
+import EduDocRequestFlow from './pages/EduDocRequestFlow';
+import SchoolEduDocRequests from './pages/SchoolEduDocRequests';
 import Notifications from './pages/Notifications';
 
 import DistDashboard from './pages/DistDashboard';
@@ -54,12 +57,15 @@ import DistIdCardRequests from './pages/DistIdCardRequests';
 import SaCampRequests from './pages/SaCampRequests';
 import SaEmailLogs from './pages/SaEmailLogs';
 import SaIdCardRequests from './pages/SaIdCardRequests';
+import DistEduDocRequests from './pages/DistEduDocRequests';
+import SaEduDocRequests from './pages/SaEduDocRequests';
 
 export default function App() {
   return (
     <TranslationProvider>
       <AuthProvider>
         <BrowserRouter>
+          <ScrollToTop />
           <Routes>
             {/* Each role still has its own direct, shareable login URL (used below) —
                 the landing page's own login selector just links into these same routes,
@@ -99,6 +105,8 @@ export default function App() {
             <Route path="/certificate-templates" element={<ProtectedRoute role="schoolAdmin"><CertificateTemplates /></ProtectedRoute>} />
             <Route path="/certificate-templates/:id/edit" element={<ProtectedRoute role="schoolAdmin"><CertificateTemplateEditor /></ProtectedRoute>} />
             <Route path="/educational-certificates" element={<ProtectedRoute role="schoolAdmin"><EducationalCertificates /></ProtectedRoute>} />
+            <Route path="/edu-doc-requests/new" element={<ProtectedRoute role="schoolAdmin"><EduDocRequestFlow /></ProtectedRoute>} />
+            <Route path="/edu-doc-requests" element={<ProtectedRoute role="schoolAdmin"><SchoolEduDocRequests /></ProtectedRoute>} />
             <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
 
             {/* School Admin — Camp */}
@@ -113,6 +121,7 @@ export default function App() {
             <Route path="/dist-settings" element={<ProtectedRoute role="distributor"><DistSettings /></ProtectedRoute>} />
             <Route path="/dist-camp-requests" element={<ProtectedRoute role="distributor"><DistCampRequests /></ProtectedRoute>} />
             <Route path="/dist-id-card-requests" element={<ProtectedRoute role="distributor"><DistIdCardRequests /></ProtectedRoute>} />
+            <Route path="/dist-edu-doc-requests" element={<ProtectedRoute role="distributor"><DistEduDocRequests /></ProtectedRoute>} />
 
             {/* Super Distributor */}
             <Route path="/sd-dashboard" element={<ProtectedRoute role="superDistributor"><SdDashboard /></ProtectedRoute>} />
@@ -130,6 +139,7 @@ export default function App() {
             <Route path="/sa-camp-requests" element={<ProtectedRoute role="superAdmin"><SaCampRequests /></ProtectedRoute>} />
             <Route path="/sa-email-logs" element={<ProtectedRoute role="superAdmin"><SaEmailLogs /></ProtectedRoute>} />
             <Route path="/sa-id-card-requests" element={<ProtectedRoute role="superAdmin"><SaIdCardRequests /></ProtectedRoute>} />
+            <Route path="/sa-edu-doc-requests" element={<ProtectedRoute role="superAdmin"><SaEduDocRequests /></ProtectedRoute>} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

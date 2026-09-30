@@ -8,7 +8,7 @@ const UPLOAD_ROOT = path.join(__dirname, '..', '..', 'uploads');
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
-['photos', 'idcards', 'certificates', 'branding', 'templates', 'imports', 'wallet', 'bank-qr', 'school-photos', 'cert-templates', 'avatars'].forEach(d => ensureDir(path.join(UPLOAD_ROOT, d)));
+['photos', 'idcards', 'certificates', 'branding', 'templates', 'imports', 'wallet', 'bank-qr', 'school-photos', 'cert-templates', 'avatars', 'edu-doc-requests', 'edu-doc-requests/pending'].forEach(d => ensureDir(path.join(UPLOAD_ROOT, d)));
 
 const photoStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, path.join(UPLOAD_ROOT, 'photos')),
@@ -100,4 +100,21 @@ const certTemplateFilter = (req, file, cb) => {
 };
 const uploadCertTemplateSource = multer({ storage: certTemplateStorage, fileFilter: certTemplateFilter, limits: { fileSize: 12 * 1024 * 1024 } });
 
-module.exports = { upload, uploadBranding, uploadTemplate, uploadImport, uploadWalletScreenshot, uploadBankQr, uploadSchoolPhoto, uploadCertTemplateSource, uploadAvatar, UPLOAD_ROOT };
+// Educational document request ("Request from Distributor") — the ONE
+// combined supporting-documents PDF a School Admin uploads per student.
+// Saved into a school-namespaced "pending" area first (filename embeds
+// req.schoolId, which attachSchool must run before this middleware to set)
+// — that filename IS the ownership check when /submit later validates the
+// fileToken it's given back, with no extra DB row needed to track it.
+const eduDocPendingStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, path.join(UPLOAD_ROOT, 'edu-doc-requests', 'pending')),
+  filename: (req, file, cb) => cb(null, `pending-${req.schoolId}-${uuidv4()}.pdf`)
+});
+const eduDocFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (file.mimetype === 'application/pdf' || ext === '.pdf') cb(null, true);
+  else cb(new Error('Only PDF files are allowed'));
+};
+const uploadEduDoc = multer({ storage: eduDocPendingStorage, fileFilter: eduDocFilter, limits: { fileSize: 7 * 1024 * 1024 } });
+
+module.exports = { upload, uploadBranding, uploadTemplate, uploadImport, uploadWalletScreenshot, uploadBankQr, uploadSchoolPhoto, uploadCertTemplateSource, uploadAvatar, uploadEduDoc, UPLOAD_ROOT };

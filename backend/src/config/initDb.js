@@ -404,6 +404,87 @@ async function initDb() {
     // Migration: ID Card background image for schools
     await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS id_card_bg_data BYTEA`);
 
+    // Migration: Educational Document Requests ("Request from Distributor")
+    // Two-level design: edu_doc_requests is the BATCH/parent (one row per
+    // Submit+OTP-verify action — one Request ID, one status, one total,
+    // covering however many students were in that submission);
+    // edu_doc_request_students is one row per student within that batch.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS educational_document_types (
+        doc_type VARCHAR(40) PRIMARY KEY,
+        name VARCHAR(150) NOT NULL,
+        price DECIMAL(10,2) NOT NULL,
+        distributor_pct DECIMAL(5,2) NOT NULL DEFAULT 0,
+        super_distributor_pct DECIMAL(5,2) NOT NULL DEFAULT 0,
+        active SMALLINT NOT NULL DEFAULT 1,
+        updated_by VARCHAR(36),
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`ALTER TABLE educational_document_types ADD COLUMN IF NOT EXISTS distributor_pct DECIMAL(5,2) NOT NULL DEFAULT 0`);
+    await client.query(`ALTER TABLE educational_document_types ADD COLUMN IF NOT EXISTS super_distributor_pct DECIMAL(5,2) NOT NULL DEFAULT 0`);
+    await client.query(`
+      INSERT INTO educational_document_types (doc_type, name, price) VALUES
+        ('caste-certificate', 'Caste Certificate', 268.00),
+        ('income-certificate', 'Income Certificate', 189.00),
+        ('age-domicile-nationality', 'Age, Domicile and Nationality Certificate', 199.00),
+        ('non-creamy-layer', 'Non-Creamy Layer Certificate', 199.00)
+      ON CONFLICT (doc_type) DO NOTHING
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS edu_doc_requests (
+        id VARCHAR(36) PRIMARY KEY,
+        request_number VARCHAR(50) NOT NULL UNIQUE,
+        school_id VARCHAR(36) NOT NULL,
+        distributor_id VARCHAR(36),
+        super_distributor_id VARCHAR(36),
+        total_amount DECIMAL(10,2) NOT NULL,
+        wallet_transaction_id VARCHAR(36),
+        status VARCHAR(20) NOT NULL DEFAULT 'submitted',
+        otp_verification_id VARCHAR(36),
+        created_by VARCHAR(36),
+        submitted_at TIMESTAMP,
+        closed_at TIMESTAMP,
+        closed_by VARCHAR(36),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_edu_doc_requests_distributor ON edu_doc_requests (distributor_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_edu_doc_requests_status ON edu_doc_requests (status)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS edu_doc_request_students (
+        id VARCHAR(36) PRIMARY KEY,
+        request_id VARCHAR(36) NOT NULL,
+        student_id VARCHAR(36) NOT NULL,
+        doc_type VARCHAR(40) NOT NULL,
+        price DECIMAL(10,2) NOT NULL,
+        distributor_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+        super_distributor_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+        pdf_path VARCHAR(500) NOT NULL,
+        pdf_data BYTEA,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (request_id) REFERENCES edu_doc_requests(id) ON DELETE CASCADE,
+        FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
+      )
+    `);
+    await client.query(`ALTER TABLE edu_doc_request_students ADD COLUMN IF NOT EXISTS distributor_amount DECIMAL(10,2) NOT NULL DEFAULT 0`);
+    await client.query(`ALTER TABLE edu_doc_request_students ADD COLUMN IF NOT EXISTS super_distributor_amount DECIMAL(10,2) NOT NULL DEFAULT 0`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_edu_doc_request_students_request ON edu_doc_request_students (request_id)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS edu_doc_request_status_history (
+        id VARCHAR(36) PRIMARY KEY,
+        request_id VARCHAR(36) NOT NULL,
+        old_status VARCHAR(20),
+        new_status VARCHAR(20) NOT NULL,
+        changed_by VARCHAR(36),
+        changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        remarks TEXT,
+        FOREIGN KEY (request_id) REFERENCES edu_doc_requests(id) ON DELETE CASCADE
+      )
+    `);
+
     // Backfill: auto-generate Saral ID for any existing student that doesn't have one
     await client.query(`
       UPDATE students

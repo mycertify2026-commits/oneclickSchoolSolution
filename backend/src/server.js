@@ -72,6 +72,7 @@ app.use('/api/commission', require('./routes/commissionRoutes'));
 app.use('/api/certificate-templates', require('./routes/certificateTemplateRoutes'));
 app.use('/api/contact', require('./routes/contactRoutes'));
 app.use('/api/email-logs', require('./routes/emailLogRoutes'));
+app.use('/api/edu-doc-requests', require('./routes/eduDocRequestRoutes'));
 
 // In production, serve the React build from the frontend directory
 if (process.env.NODE_ENV === 'production') {

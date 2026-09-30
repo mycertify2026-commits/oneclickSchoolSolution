@@ -32,4 +32,25 @@ async function getIdCardPrice(copyType) {
   return rows.length ? Number(rows[0].price) : (type === 'hard' ? 100 : FALLBACK_PRICES.idcard);
 }
 
-module.exports = { VALID_TYPES, FALLBACK_PRICES, isValidType, getPriceForType, getIdCardPrice };
+// Educational document types ("Request from Distributor" feature) — exact
+// ids from frontend/src/data/educationalCertificates.js, reused here so the
+// backend never invents its own slug list.
+const EDU_DOC_TYPES = ['caste-certificate', 'income-certificate', 'age-domicile-nationality', 'non-creamy-layer'];
+
+function isValidEduDocType(type) {
+  return EDU_DOC_TYPES.includes(type);
+}
+
+// Returns null (never a guessed fallback) when the type is invalid or
+// inactive, so the caller rejects the request instead of silently charging
+// a made-up price.
+async function getEduDocPrice(docType) {
+  if (!isValidEduDocType(docType)) return null;
+  const [rows] = await pool.query('SELECT price FROM educational_document_types WHERE doc_type = ? AND active = 1', [docType]);
+  return rows.length ? Number(rows[0].price) : null;
+}
+
+module.exports = {
+  VALID_TYPES, FALLBACK_PRICES, isValidType, getPriceForType, getIdCardPrice,
+  EDU_DOC_TYPES, isValidEduDocType, getEduDocPrice,
+};
