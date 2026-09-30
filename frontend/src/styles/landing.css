@@ -323,6 +323,26 @@
 .lp-cert-body .lp-cert-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; }
 .lp-cert-badge { font-size: 10px; color: var(--text-light); text-transform: uppercase; letter-spacing: .04em; text-align: center; padding: 12px 0 4px; }
 
+/* ---------- Logistics ---------- */
+/* Scoped amber accent so this reads as a distinct line of business rather
+   than another certificate-platform feature, without touching the global
+   --primary tokens used everywhere else on the page. */
+.lp-eyebrow-logistics { color: #B45309; background: rgba(217,119,6,0.12); }
+.lp-card-icon-logistics { background: rgba(217,119,6,0.12); color: #D97706; }
+.lp-card-logistics:hover { border-color: transparent; box-shadow: 0 20px 40px -12px rgba(217,119,6,0.25); }
+.lp-logistics-tech { margin-top: 56px; padding-top: 48px; border-top: 1px solid var(--border); }
+.lp-logistics-cta {
+  margin-top: 56px; padding: 40px 32px; border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, #B45309 0%, #D97706 100%);
+  color: var(--white); text-align: center;
+}
+.lp-logistics-cta h3 { font-size: clamp(20px,2.4vw,26px); font-weight: 800; margin: 0 0 12px; text-wrap: balance; }
+.lp-logistics-cta p { font-size: 14.5px; opacity: 0.92; max-width: 560px; margin: 0 auto 26px; line-height: 1.6; }
+.lp-logistics-cta .lp-btn-primary { background: var(--white); color: #B45309; box-shadow: none; }
+.lp-logistics-cta .lp-btn-primary:hover { background: rgba(255,255,255,0.9); }
+.lp-logistics-cta .lp-btn-outline { background: transparent; color: var(--white); border-color: rgba(255,255,255,0.5); }
+.lp-logistics-cta .lp-btn-outline:hover { background: rgba(255,255,255,0.12); border-color: var(--white); }
+
 /* ---------- CTA ---------- */
 .lp-cta {
   background: var(--primary-gradient);
@@ -471,6 +491,7 @@
   .lp-form-row { grid-template-columns: 1fr; }
   .lp-footer-grid { grid-template-columns: 1fr 1fr; gap: 32px; }
   .lp-cta { padding: 44px 24px; margin: 0 16px; }
+  .lp-logistics-cta { padding: 32px 20px; }
   .lp-float-card { display: none; }
 }
 

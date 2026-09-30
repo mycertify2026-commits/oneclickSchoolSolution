@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { id: 'lp-how-it-works', label: 'How It Works' },
   { id: 'lp-services', label: 'Services' },
   { id: 'lp-about', label: 'About' },
+  { id: 'lp-logistics', label: 'Logistics' },
   { id: 'lp-contact', label: 'Contact' },
 ];
 

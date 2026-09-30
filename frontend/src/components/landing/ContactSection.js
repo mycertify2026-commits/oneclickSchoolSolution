@@ -5,6 +5,7 @@ const INQUIRY_OPTIONS = [
   { value: 'school', label: 'School' },
   { value: 'distributor', label: 'Distributor' },
   { value: 'superDistributor', label: 'Super Distributor' },
+  { value: 'logistics', label: 'Logistics Services' },
   { value: 'general', label: 'General Inquiry' },
   { value: 'support', label: 'Support' },
   { value: 'partnership', label: 'Partnership' },

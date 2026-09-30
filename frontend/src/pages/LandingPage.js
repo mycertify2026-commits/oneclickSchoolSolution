@@ -11,6 +11,7 @@ import RolesSection from '../components/landing/RolesSection';
 import SecuritySection from '../components/landing/SecuritySection';
 import CertificateShowcase from '../components/landing/CertificateShowcase';
 import WhyChooseUs from '../components/landing/WhyChooseUs';
+import LogisticsSection from '../components/landing/LogisticsSection';
 import CTASection from '../components/landing/CTASection';
 import ContactSection from '../components/landing/ContactSection';
 import LandingFooter from '../components/landing/LandingFooter';
@@ -61,6 +62,7 @@ export default function LandingPage() {
         <SecuritySection />
         <CertificateShowcase />
         <WhyChooseUs />
+        <LogisticsSection />
         <CTASection onLoginClick={openLoginModal} />
         <ContactSection />
       </main>

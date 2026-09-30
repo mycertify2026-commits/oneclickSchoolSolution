@@ -4,6 +4,7 @@ const INQUIRY_LABELS = {
   school: 'School',
   distributor: 'Distributor',
   superDistributor: 'Super Distributor',
+  logistics: 'Logistics Services',
   general: 'General Inquiry',
   support: 'Support',
   partnership: 'Partnership',

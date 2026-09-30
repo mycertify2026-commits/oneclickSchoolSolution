@@ -4,7 +4,7 @@ const router = express.Router();
 const { submitContactInquiry } = require('../controllers/contactController');
 const { handleValidationErrors } = require('../middleware/validate');
 
-const INQUIRY_TYPES = ['school', 'distributor', 'superDistributor', 'general', 'support', 'partnership'];
+const INQUIRY_TYPES = ['school', 'distributor', 'superDistributor', 'logistics', 'general', 'support', 'partnership'];
 
 router.post('/',
   body('name').trim().notEmpty().withMessage('Name is required').isLength({ max: 150 }),
