@@ -343,6 +343,69 @@
 .lp-logistics-cta .lp-btn-outline { background: transparent; color: var(--white); border-color: rgba(255,255,255,0.5); }
 .lp-logistics-cta .lp-btn-outline:hover { background: rgba(255,255,255,0.12); border-color: var(--white); }
 
+/* ---------- Logistics page (/logistics) ---------- */
+.lg-hero { padding: 76px 0 50px; }
+.lg-hero .lp-highlight { background: linear-gradient(135deg, #B45309 0%, #D97706 100%); -webkit-background-clip: text; background-clip: text; }
+
+.lg-tracking-map {
+  position: relative;
+  height: 210px;
+  border-radius: var(--radius);
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--border) 1.5px, transparent 1.5px);
+  background-size: 16px 16px;
+  overflow: hidden;
+}
+.lg-map-pin { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; color: var(--text-secondary); }
+.lg-map-pin i { font-size: 20px; color: #D97706; filter: drop-shadow(0 2px 3px rgba(217,119,6,.35)); }
+.lg-map-pin.origin { top: 20px; left: 26px; }
+.lg-map-pin.destination { bottom: 20px; right: 26px; align-items: flex-end; }
+.lg-map-route { position: absolute; inset: 0; width: 100%; height: 100%; }
+.lg-map-truck {
+  position: absolute; top: 46%; left: 44%;
+  width: 34px; height: 34px; border-radius: 50%;
+  background: #D97706; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; box-shadow: 0 6px 16px rgba(217,119,6,.4);
+}
+.lg-tracking-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-top: 14px; }
+.lg-tracking-stat { text-align: center; padding: 10px 6px; border-radius: var(--radius); background: var(--bg); }
+.lg-tracking-stat strong { display: block; font-size: 15px; font-weight: 800; color: var(--text-primary); }
+.lg-tracking-stat span { font-size: 10px; color: var(--text-light); text-transform: uppercase; letter-spacing: .04em; }
+
+.lg-service-row { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; padding: 56px 0; border-bottom: 1px solid var(--border); }
+.lg-service-row:last-of-type { border-bottom: none; }
+.lg-service-visual {
+  position: relative; height: 320px; border-radius: var(--radius-xl);
+  background: linear-gradient(135deg, #FDBA74 0%, #D97706 100%);
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.lg-service-visual::before {
+  content: ''; position: absolute; inset: 0;
+  background-image: radial-gradient(rgba(255,255,255,.18) 2px, transparent 2px);
+  background-size: 22px 22px;
+}
+.lg-service-visual .lg-ghost-icon { position: absolute; font-size: 220px; color: rgba(255,255,255,.14); transform: rotate(-8deg); right: -20px; bottom: -30px; }
+.lg-service-visual .lg-main-icon {
+  position: relative; z-index: 1; width: 104px; height: 104px; border-radius: 28px;
+  background: rgba(255,255,255,.22);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 44px; color: #fff; box-shadow: 0 16px 32px rgba(0,0,0,.18);
+}
+.lg-service-text .lg-service-tagline { font-size: 13px; font-weight: 800; color: #B45309; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .05em; }
+.lg-service-text h2 { font-size: clamp(22px,2.4vw,28px); font-weight: 800; margin: 0 0 14px; text-wrap: balance; }
+.lg-service-text p { font-size: 15px; color: var(--text-secondary); line-height: 1.7; margin: 0 0 20px; }
+.lg-service-features { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.lg-service-features li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-primary); font-weight: 600; }
+.lg-service-features li i { color: #D97706; font-size: 13px; flex-shrink: 0; }
+
+@media (max-width: 900px) {
+  .lg-service-row { grid-template-columns: 1fr; gap: 26px; padding: 36px 0; }
+  .lg-service-row .lg-service-visual { order: -1; height: 220px; }
+  .lg-service-visual .lg-ghost-icon { font-size: 150px; }
+}
+
 /* ---------- CTA ---------- */
 .lp-cta {
   background: var(--primary-gradient);
@@ -511,4 +574,60 @@
     scroll-behavior: auto !important;
   }
   .lp-reveal { opacity: 1; transform: none; }
+}
+
+/* ---------- WhatsApp chat button ---------- */
+.lp-whatsapp-btn {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 500;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: #25D366;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  text-decoration: none;
+  box-shadow: 0 6px 20px rgba(37,211,102,.45);
+  transition: var(--transition);
+}
+.lp-whatsapp-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #25D366;
+  animation: lpWhatsAppPulse 2.2s ease-out infinite;
+  z-index: -1;
+}
+.lp-whatsapp-btn:hover { transform: scale(1.08); box-shadow: 0 8px 26px rgba(37,211,102,.55); }
+.lp-whatsapp-btn:focus-visible { outline: 3px solid rgba(37,211,102,.5); outline-offset: 3px; }
+.lp-whatsapp-tooltip {
+  position: absolute;
+  right: 68px;
+  top: 50%;
+  transform: translateY(-50%) translateX(6px);
+  background: #0F1E3D;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 8px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease, transform .2s ease;
+}
+.lp-whatsapp-btn:hover .lp-whatsapp-tooltip { opacity: 1; transform: translateY(-50%) translateX(0); }
+@keyframes lpWhatsAppPulse {
+  0% { transform: scale(1); opacity: .55; }
+  100% { transform: scale(1.7); opacity: 0; }
+}
+@media (max-width: 480px) {
+  .lp-whatsapp-btn { right: 16px; bottom: 16px; width: 52px; height: 52px; font-size: 26px; }
+  .lp-whatsapp-tooltip { display: none; }
 }

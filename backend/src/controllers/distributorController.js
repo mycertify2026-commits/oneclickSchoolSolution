@@ -497,9 +497,9 @@ async function computeDistributorCommission(distributorId, flatRate) {
      WHERE s.distributor_id = ?`,
     [distributorId]
   );
-  const totalRevenue = Number(totalsRows[0].total_revenue);
-  const totalCertificates = Number(totalsRows[0].total_certificates);
-  const totalCommission = Number((totalRevenue * rate / 100).toFixed(2));
+  let totalRevenue = Number(totalsRows[0].total_revenue);
+  let totalCertificates = Number(totalsRows[0].total_certificates);
+  let totalCommission = Number((totalRevenue * rate / 100).toFixed(2));
 
   const [monthlyRows] = await pool.query(
     `SELECT ${monthExpr('c.created_at')} as month, SUM(c.price) as revenue, COUNT(c.id) as certificate_count
@@ -509,10 +509,10 @@ async function computeDistributorCommission(distributorId, flatRate) {
      GROUP BY month ORDER BY month DESC LIMIT 12`,
     [distributorId]
   );
-  const monthly = monthlyRows.map(row => ({
+  const monthlyMap = new Map(monthlyRows.map(row => [row.month, {
     month: row.month, revenue: Number(row.revenue), certificateCount: Number(row.certificate_count),
-    commission: Number((Number(row.revenue) * rate / 100).toFixed(2))
-  }));
+    commission: Number((Number(row.revenue) * rate / 100).toFixed(2)),
+  }]));
 
   const [perSchoolRows] = await pool.query(
     `SELECT s.id, s.name, COALESCE(SUM(c.price), 0) as revenue, COUNT(c.id) as certificate_count
@@ -522,10 +522,61 @@ async function computeDistributorCommission(distributorId, flatRate) {
      GROUP BY s.id, s.name ORDER BY revenue DESC`,
     [distributorId]
   );
-  const perSchool = perSchoolRows.map(row => ({
+  const perSchoolMap = new Map(perSchoolRows.map(row => [row.id, {
     schoolId: row.id, schoolName: row.name, revenue: Number(row.revenue), certificateCount: Number(row.certificate_count),
-    commission: Number((Number(row.revenue) * rate / 100).toFixed(2))
-  }));
+    commission: Number((Number(row.revenue) * rate / 100).toFixed(2)),
+  }]));
+
+  // Educational "Request from Distributor" certificates use their own
+  // per-document-type commission split (set by Super Admin in Settings),
+  // not this distributor's flat rate — so distributor_amount is summed
+  // directly rather than recomputed from `rate`. Folded into the same
+  // totals/monthly/per-school breakdown so a distributor's "earnings" here
+  // reflects every source of commission, not just platform certificates.
+  const [eduTotalsRows] = await pool.query(
+    `SELECT COALESCE(SUM(rs.price), 0) as revenue, COALESCE(SUM(rs.distributor_amount), 0) as commission, COUNT(rs.id) as item_count
+     FROM edu_doc_request_students rs JOIN edu_doc_requests r ON r.id = rs.request_id
+     WHERE r.distributor_id = ?`,
+    [distributorId]
+  );
+  totalRevenue = Number((totalRevenue + Number(eduTotalsRows[0].revenue)).toFixed(2));
+  totalCommission = Number((totalCommission + Number(eduTotalsRows[0].commission)).toFixed(2));
+  totalCertificates += Number(eduTotalsRows[0].item_count);
+
+  const [eduMonthlyRows] = await pool.query(
+    `SELECT ${monthExpr('r.created_at')} as month, SUM(rs.price) as revenue, SUM(rs.distributor_amount) as commission, COUNT(rs.id) as item_count
+     FROM edu_doc_request_students rs JOIN edu_doc_requests r ON r.id = rs.request_id
+     WHERE r.distributor_id = ?
+     GROUP BY month`,
+    [distributorId]
+  );
+  for (const row of eduMonthlyRows) {
+    const existing = monthlyMap.get(row.month) || { month: row.month, revenue: 0, certificateCount: 0, commission: 0 };
+    existing.revenue = Number((existing.revenue + Number(row.revenue)).toFixed(2));
+    existing.commission = Number((existing.commission + Number(row.commission)).toFixed(2));
+    existing.certificateCount += Number(row.item_count);
+    monthlyMap.set(row.month, existing);
+  }
+
+  const [eduPerSchoolRows] = await pool.query(
+    `SELECT r.school_id, sch.name as school_name, SUM(rs.price) as revenue, SUM(rs.distributor_amount) as commission, COUNT(rs.id) as item_count
+     FROM edu_doc_request_students rs
+     JOIN edu_doc_requests r ON r.id = rs.request_id
+     JOIN schools sch ON sch.id = r.school_id
+     WHERE r.distributor_id = ?
+     GROUP BY r.school_id, sch.name`,
+    [distributorId]
+  );
+  for (const row of eduPerSchoolRows) {
+    const existing = perSchoolMap.get(row.school_id) || { schoolId: row.school_id, schoolName: row.school_name, revenue: 0, certificateCount: 0, commission: 0 };
+    existing.revenue = Number((existing.revenue + Number(row.revenue)).toFixed(2));
+    existing.commission = Number((existing.commission + Number(row.commission)).toFixed(2));
+    existing.certificateCount += Number(row.item_count);
+    perSchoolMap.set(row.school_id, existing);
+  }
+
+  const monthly = [...monthlyMap.values()].sort((a, b) => b.month.localeCompare(a.month)).slice(0, 12);
+  const perSchool = [...perSchoolMap.values()].sort((a, b) => b.revenue - a.revenue);
 
   return { totalRevenue, totalCertificates, totalCommission, monthly, perSchool };
 }

@@ -6,6 +6,7 @@ import ScrollToTop from './components/ScrollToTop';
 
 import Login from './pages/Login';
 import LandingPage from './pages/LandingPage';
+import LogisticsPage from './pages/LogisticsPage';
 import VerifyCertificate from './pages/VerifyCertificate';
 import ForgotPassword from './pages/ForgotPassword';
 import SetPassword from './pages/SetPassword';
@@ -71,6 +72,7 @@ export default function App() {
                 the landing page's own login selector just links into these same routes,
                 it does not replace them. */}
             <Route path="/" element={<LandingPage />} />
+            <Route path="/logistics" element={<LogisticsPage />} />
             <Route path="/login/super-admin" element={<Login role="superAdmin" />} />
             <Route path="/login/school" element={<Login role="schoolAdmin" />} />
             <Route path="/login/distributor" element={<Login role="distributor" />} />

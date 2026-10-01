@@ -230,7 +230,7 @@ function CertificateDetail({ cert, price, onBack, onRequest }) {
             className="btn btn-primary"
             style={{ fontSize: 14, fontWeight: 700, padding: '12px 24px', display: 'inline-flex', alignItems: 'center', gap: 8 }}
           >
-            Request Documents from Distributor <i className="fas fa-arrow-right" aria-hidden="true" style={{ fontSize: 12 }}></i>
+            Apply for Certificate <i className="fas fa-arrow-right" aria-hidden="true" style={{ fontSize: 12 }}></i>
           </button>
           <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 8 }}>
             You'll select a student, upload supporting documents, and confirm via OTP.

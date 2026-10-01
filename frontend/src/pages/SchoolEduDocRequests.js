@@ -34,7 +34,7 @@ export default function SchoolEduDocRequests() {
         <div className="table-responsive">
           <table className="data-table">
             <thead>
-              <tr><th>Request ID</th><th>Certificate(s)</th><th>Students</th><th>Amount</th><th>Date</th><th>Status</th></tr>
+              <tr><th>Request ID</th><th>Student(s)</th><th>Certificate(s)</th><th>Amount</th><th>Date</th><th>Status</th></tr>
             </thead>
             <tbody>
               {loading ? (
@@ -43,11 +43,12 @@ export default function SchoolEduDocRequests() {
                 <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 24 }}>No educational document requests yet.</td></tr>
               ) : requests.map(r => {
                 const docTypes = [...new Set((r.students || []).map(s => s.doc_type))];
+                const studentNames = (r.students || []).map(s => s.student_name).filter(Boolean);
                 return (
                   <tr key={r.id}>
                     <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{r.request_number}</td>
+                    <td style={{ fontWeight: 600, fontSize: 13 }}>{studentNames.join(', ') || '—'}</td>
                     <td style={{ fontSize: 12.5 }}>{docTypes.join(', ') || '—'}</td>
-                    <td>{(r.students || []).length}</td>
                     <td>₹{Number(r.total_amount).toLocaleString('en-IN')}</td>
                     <td style={{ fontSize: 12 }}>{new Date(r.created_at).toLocaleDateString('en-IN')}</td>
                     <td><span className={`badge ${BADGES[r.status] || 'badge-warning'}`}>{LABELS[r.status] || r.status}</span></td>

@@ -385,7 +385,7 @@ async function verifyOtp(req, res) {
            VALUES (?,?,?,?,?,?,?,?,?)`,
           [uuid(), requestId, it.studentId, it.docType, it.price, it.distributorAmount || 0, it.superDistributorAmount || 0, finalPath, pdfData]
         );
-        successItems.push(it);
+        successItems.push({ ...it, finalPath });
       } catch (itemErr) {
         console.error('Educational document request item failed for student', it.studentId, itemErr.message);
         try {
@@ -417,7 +417,8 @@ async function verifyOtp(req, res) {
       if (distUser) {
         if (distUser.email) {
           try {
-            await sendEduDocDistributorEmail(distUser.email, distUser.name, { requestNumber, schoolName: school.name, items: emailItems });
+            const distEmailItems = successItems.map(it => ({ studentName: it.studentName, docTypeName: it.docTypeName, price: it.price, pdfPath: it.finalPath }));
+            await sendEduDocDistributorEmail(distUser.email, distUser.name, { requestNumber, schoolName: school.name, items: distEmailItems });
           } catch (e) { console.error('Distributor email failed:', e.message); }
         }
         await createNotification(distUser.user_id, `New educational certificate request ${requestNumber} from ${school.name}: ${successItems.length} document(s).`);

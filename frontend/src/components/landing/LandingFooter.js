@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import ROLES from './rolesData';
 import LandingLogo from './LandingLogo';
 
@@ -8,11 +8,19 @@ const PLATFORM_LINKS = [
   { id: 'lp-services', label: 'Services' },
   { id: 'lp-how-it-works', label: 'How It Works' },
   { id: 'lp-about', label: 'About' },
+  { to: '/logistics', label: 'Logistics' },
   { id: 'lp-contact', label: 'Contact' },
 ];
 
 export default function LandingFooter() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   function scrollToSection(id) {
+    if (location.pathname !== '/') {
+      navigate('/', { state: { scrollTo: id } });
+      return;
+    }
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
@@ -30,7 +38,9 @@ export default function LandingFooter() {
             <h4>Platform</h4>
             <ul>
               {PLATFORM_LINKS.map((l) => (
-                <li key={l.id}><button onClick={() => scrollToSection(l.id)}>{l.label}</button></li>
+                <li key={l.to || l.id}>
+                  {l.to ? <Link to={l.to}>{l.label}</Link> : <button onClick={() => scrollToSection(l.id)}>{l.label}</button>}
+                </li>
               ))}
             </ul>
           </div>

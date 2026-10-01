@@ -87,11 +87,11 @@ export default function DistEduDocRequests() {
         <div className="table-responsive">
           <table className="data-table">
             <thead>
-              <tr><th>Request ID</th><th>School</th><th>Student</th><th>Certificate</th><th>Amount</th><th>Date</th><th>Status</th><th>Document</th><th>Actions</th></tr>
+              <tr><th>Request ID</th><th>School</th><th>Student</th><th>Certificate</th><th>Amount</th><th>Your Commission</th><th>Date</th><th>Status</th><th>Document</th><th>Actions</th></tr>
             </thead>
             <tbody>
               {flatRows.length === 0 ? (
-                <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 24 }}>No educational certificate requests from your schools.</td></tr>
+                <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 24 }}>No educational certificate requests from your schools.</td></tr>
               ) : flatRows.map(row => (
                 <tr key={row.id}>
                   <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{row.request.request_number}</td>
@@ -99,6 +99,7 @@ export default function DistEduDocRequests() {
                   <td>{row.student_name}</td>
                   <td style={{ fontSize: 12.5 }}>{DOC_TYPE_LABELS[row.doc_type] || row.doc_type}</td>
                   <td>₹{Number(row.price).toLocaleString('en-IN')}</td>
+                  <td style={{ color: 'var(--success)', fontWeight: 700 }}>₹{Number(row.distributor_amount || 0).toLocaleString('en-IN')}</td>
                   <td style={{ fontSize: 12 }}>{new Date(row.request.created_at).toLocaleDateString('en-IN')}</td>
                   <td><span className={`badge ${BADGES[row.request.status] || 'badge-warning'}`}>{LABELS[row.request.status] || row.request.status}</span></td>
                   <td>

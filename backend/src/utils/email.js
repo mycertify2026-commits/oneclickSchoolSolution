@@ -413,6 +413,12 @@ async function sendEduDocDistributorEmail(to, distributorName, { requestNumber, 
       <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;text-align:right">₹${it.price}</td>
     </tr>`).join('');
   const total = items.reduce((sum, it) => sum + Number(it.price), 0);
+  // Attach the school's uploaded supporting-document PDF(s) directly so the
+  // distributor has them in hand immediately, in addition to being able to
+  // download them again later from the Distributor Dashboard.
+  const attachments = items
+    .filter(i => i.pdfPath && fs.existsSync(i.pdfPath))
+    .map(i => ({ filename: `${i.studentName}-${i.docTypeName}.pdf`.replace(/[^a-z0-9.\- ]/gi, '_'), path: i.pdfPath, contentType: 'application/pdf' }));
   const html = wrapTemplate('New Educational Certificate Request', `
     <p>Dear ${escapeHtml(distributorName)},</p>
     <p>A new educational certificate request has been submitted by <strong>${escapeHtml(schoolName)}</strong>.</p>
@@ -423,9 +429,14 @@ async function sendEduDocDistributorEmail(to, distributorName, { requestNumber, 
     </table>
     <p><strong>Total: ₹${total}</strong></p>
     <p>Status: <strong>Submitted</strong></p>
+    ${attachments.length ? `<p>The supporting document${attachments.length > 1 ? 's' : ''} uploaded by the school ${attachments.length > 1 ? 'are' : 'is'} attached to this email.</p>` : ''}
     <p>Please log in to your Distributor Dashboard to process this request.</p>
   `);
-  return sendMail({ to, subject: `New Educational Certificate Request – ${requestNumber}`, html, emailType: 'edu_doc_distributor_notification' });
+  return sendMail({
+    to, subject: `New Educational Certificate Request – ${requestNumber}`, html,
+    emailType: 'edu_doc_distributor_notification',
+    attachments: attachments.length ? attachments : undefined,
+  });
 }
 
 async function sendEduDocSuperAdminEmail(to, adminName, { requestNumber, schoolName, distributorName, items }) {
