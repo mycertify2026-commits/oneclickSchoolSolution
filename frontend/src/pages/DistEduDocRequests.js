@@ -55,18 +55,19 @@ export default function DistEduDocRequests() {
     } finally { setClosingId(null); }
   }
 
-  async function handleDownload(studentRowId, label) {
-    setDownloadingId(studentRowId);
+async function handleDownload(studentRowId, label, kind = 'pdf') {
+    setDownloadingId(`${studentRowId}-${kind}`);
     try {
-      const res = await api.get(`/edu-doc-requests/documents/${studentRowId}/pdf`, { responseType: 'blob' });
-      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const res = await api.get(`/edu-doc-requests/documents/${studentRowId}/${kind}`, { responseType: 'blob' });
+      const contentType = res.headers['content-type'] || (kind === 'pdf' ? 'application/pdf' : 'image/jpeg');
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: contentType }));
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${label || 'document'}.pdf`;
+      link.download = label || kind;
       link.click();
       window.URL.revokeObjectURL(url);
     } catch (e) {
-      alert('Could not download this document.');
+      alert('Could not download this file.');
     } finally {
       setDownloadingId(null);
     }
@@ -102,9 +103,15 @@ export default function DistEduDocRequests() {
                   <td style={{ color: 'var(--success)', fontWeight: 700 }}>₹{Number(row.distributor_amount || 0).toLocaleString('en-IN')}</td>
                   <td style={{ fontSize: 12 }}>{new Date(row.request.created_at).toLocaleDateString('en-IN')}</td>
                   <td><span className={`badge ${BADGES[row.request.status] || 'badge-warning'}`}>{LABELS[row.request.status] || row.request.status}</span></td>
-                  <td>
-                    <button className="btn-icon" title="Download Document" onClick={() => handleDownload(row.id, `${row.student_name}-${row.doc_type}`)} disabled={downloadingId === row.id}>
-                      <i className="fas fa-download"></i>
+                  <td style={{ display: 'flex', gap: 4 }}>
+                    <button className="btn-icon" title="Download Combined PDF" onClick={() => handleDownload(row.id, `${row.student_name}-${row.doc_type}.pdf`, 'pdf')} disabled={downloadingId === `${row.id}-pdf`}>
+                      <i className="fas fa-file-pdf"></i>
+                    </button>
+                    <button className="btn-icon" title="Download Applicant Photo" onClick={() => handleDownload(row.id, `${row.student_name}-photo.jpg`, 'photo')} disabled={downloadingId === `${row.id}-photo`}>
+                      <i className="fas fa-image"></i>
+                    </button>
+                    <button className="btn-icon" title="Download Father's Signature" onClick={() => handleDownload(row.id, `${row.student_name}-signature.jpg`, 'signature')} disabled={downloadingId === `${row.id}-signature`}>
+                      <i className="fas fa-signature"></i>
                     </button>
                   </td>
                   <td style={{ display: 'flex', gap: 6 }}>

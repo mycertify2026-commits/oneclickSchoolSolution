@@ -230,6 +230,12 @@ async function deleteDistributor(req, res) {
 
     await pool.query('UPDATE distributors SET deleted_at = NOW() WHERE id = ?', [req.params.id]);
     await pool.query("UPDATE users SET deleted_at = NOW(), is_active = 0 WHERE id = ? AND role = 'distributor'", [distRows[0].user_id]);
+    // A soft-deleted distributor's id was still sitting on schools.distributor_id,
+    // so every downstream query (emails, commission, request routing) kept
+    // resolving the dead distributor instead of hitting the "no distributor
+    // assigned" path that already exists everywhere. Clearing it here is the
+    // one place that fixes every one of those call sites at once.
+    await pool.query('UPDATE schools SET distributor_id = NULL WHERE distributor_id = ?', [req.params.id]);
 
     res.json({ message: 'Distributor deleted successfully' });
   } catch (err) {

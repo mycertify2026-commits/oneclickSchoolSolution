@@ -138,6 +138,18 @@ async function uploadPendingPdf(req, res) {
   res.json({ fileToken: req.file.filename, fileName: req.file.originalname, fileSize: req.file.size });
 }
 
+async function uploadPendingPhoto(req, res) {
+  cleanupStalePendingUploads();
+  if (!req.file) return res.status(400).json({ error: 'A photo is required' });
+  res.json({ fileToken: req.file.filename, fileName: req.file.originalname, fileSize: req.file.size });
+}
+
+async function uploadPendingSignature(req, res) {
+  cleanupStalePendingUploads();
+  if (!req.file) return res.status(400).json({ error: 'A signature photo is required' });
+  res.json({ fileToken: req.file.filename, fileName: req.file.originalname, fileSize: req.file.size });
+}
+
 // ── Submit (validate + price + OTP) ─────────────────────────────────────────
 
 async function submitRequest(req, res) {
@@ -145,21 +157,28 @@ async function submitRequest(req, res) {
     const items = Array.isArray(req.body.items) ? req.body.items : [];
     if (!items.length) return res.status(400).json({ error: 'Please add at least one student before submitting.' });
 
+    // The pending filename embeds the school id — this is the ownership
+    // check for a fileToken, since no DB row tracks pending uploads.
+    function validateToken(token, label) {
+      if (!token) return `Each item must include ${label}.`;
+      if (!token.startsWith(`pending-${req.schoolId}-`)) return 'Invalid or expired file token. Please re-upload the document.';
+      if (!fs.existsSync(path.join(PENDING_DIR, token))) return 'Uploaded document not found or expired. Please re-upload.';
+      return null;
+    }
+
     for (const it of items) {
-      if (!it.studentId || !it.docType || !it.fileToken) {
-        return res.status(400).json({ error: 'Each item must include a student, a certificate type, and an uploaded document.' });
+      if (!it.studentId || !it.docType) {
+        return res.status(400).json({ error: 'Each item must include a student and a certificate type.' });
       }
       if (!isValidEduDocType(it.docType)) {
         return res.status(400).json({ error: `Invalid certificate type: ${it.docType}` });
       }
-      // The pending filename embeds the school id — this is the ownership
-      // check for a fileToken, since no DB row tracks pending uploads.
-      if (!it.fileToken.startsWith(`pending-${req.schoolId}-`)) {
-        return res.status(400).json({ error: 'Invalid or expired file token. Please re-upload the document.' });
-      }
-      if (!fs.existsSync(path.join(PENDING_DIR, it.fileToken))) {
-        return res.status(400).json({ error: 'Uploaded document not found or expired. Please re-upload.' });
-      }
+      const fileErr = validateToken(it.fileToken, 'the combined supporting-document PDF');
+      if (fileErr) return res.status(400).json({ error: fileErr });
+      const photoErr = validateToken(it.photoToken, "the applicant's photo");
+      if (photoErr) return res.status(400).json({ error: photoErr });
+      const signatureErr = validateToken(it.signatureToken, "the father's signature photo");
+      if (signatureErr) return res.status(400).json({ error: signatureErr });
     }
 
     // Student must belong to this school — never trust the id alone.
@@ -209,6 +228,8 @@ async function submitRequest(req, res) {
         distributorAmount,
         superDistributorAmount,
         fileToken: it.fileToken,
+        photoToken: it.photoToken,
+        signatureToken: it.signatureToken,
       });
     }
     const total = Math.round(snapshotItems.reduce((s, i) => s + i.price, 0) * 100) / 100;
@@ -372,20 +393,30 @@ async function verifyOtp(req, res) {
     // cartController's checkout loop and idCardController's hard-copy batch.
     const successItems = [];
     let refundedTotal = 0;
+    function movePending(token, suffix) {
+      const pendingPath = path.join(PENDING_DIR, token);
+      if (!fs.existsSync(pendingPath)) throw new Error('Uploaded file is missing');
+      const finalPath = path.join(EDU_DOC_DIR, `${requestNumber}-${suffix}${path.extname(token) || ''}`);
+      fs.renameSync(pendingPath, finalPath);
+      return finalPath;
+    }
+
     for (const it of snapshot.items) {
       try {
-        const pendingPath = path.join(PENDING_DIR, it.fileToken);
-        if (!fs.existsSync(pendingPath)) throw new Error('Uploaded document is missing');
-        const finalPath = path.join(EDU_DOC_DIR, `${requestNumber}-${it.studentId}.pdf`);
-        fs.renameSync(pendingPath, finalPath);
+        const finalPath = movePending(it.fileToken, `${it.studentId}`);
         const pdfData = fs.readFileSync(finalPath);
+        const photoPath = movePending(it.photoToken, `${it.studentId}-photo`);
+        const photoData = fs.readFileSync(photoPath);
+        const signaturePath = movePending(it.signatureToken, `${it.studentId}-signature`);
+        const signatureData = fs.readFileSync(signaturePath);
 
         await pool.query(
-          `INSERT INTO edu_doc_request_students (id, request_id, student_id, doc_type, price, distributor_amount, super_distributor_amount, pdf_path, pdf_data)
-           VALUES (?,?,?,?,?,?,?,?,?)`,
-          [uuid(), requestId, it.studentId, it.docType, it.price, it.distributorAmount || 0, it.superDistributorAmount || 0, finalPath, pdfData]
+          `INSERT INTO edu_doc_request_students
+           (id, request_id, student_id, doc_type, price, distributor_amount, super_distributor_amount, pdf_path, pdf_data, applicant_photo_path, applicant_photo_data, father_signature_path, father_signature_data)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [uuid(), requestId, it.studentId, it.docType, it.price, it.distributorAmount || 0, it.superDistributorAmount || 0, finalPath, pdfData, photoPath, photoData, signaturePath, signatureData]
         );
-        successItems.push({ ...it, finalPath });
+        successItems.push({ ...it, finalPath, photoPath, signaturePath });
       } catch (itemErr) {
         console.error('Educational document request item failed for student', it.studentId, itemErr.message);
         try {
@@ -412,12 +443,22 @@ async function verifyOtp(req, res) {
       );
       const distUser = distRows[0];
       distributorName = distUser?.name || null;
-      const emailItems = successItems.map(it => ({ studentName: it.studentName, docTypeName: it.docTypeName, price: it.price }));
+      // Both the distributor and every Super Admin get the applicant photo
+      // and father's signature photo attached, in addition to the combined
+      // PDF (distributor only, as before) — all three stay downloadable
+      // from each role's panel afterwards too.
+      const distEmailItems = successItems.map(it => ({
+        studentName: it.studentName, docTypeName: it.docTypeName, price: it.price,
+        pdfPath: it.finalPath, photoPath: it.photoPath, signaturePath: it.signaturePath,
+      }));
+      const adminEmailItems = successItems.map(it => ({
+        studentName: it.studentName, docTypeName: it.docTypeName, price: it.price,
+        photoPath: it.photoPath, signaturePath: it.signaturePath,
+      }));
 
       if (distUser) {
         if (distUser.email) {
           try {
-            const distEmailItems = successItems.map(it => ({ studentName: it.studentName, docTypeName: it.docTypeName, price: it.price, pdfPath: it.finalPath }));
             await sendEduDocDistributorEmail(distUser.email, distUser.name, { requestNumber, schoolName: school.name, items: distEmailItems });
           } catch (e) { console.error('Distributor email failed:', e.message); }
         }
@@ -428,7 +469,7 @@ async function verifyOtp(req, res) {
       for (const admin of adminRows) {
         if (admin.email) {
           try {
-            await sendEduDocSuperAdminEmail(admin.email, admin.name, { requestNumber, schoolName: school.name, distributorName, items: emailItems });
+            await sendEduDocSuperAdminEmail(admin.email, admin.name, { requestNumber, schoolName: school.name, distributorName, items: adminEmailItems });
           } catch (e) { console.error('Super admin email failed:', e.message); }
         }
         await createNotification(admin.id, `New educational certificate request ${requestNumber} from ${school.name}: ${successItems.length} document(s).`);
@@ -620,8 +661,17 @@ async function updateStatusByAdmin(req, res) {
 }
 
 // ── Document download (per student, auth-gated — never a public URL) ───────
+// Shared by the combined PDF and the two new per-student images — same
+// access rule for all three (school that owns it / the assigned distributor
+// or super distributor / any Super Admin), just a different pair of
+// path/data columns and a different downloaded filename.
+const DOWNLOAD_KINDS = {
+  pdf: { pathCol: 'pdf_path', dataCol: 'pdf_data', name: (row) => `educational-document-${row.id}${path.extname(row.pdf_path) || '.pdf'}` },
+  photo: { pathCol: 'applicant_photo_path', dataCol: 'applicant_photo_data', name: (row) => `applicant-photo-${row.id}${path.extname(row.applicant_photo_path) || '.jpg'}` },
+  signature: { pathCol: 'father_signature_path', dataCol: 'father_signature_data', name: (row) => `father-signature-${row.id}${path.extname(row.father_signature_path) || '.jpg'}` },
+};
 
-async function downloadPdf(req, res) {
+async function downloadFile(req, res, kind) {
   try {
     const [rows] = await pool.query(
       `SELECT rs.*, r.school_id, r.distributor_id, r.super_distributor_id
@@ -645,23 +695,30 @@ async function downloadPdf(req, res) {
     if (!allowed && role === 'superDistributor') allowed = row.super_distributor_id === req.user.id;
     if (!allowed) return res.status(403).json({ error: 'Access denied' });
 
-    restoreIfMissing(row.pdf_path, row.pdf_data);
-    if (!row.pdf_path || !fs.existsSync(row.pdf_path)) {
-      return res.status(404).json({ error: 'Document file not found' });
+    const { pathCol, dataCol, name } = DOWNLOAD_KINDS[kind];
+    const filePath = row[pathCol];
+    restoreIfMissing(filePath, row[dataCol]);
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'File not found' });
     }
-    res.download(row.pdf_path, `educational-document-${row.id}.pdf`);
+    res.download(filePath, name(row));
   } catch (err) {
-    console.error('downloadPdf error:', err.message);
+    console.error(`download${kind} error:`, err.message);
     res.status(500).json({ error: 'Server error' });
   }
 }
 
+const downloadPdf = (req, res) => downloadFile(req, res, 'pdf');
+const downloadPhoto = (req, res) => downloadFile(req, res, 'photo');
+const downloadSignature = (req, res) => downloadFile(req, res, 'signature');
+
 module.exports = {
-  getDocTypes, listDocTypesForAdmin, updateDocType, uploadPendingPdf,
+  getDocTypes, listDocTypesForAdmin, updateDocType,
+  uploadPendingPdf, uploadPendingPhoto, uploadPendingSignature,
   submitRequest, resendOtp, verifyOtp,
   listMine,
   listForDistributor, updateStatusByDistributor, closeByDistributor,
   listAll, updateStatusByAdmin,
-  downloadPdf,
+  downloadPdf, downloadPhoto, downloadSignature,
   STATUS_VALUES,
 };

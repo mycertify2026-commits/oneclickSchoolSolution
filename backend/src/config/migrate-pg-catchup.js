@@ -513,13 +513,32 @@ async function migrate() {
     console.log('  + educational_document_types (seeded) / edu_doc_requests / edu_doc_request_students / edu_doc_request_status_history ensured');
   });
 
+  await step(26, 'edu_doc_request_students — applicant photo + father signature; clean up schools still pointing at a deleted distributor/super distributor', async () => {
+    await client.query(`ALTER TABLE edu_doc_request_students ADD COLUMN IF NOT EXISTS applicant_photo_path VARCHAR(500)`);
+    await client.query(`ALTER TABLE edu_doc_request_students ADD COLUMN IF NOT EXISTS applicant_photo_data BYTEA`);
+    await client.query(`ALTER TABLE edu_doc_request_students ADD COLUMN IF NOT EXISTS father_signature_path VARCHAR(500)`);
+    await client.query(`ALTER TABLE edu_doc_request_students ADD COLUMN IF NOT EXISTS father_signature_data BYTEA`);
+    // Deleting a distributor/super distributor was never clearing the
+    // schools that still pointed at them (schools.distributor_id /
+    // schools.super_distributor_id, and a distributor's own
+    // super_distributor_id) — every email/commission/request-routing query
+    // kept silently resolving the deleted account. The controllers are
+    // fixed to clear this going forward; this is the one-time catch-up for
+    // whatever's already broken on this database.
+    const r1 = await client.query(`UPDATE schools SET distributor_id = NULL WHERE distributor_id IN (SELECT id FROM distributors WHERE deleted_at IS NOT NULL)`);
+    const r2 = await client.query(`UPDATE schools SET super_distributor_id = NULL WHERE super_distributor_id IN (SELECT id FROM users WHERE role = 'superDistributor' AND deleted_at IS NOT NULL)`);
+    const r3 = await client.query(`UPDATE distributors SET super_distributor_id = NULL WHERE super_distributor_id IN (SELECT id FROM users WHERE role = 'superDistributor' AND deleted_at IS NOT NULL)`);
+    console.log(`  + applicant_photo_path/applicant_photo_data/father_signature_path/father_signature_data ensured`);
+    console.log(`  + cleared stale distributor_id on ${r1.rowCount} school(s), stale super_distributor_id on ${r2.rowCount} school(s) and ${r3.rowCount} distributor(s)`);
+  });
+
   await client.end();
 
   if (failures > 0) {
     console.error(`\nPostgreSQL catch-up migration finished with ${failures} failed section(s) — see ✗ lines above. Every other section still applied.`);
     process.exitCode = 1;
   } else {
-    console.log('\nPostgreSQL catch-up migration completed successfully — all 25 sections applied.');
+    console.log('\nPostgreSQL catch-up migration completed successfully — all 26 sections applied.');
   }
 }
 

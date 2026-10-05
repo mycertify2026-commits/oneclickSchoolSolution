@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 const fs = require('fs');
+const path = require('path');
 const { pool } = require('../config/db');
 require('dotenv').config();
 
@@ -405,6 +406,28 @@ async function sendEduDocOtpEmail(to, name, otp, { itemCount, cartTotal }) {
   return result;
 }
 
+// Shared by both the distributor and Super Admin notification emails below —
+// each item may carry a pdfPath (distributor only), photoPath and/or
+// signaturePath; whichever of those exist on disk are attached, named after
+// the student so a mail client's attachment list is self-explanatory without
+// opening each file.
+function buildEduDocAttachments(items) {
+  const safe = (s) => String(s).replace(/[^a-z0-9.\- ]/gi, '_');
+  const attachments = [];
+  for (const it of items) {
+    if (it.pdfPath && fs.existsSync(it.pdfPath)) {
+      attachments.push({ filename: safe(`${it.studentName}-${it.docTypeName}.pdf`), path: it.pdfPath, contentType: 'application/pdf' });
+    }
+    if (it.photoPath && fs.existsSync(it.photoPath)) {
+      attachments.push({ filename: safe(`${it.studentName}-photo${path.extname(it.photoPath)}`), path: it.photoPath });
+    }
+    if (it.signaturePath && fs.existsSync(it.signaturePath)) {
+      attachments.push({ filename: safe(`${it.studentName}-father-signature${path.extname(it.signaturePath)}`), path: it.signaturePath });
+    }
+  }
+  return attachments;
+}
+
 async function sendEduDocDistributorEmail(to, distributorName, { requestNumber, schoolName, items }) {
   const rows = items.map((it, i) => `
     <tr>
@@ -413,12 +436,11 @@ async function sendEduDocDistributorEmail(to, distributorName, { requestNumber, 
       <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;text-align:right">₹${it.price}</td>
     </tr>`).join('');
   const total = items.reduce((sum, it) => sum + Number(it.price), 0);
-  // Attach the school's uploaded supporting-document PDF(s) directly so the
-  // distributor has them in hand immediately, in addition to being able to
-  // download them again later from the Distributor Dashboard.
-  const attachments = items
-    .filter(i => i.pdfPath && fs.existsSync(i.pdfPath))
-    .map(i => ({ filename: `${i.studentName}-${i.docTypeName}.pdf`.replace(/[^a-z0-9.\- ]/gi, '_'), path: i.pdfPath, contentType: 'application/pdf' }));
+  // Attach the school's uploaded supporting-document PDF, applicant photo
+  // and father's signature photo directly so the distributor has them in
+  // hand immediately, in addition to being able to download them again
+  // later from the Distributor Dashboard.
+  const attachments = buildEduDocAttachments(items);
   const html = wrapTemplate('New Educational Certificate Request', `
     <p>Dear ${escapeHtml(distributorName)},</p>
     <p>A new educational certificate request has been submitted by <strong>${escapeHtml(schoolName)}</strong>.</p>
@@ -447,6 +469,10 @@ async function sendEduDocSuperAdminEmail(to, adminName, { requestNumber, schoolN
       <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;text-align:right">₹${it.price}</td>
     </tr>`).join('');
   const total = items.reduce((sum, it) => sum + Number(it.price), 0);
+  // Super Admin gets the applicant photo and father's signature photo
+  // attached too (not the combined PDF — that one stays distributor-only),
+  // so oversight doesn't require logging in just to see what was uploaded.
+  const attachments = buildEduDocAttachments(items);
   const html = wrapTemplate('New Educational Certificate Request', `
     <p>Dear ${escapeHtml(adminName)},</p>
     <p><strong>Request ID:</strong> ${escapeHtml(requestNumber)}</p>
@@ -458,8 +484,13 @@ async function sendEduDocSuperAdminEmail(to, adminName, { requestNumber, schoolN
     </table>
     <p><strong>Total: ₹${total}</strong></p>
     <p>Status: <strong>Submitted</strong></p>
+    ${attachments.length ? `<p>The applicant photo${attachments.length > 1 ? 's' : ''} and signature${attachments.length > 1 ? 's' : ''} uploaded by the school are attached to this email.</p>` : ''}
   `);
-  return sendMail({ to, subject: `New Educational Certificate Request – ${requestNumber}`, html, emailType: 'edu_doc_super_admin_notification' });
+  return sendMail({
+    to, subject: `New Educational Certificate Request – ${requestNumber}`, html,
+    emailType: 'edu_doc_super_admin_notification',
+    attachments: attachments.length ? attachments : undefined,
+  });
 }
 
 // ---------------------------------------------------------------------------

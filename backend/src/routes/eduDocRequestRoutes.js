@@ -4,7 +4,7 @@ const rateLimit = require('express-rate-limit');
 const c = require('../controllers/eduDocRequestController');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { attachSchool } = require('../middleware/attachSchool');
-const { uploadEduDoc } = require('../middleware/upload');
+const { uploadEduDoc, uploadEduDocPhoto, uploadEduDocSignature } = require('../middleware/upload');
 
 const otpLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { error: 'Too many attempts, try again later.' } });
 
@@ -24,6 +24,28 @@ router.post(
   },
   c.uploadPendingPdf
 );
+router.post(
+  '/upload-photo',
+  authenticate, requireRole('schoolAdmin'), attachSchool,
+  (req, res, next) => {
+    uploadEduDocPhoto.single('photo')(req, res, (err) => {
+      if (err) return res.status(400).json({ error: err.message || 'Upload failed' });
+      next();
+    });
+  },
+  c.uploadPendingPhoto
+);
+router.post(
+  '/upload-signature',
+  authenticate, requireRole('schoolAdmin'), attachSchool,
+  (req, res, next) => {
+    uploadEduDocSignature.single('signature')(req, res, (err) => {
+      if (err) return res.status(400).json({ error: err.message || 'Upload failed' });
+      next();
+    });
+  },
+  c.uploadPendingSignature
+);
 router.post('/submit', authenticate, requireRole('schoolAdmin'), attachSchool, otpLimiter, c.submitRequest);
 router.post('/resend-otp', authenticate, requireRole('schoolAdmin'), attachSchool, otpLimiter, c.resendOtp);
 router.post('/verify-otp', authenticate, requireRole('schoolAdmin'), attachSchool, otpLimiter, c.verifyOtp);
@@ -40,9 +62,11 @@ router.put('/types/:docType', authenticate, requireRole('superAdmin'), c.updateD
 router.get('/', authenticate, requireRole('superAdmin'), c.listAll);
 router.put('/:id', authenticate, requireRole('superAdmin'), c.updateStatusByAdmin);
 
-// Document download — one PDF per student in a request, access-checked
-// inside the handler (school owner / assigned distributor or super
-// distributor / super admin), never a public URL.
+// Document download — one PDF + applicant photo + father's signature per
+// student in a request, access-checked inside the handler (school owner /
+// assigned distributor or super distributor / super admin), never a public URL.
 router.get('/documents/:id/pdf', authenticate, c.downloadPdf);
+router.get('/documents/:id/photo', authenticate, c.downloadPhoto);
+router.get('/documents/:id/signature', authenticate, c.downloadSignature);
 
 module.exports = router;

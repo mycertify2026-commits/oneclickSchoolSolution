@@ -7,6 +7,9 @@ import EduDocOtpModal from '../components/EduDocOtpModal';
 
 const CART_STORAGE_KEY = 'eduDocCart';
 const MAX_FILE_SIZE = 7 * 1024 * 1024;
+const MAX_IMAGE_SIZE = 3 * 1024 * 1024;
+const IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+const IMAGE_EXT_RE = /\.(jpe?g|png|webp)$/i;
 
 function loadCartFromStorage() {
   try {
@@ -33,6 +36,12 @@ export default function EduDocRequestFlow() {
   const [file, setFile] = useState(null);
   const [fileToken, setFileToken] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [photo, setPhoto] = useState(null);
+  const [photoToken, setPhotoToken] = useState('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [signature, setSignature] = useState(null);
+  const [signatureToken, setSignatureToken] = useState('');
+  const [uploadingSignature, setUploadingSignature] = useState(false);
   const [itemError, setItemError] = useState('');
 
   const [cart, setCart] = useState(loadCartFromStorage);
@@ -113,11 +122,71 @@ export default function EduDocRequestFlow() {
     }
   }
 
+  function validateImage(f) {
+    if (!IMAGE_TYPES.includes(f.type) && !IMAGE_EXT_RE.test(f.name)) return 'Only JPG, PNG, or WEBP images are allowed.';
+    if (f.size > MAX_IMAGE_SIZE) return 'Maximum file size is 3 MB.';
+    return null;
+  }
+
+  function handlePhotoChange(e) {
+    setItemError('');
+    setPhotoToken('');
+    const f = e.target.files[0];
+    if (!f) { setPhoto(null); return; }
+    const err = validateImage(f);
+    if (err) { setItemError(err); setPhoto(null); return; }
+    setPhoto(f);
+  }
+
+  async function handleUploadPhoto() {
+    if (!photo) return;
+    setUploadingPhoto(true);
+    setItemError('');
+    try {
+      const formData = new FormData();
+      formData.append('photo', photo);
+      const { data } = await api.post('/edu-doc-requests/upload-photo', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setPhotoToken(data.fileToken);
+    } catch (e) {
+      setItemError(e.response?.data?.error || 'Upload failed. Please try again.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
+
+  function handleSignatureChange(e) {
+    setItemError('');
+    setSignatureToken('');
+    const f = e.target.files[0];
+    if (!f) { setSignature(null); return; }
+    const err = validateImage(f);
+    if (err) { setItemError(err); setSignature(null); return; }
+    setSignature(f);
+  }
+
+  async function handleUploadSignature() {
+    if (!signature) return;
+    setUploadingSignature(true);
+    setItemError('');
+    try {
+      const formData = new FormData();
+      formData.append('signature', signature);
+      const { data } = await api.post('/edu-doc-requests/upload-signature', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setSignatureToken(data.fileToken);
+    } catch (e) {
+      setItemError(e.response?.data?.error || 'Upload failed. Please try again.');
+    } finally {
+      setUploadingSignature(false);
+    }
+  }
+
   function handleAddToCart() {
     setItemError('');
     if (!selectedType) { setItemError('Please select a certificate.'); return; }
     if (!selectedStudentId) { setItemError('Please select a student.'); return; }
     if (!fileToken) { setItemError('Please upload the combined document PDF first.'); return; }
+    if (!photoToken) { setItemError("Please upload the applicant's photo."); return; }
+    if (!signatureToken) { setItemError("Please upload the father's signature photo."); return; }
     if (cart.some(it => it.studentId === selectedStudentId && it.docType === selectedType)) {
       setItemError('This certificate is already in the cart for this student.');
       return;
@@ -131,6 +200,10 @@ export default function EduDocRequestFlow() {
       price: typeInfo?.price || 0,
       fileToken,
       fileName: file?.name || 'document.pdf',
+      photoToken,
+      photoName: photo?.name || 'photo.jpg',
+      signatureToken,
+      signatureName: signature?.name || 'signature.jpg',
     }]);
     // Reset per-item fields, keep the certificate locked so "Add Another
     // Student" just returns to student selection, per the spec's requirement
@@ -138,6 +211,10 @@ export default function EduDocRequestFlow() {
     setSelectedStudentId('');
     setFile(null);
     setFileToken('');
+    setPhoto(null);
+    setPhotoToken('');
+    setSignature(null);
+    setSignatureToken('');
   }
 
   function handleRemoveFromCart(index) {
@@ -150,7 +227,7 @@ export default function EduDocRequestFlow() {
     setSubmitting(true);
     try {
       const { data } = await api.post('/edu-doc-requests/submit', {
-        items: cart.map(it => ({ studentId: it.studentId, docType: it.docType, fileToken: it.fileToken })),
+        items: cart.map(it => ({ studentId: it.studentId, docType: it.docType, fileToken: it.fileToken, photoToken: it.photoToken, signatureToken: it.signatureToken })),
       });
       if (data.insufficientBalance) {
         setInsufficientInfo(data);
@@ -338,27 +415,45 @@ export default function EduDocRequestFlow() {
 
                     {/* Step 4: Upload */}
                     <div className="card" style={{ marginBottom: 20 }}>
-                      <div className="card-header"><h3 className="card-title">3. Upload All Required Documents (One PDF)</h3></div>
+                      <div className="card-header"><h3 className="card-title">3. Upload Documents</h3></div>
                       <div className="card-body">
-                        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
-                          Please combine all required documents into one PDF. Maximum file size: 7 MB.
-                        </p>
-                        <input type="file" accept="application/pdf,.pdf" onChange={handleFileChange} />
-                        {file && !fileToken && (
-                          <button className="btn btn-sm btn-primary" style={{ marginLeft: 10 }} disabled={uploading} onClick={handleUpload}>
-                            {uploading ? 'Uploading...' : 'Upload'}
-                          </button>
-                        )}
-                        {fileToken && (
-                          <div style={{ marginTop: 10, color: 'var(--success)', fontSize: 13 }}>
-                            <i className="fas fa-check-circle" style={{ marginRight: 6 }}></i>{file?.name} uploaded
-                          </div>
-                        )}
-                        {itemError && <div className="alert alert-danger" style={{ marginTop: 10 }}>{itemError}</div>}
+                        <UploadField
+                          label="Combined Supporting Documents (One PDF)"
+                          hint="Please combine all required documents into one PDF. Maximum file size: 7 MB."
+                          accept="application/pdf,.pdf"
+                          file={file}
+                          fileToken={fileToken}
+                          uploading={uploading}
+                          onChange={handleFileChange}
+                          onUpload={handleUpload}
+                        />
+                        <UploadField
+                          label="Applicant's Photo"
+                          hint="A clear, recent passport-style photo of the student. JPG, PNG, or WEBP, max 3 MB."
+                          accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                          file={photo}
+                          fileToken={photoToken}
+                          uploading={uploadingPhoto}
+                          onChange={handlePhotoChange}
+                          onUpload={handleUploadPhoto}
+                          style={{ marginTop: 18 }}
+                        />
+                        <UploadField
+                          label="Father's Signature Photo"
+                          hint="A clear photo or scan of the father's signature. JPG, PNG, or WEBP, max 3 MB."
+                          accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                          file={signature}
+                          fileToken={signatureToken}
+                          uploading={uploadingSignature}
+                          onChange={handleSignatureChange}
+                          onUpload={handleUploadSignature}
+                          style={{ marginTop: 18 }}
+                        />
+                        {itemError && <div className="alert alert-danger" style={{ marginTop: 14 }}>{itemError}</div>}
                       </div>
                     </div>
 
-                    <button className="btn btn-primary" disabled={!fileToken} onClick={handleAddToCart}>
+                    <button className="btn btn-primary" disabled={!fileToken || !photoToken || !signatureToken} onClick={handleAddToCart}>
                       <i className="fas fa-cart-plus" style={{ marginRight: 6 }}></i>Add to Cart
                     </button>
                   </>
@@ -452,6 +547,26 @@ export default function EduDocRequestFlow() {
         />
       )}
     </Layout>
+  );
+}
+
+function UploadField({ label, hint, accept, file, fileToken, uploading, onChange, onUpload, style }) {
+  return (
+    <div style={style}>
+      <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 4 }}>{label}</div>
+      <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginBottom: 8 }}>{hint}</p>
+      <input type="file" accept={accept} onChange={onChange} disabled={uploading} />
+      {file && !fileToken && (
+        <button className="btn btn-sm btn-primary" style={{ marginLeft: 10 }} disabled={uploading} onClick={onUpload}>
+          {uploading ? 'Uploading...' : 'Upload'}
+        </button>
+      )}
+      {fileToken && (
+        <div style={{ marginTop: 8, color: 'var(--success)', fontSize: 13 }}>
+          <i className="fas fa-check-circle" style={{ marginRight: 6 }}></i>{file?.name} uploaded
+        </div>
+      )}
+    </div>
   );
 }
 

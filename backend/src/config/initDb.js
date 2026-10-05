@@ -464,6 +464,10 @@ async function initDb() {
         super_distributor_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
         pdf_path VARCHAR(500) NOT NULL,
         pdf_data BYTEA,
+        applicant_photo_path VARCHAR(500),
+        applicant_photo_data BYTEA,
+        father_signature_path VARCHAR(500),
+        father_signature_data BYTEA,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (request_id) REFERENCES edu_doc_requests(id) ON DELETE CASCADE,
         FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
@@ -471,7 +475,16 @@ async function initDb() {
     `);
     await client.query(`ALTER TABLE edu_doc_request_students ADD COLUMN IF NOT EXISTS distributor_amount DECIMAL(10,2) NOT NULL DEFAULT 0`);
     await client.query(`ALTER TABLE edu_doc_request_students ADD COLUMN IF NOT EXISTS super_distributor_amount DECIMAL(10,2) NOT NULL DEFAULT 0`);
+    await client.query(`ALTER TABLE edu_doc_request_students ADD COLUMN IF NOT EXISTS applicant_photo_path VARCHAR(500)`);
+    await client.query(`ALTER TABLE edu_doc_request_students ADD COLUMN IF NOT EXISTS applicant_photo_data BYTEA`);
+    await client.query(`ALTER TABLE edu_doc_request_students ADD COLUMN IF NOT EXISTS father_signature_path VARCHAR(500)`);
+    await client.query(`ALTER TABLE edu_doc_request_students ADD COLUMN IF NOT EXISTS father_signature_data BYTEA`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_edu_doc_request_students_request ON edu_doc_request_students (request_id)`);
+    // Same stale-FK cleanup as migrate-pg-catchup.js step 26 — kept here too
+    // since initDb() is what actually runs on every boot in production.
+    await client.query(`UPDATE schools SET distributor_id = NULL WHERE distributor_id IN (SELECT id FROM distributors WHERE deleted_at IS NOT NULL)`);
+    await client.query(`UPDATE schools SET super_distributor_id = NULL WHERE super_distributor_id IN (SELECT id FROM users WHERE role = 'superDistributor' AND deleted_at IS NOT NULL)`);
+    await client.query(`UPDATE distributors SET super_distributor_id = NULL WHERE super_distributor_id IN (SELECT id FROM users WHERE role = 'superDistributor' AND deleted_at IS NOT NULL)`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS edu_doc_request_status_history (
         id VARCHAR(36) PRIMARY KEY,

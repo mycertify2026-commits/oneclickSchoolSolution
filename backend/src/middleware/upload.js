@@ -117,4 +117,19 @@ const eduDocFilter = (req, file, cb) => {
 };
 const uploadEduDoc = multer({ storage: eduDocPendingStorage, fileFilter: eduDocFilter, limits: { fileSize: 7 * 1024 * 1024 } });
 
-module.exports = { upload, uploadBranding, uploadTemplate, uploadImport, uploadWalletScreenshot, uploadBankQr, uploadSchoolPhoto, uploadCertTemplateSource, uploadAvatar, uploadEduDoc, UPLOAD_ROOT };
+// Applicant photo + father's signature — two more per-student images for the
+// same request, uploaded to the same pending area. The filename still starts
+// with `pending-${req.schoolId}-`, which is the only thing the ownership
+// check at /submit actually looks for, so reusing that exact prefix (with a
+// "photo-"/"sig-" tag right after it) keeps that check working unmodified.
+const eduDocImageStorage = (tag) => multer.diskStorage({
+  destination: (req, file, cb) => cb(null, path.join(UPLOAD_ROOT, 'edu-doc-requests', 'pending')),
+  filename: (req, file, cb) => cb(null, `pending-${req.schoolId}-${tag}-${uuidv4()}${path.extname(file.originalname) || '.jpg'}`)
+});
+const uploadEduDocPhoto = multer({ storage: eduDocImageStorage('photo'), fileFilter: imageFilter, limits: { fileSize: 3 * 1024 * 1024 } });
+const uploadEduDocSignature = multer({ storage: eduDocImageStorage('sig'), fileFilter: imageFilter, limits: { fileSize: 2 * 1024 * 1024 } });
+
+module.exports = {
+  upload, uploadBranding, uploadTemplate, uploadImport, uploadWalletScreenshot, uploadBankQr, uploadSchoolPhoto, uploadCertTemplateSource, uploadAvatar,
+  uploadEduDoc, uploadEduDocPhoto, uploadEduDocSignature, UPLOAD_ROOT,
+};

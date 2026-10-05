@@ -96,6 +96,10 @@ const TABLES = [
       \`super_distributor_amount\` DECIMAL(10,2) NOT NULL DEFAULT 0,
       \`pdf_path\` VARCHAR(500) NOT NULL,
       \`pdf_data\` MEDIUMBLOB,
+      \`applicant_photo_path\` VARCHAR(500),
+      \`applicant_photo_data\` MEDIUMBLOB,
+      \`father_signature_path\` VARCHAR(500),
+      \`father_signature_data\` MEDIUMBLOB,
       \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (\`id\`),
       FOREIGN KEY (\`request_id\`) REFERENCES \`edu_doc_requests\`(\`id\`) ON DELETE CASCADE,
@@ -150,11 +154,24 @@ async function migrate() {
       ['educational_document_types', 'super_distributor_pct', 'DECIMAL(5,2) NOT NULL DEFAULT 0'],
       ['edu_doc_request_students', 'distributor_amount', 'DECIMAL(10,2) NOT NULL DEFAULT 0'],
       ['edu_doc_request_students', 'super_distributor_amount', 'DECIMAL(10,2) NOT NULL DEFAULT 0'],
+      ['edu_doc_request_students', 'applicant_photo_path', 'VARCHAR(500)'],
+      ['edu_doc_request_students', 'applicant_photo_data', 'MEDIUMBLOB'],
+      ['edu_doc_request_students', 'father_signature_path', 'VARCHAR(500)'],
+      ['edu_doc_request_students', 'father_signature_data', 'MEDIUMBLOB'],
     ];
     for (const [table, column, definition] of RETROFIT_COLUMNS) {
       if (await columnExists(connection, dbName, table, column)) continue;
       await connection.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${definition}`);
       console.log(`  + ${table}.${column}: added`);
+    }
+
+    // Same stale-FK cleanup as the Postgres migration — a deleted
+    // distributor/super distributor never had schools' FK to them cleared.
+    const [r1] = await connection.query(`UPDATE schools SET distributor_id = NULL WHERE distributor_id IN (SELECT id FROM distributors WHERE deleted_at IS NOT NULL)`);
+    const [r2] = await connection.query(`UPDATE schools SET super_distributor_id = NULL WHERE super_distributor_id IN (SELECT id FROM users WHERE role = 'superDistributor' AND deleted_at IS NOT NULL)`);
+    const [r3] = await connection.query(`UPDATE distributors SET super_distributor_id = NULL WHERE super_distributor_id IN (SELECT id FROM users WHERE role = 'superDistributor' AND deleted_at IS NOT NULL)`);
+    if (r1.affectedRows || r2.affectedRows || r3.affectedRows) {
+      console.log(`  + cleared stale distributor_id on ${r1.affectedRows} school(s), stale super_distributor_id on ${r2.affectedRows} school(s) and ${r3.affectedRows} distributor(s)`);
     }
 
     console.log('\nEducational document requests migration completed successfully.');

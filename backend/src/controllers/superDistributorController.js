@@ -177,6 +177,11 @@ async function deleteSuperDistributor(req, res) {
 
     await pool.query('UPDATE users SET deleted_at = NOW(), is_active = 0 WHERE id = ?', [id]);
     await pool.query('UPDATE distributors SET deleted_at = NOW() WHERE user_id = ?', [id]);
+    // Same stale-FK problem as deleting a distributor: schools directly
+    // assigned to this super distributor, and distributors that fell back
+    // to this super distributor, must stop resolving to them.
+    await pool.query('UPDATE schools SET super_distributor_id = NULL WHERE super_distributor_id = ?', [id]);
+    await pool.query('UPDATE distributors SET super_distributor_id = NULL WHERE super_distributor_id = ?', [id]);
 
     res.json({ message: 'Super distributor deactivated successfully' });
   } catch (err) {
@@ -742,6 +747,7 @@ async function deleteMyDistributor(req, res) {
     const [distRows] = await pool.query('SELECT user_id FROM distributors WHERE id = ?', [req.params.id]);
     await pool.query('UPDATE distributors SET deleted_at = NOW() WHERE id = ?', [req.params.id]);
     await pool.query("UPDATE users SET deleted_at = NOW(), is_active = 0 WHERE id = ? AND role = 'distributor'", [distRows[0].user_id]);
+    await pool.query('UPDATE schools SET distributor_id = NULL WHERE distributor_id = ?', [req.params.id]);
     res.json({ message: 'Distributor deleted successfully' });
   } catch (err) {
     console.error('SD deleteMyDistributor error:', err.message);
