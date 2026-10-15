@@ -499,9 +499,9 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   // full header width is always available to the name.
   doc.save().rect(0, CARD_TOP, W, HDR_H).fillColor(headerColor).fill().restore();
 
-  const logoSz = 26;
+  const logoSz = 32;
   if (canDraw(logoPath)) {
-    try { doc.image(logoPath, 10, CARD_TOP + 12, { width: logoSz, height: logoSz }); } catch (e) {}
+    try { doc.image(logoPath, 10, CARD_TOP + 9, { width: logoSz, height: logoSz }); } catch (e) {}
   }
 
   const nameX = 10 + logoSz + 6;
@@ -610,7 +610,7 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   // shown, is now just another row above, in restFieldsV.)
   const bandY = cursorYV + 2;
 
-  const qrSz = Math.max(20, Math.min(26, CONTENT_BOTTOM - bandY - 2));
+  const qrSz = Math.max(20, Math.min(32, CONTENT_BOTTOM - bandY - 2));
   const qrX = FX, qrY = bandY;
   if (qrBuffer) {
     try { doc.image(qrBuffer, qrX, qrY, { width: qrSz, height: qrSz }); } catch (e) {}
