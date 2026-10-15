@@ -176,7 +176,11 @@ async function generateIdCardPdf({ school, student, certificate, outputPath, pho
 
 // ── FRONT ────────────────────────────────────────────────────────────────────
 function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, student, certificate, photoPath, logoPath, signaturePath, stampPath, qrBuffer, bgBuf, bgOpacity, borderColor, showFeatureStrip, featureIcons, watermarkBuf, watermarkOpacity, GOLD, ORANGE, NAVY, GREY, TEXT, WHITE }) {
-  const FTR_H = 24;
+  // The feature-strip footer grows by schoolAddressRowH only when there's
+  // an actual school address to show in it (a school with no
+  // city/taluka/district filled in renders exactly as before this existed).
+  const schoolAddressRowH = buildSchoolAddress(school) ? 9 : 0;
+  const FTR_H = 24 + schoolAddressRowH;
   const CARD_TOP = 12;
   const RIGHT_X = 188;
   // No separate Student UID strip — that band was removed (it duplicated the
@@ -287,18 +291,11 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
     const subtitle = fitSingleLine(doc, subtitleValue, 118, 'Helvetica', 5);
     doc.font('Helvetica').fontSize(5).fillColor(TEXT)
       .text(subtitle, 66, afterNameY, { width: 118, lineBreak: false });
-    afterNameY += 6;
   }
-  // School address (city/village, taluka, district) — replaces the old
-  // website/phone contact line. No phone or mobile number is shown here
-  // anymore, per requirement; Father's Mobile below is a different field
-  // (the student's own contact, not the school's).
-  const schoolAddress = buildSchoolAddress(school);
-  if (schoolAddress) {
-    const addressText = fitSingleLine(doc, schoolAddress, 118, 'Helvetica', 4.6);
-    doc.font('Helvetica').fontSize(4.6).fillColor(TEXT)
-      .text(addressText, 66, afterNameY, { width: 118, lineBreak: false });
-  }
+  // School address lives in the card's footer now (see featureY below),
+  // not here — no phone/mobile number is shown anywhere on the card either
+  // way; Father's Mobile below is a different field (the student's own
+  // contact, not the school's).
 
   // Separator between the school-identity block above and the student
   // information block below — both sit on the plain white left side with
@@ -322,39 +319,89 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
     drawPhotoPlaceholder(doc, PH_X, PH_Y, PH_W, PH_H, GREY);
   }
 
-  // Compact, consistently aligned key/value fields.
+  // Compact, consistently aligned key/value fields. Student Name gets the
+  // same wrap-then-shrink treatment as the school name (up to 2 lines,
+  // shrinking font before ever truncating) — a long student name is just
+  // as common as a long school name, and was hitting the same "..."
+  // truncation. Every other field value still shrinks to fit on one line
+  // before ever truncating (fitValueShrink) — GR No./DOB/mobile/Standard
+  // are all naturally short, and Father's Name benefits from the same
+  // protection without needing a second line.
   const FX = 68, LABEL_W = 39, VALUE_X = FX + LABEL_W + 4;
   const fieldWidth = RIGHT_X - VALUE_X - 3;
-  const fields = [
-    ['Student Name', safe(student.full_name)],
-    ['GR No.', safe(student.gr_number || student.register_number)],
-    ['Date of Birth', fmtDate(student.dob)],
-    ["Father's Mobile", safe(student.parent_mobile)],
-    ["Father's Name", safe(student.father_name)],
-    ['Standard', formatStandardLabel(student.current_standard || student.admission_standard)],
-  ];
-  fields.forEach(([label, value], index) => {
-    const y = 65 + index * 9;
-    doc.font('Helvetica').fontSize(5.6).fillColor(TEXT)
-      .text(label, FX, y, { width: LABEL_W, lineBreak: false, ellipsis: true });
-    doc.font('Helvetica').fontSize(5.6).fillColor(TEXT)
-      .text(':', FX + LABEL_W - 1, y, { width: 4, lineBreak: false });
-    const valueText = fitSingleLine(doc, value || '—', fieldWidth, 'Helvetica-Bold', 5.6);
-    doc.font('Helvetica-Bold').fontSize(5.6).fillColor(TEXT)
-      .text(valueText, VALUE_X, y, { width: fieldWidth, lineBreak: false });
+  const ROW_H = 9;
+
+  // The decorative panel's left edge isn't a straight vertical line — it's
+  // diagonal from (RIGHT_X, CARD_TOP) down to a notch at (166, 88), only
+  // becoming the flat RIGHT_X boundary below y=88 (see the panel polygon
+  // above). `fieldWidth` assumes the flat boundary, which single short
+  // values never reached anyway — but a 2-line wrapped Student Name sits
+  // right in that diagonal zone and, at fieldWidth, can run under the
+  // panel. Use the panel's actual edge at this field's lowest point
+  // instead of the flat assumption.
+  const panelLeftEdgeAt = (y) => (y >= 88 ? RIGHT_X : RIGHT_X + (166 - RIGHT_X) * ((y - CARD_TOP) / (88 - CARD_TOP)));
+  const nameFieldWidth = Math.min(fieldWidth, panelLeftEdgeAt(80) - VALUE_X - 3);
+
+  const nameValue = safe(student.full_name, '—');
+  const { lines: studentNameLines, fontSize: studentNameSize } = splitSchoolName(doc, nameValue, nameFieldWidth, 'Helvetica-Bold', 5.6, 4.2, 4);
+  const studentNamePitch = studentNameSize + 1.2;
+
+  doc.font('Helvetica').fontSize(5.6).fillColor(TEXT)
+    .text('Student Name', FX, 65, { width: LABEL_W, lineBreak: false, ellipsis: true });
+  doc.font('Helvetica').fontSize(5.6).fillColor(TEXT)
+    .text(':', FX + LABEL_W - 1, 65, { width: 4, lineBreak: false });
+  studentNameLines.forEach((line, i) => {
+    doc.font('Helvetica-Bold').fontSize(studentNameSize).fillColor(TEXT)
+      .text(line, VALUE_X, 65 + i * studentNamePitch, { width: nameFieldWidth, lineBreak: false });
   });
 
-  // ── Address + Principal Signature — the space freed by dropping the old
-  // text-only "Authorized by" row and the Student UID strip. A real
-  // signature image now sits above the designation label instead of plain
-  // text standing in for it.
-  const sigBandY = 65 + fields.length * 9 + 2;
+  // Father's Name is a person's full name too, exactly as prone to running
+  // long as Student Name (confirmed: a realistic compound name doesn't fit
+  // even at minFontSize on one line) — gets the same 2-line wrap treatment.
+  // GR No./Date of Birth/Father's Mobile/Standard stay single-line shrink,
+  // since they're all naturally short, format-bound values.
+  const restFields = [
+    ['GR No.', safe(student.gr_number || student.register_number), false],
+    ['Date of Birth', fmtDate(student.dob), false],
+    ["Father's Mobile", safe(student.parent_mobile), false],
+    ["Father's Name", safe(student.father_name), true],
+    ['Standard', formatStandardLabel(student.current_standard || student.admission_standard), false],
+  ];
+  // Student's own address (opt-in per school) renders as just another
+  // label:value row now, same column alignment and shrink-before-truncate
+  // as every other field — it used to be a differently-formatted free-text
+  // line ("Address: ...") that didn't match the rest of the card.
   if (school.id_card_show_address && student.address) {
-    const addrW = 68;
-    const addrText = fitSingleLine(doc, `Address: ${student.address}`, addrW, 'Helvetica', 4.6);
-    doc.font('Helvetica').fontSize(4.6).fillColor(TEXT)
-      .text(addrText, FX, sigBandY + 3, { width: addrW, lineBreak: false });
+    restFields.push(['Address', safe(student.address), false]);
   }
+  let cursorY = 65 + Math.max(ROW_H, studentNameLines.length * studentNamePitch);
+  restFields.forEach(([label, value, wrap]) => {
+    doc.font('Helvetica').fontSize(5.6).fillColor(TEXT)
+      .text(label, FX, cursorY, { width: LABEL_W, lineBreak: false, ellipsis: true });
+    doc.font('Helvetica').fontSize(5.6).fillColor(TEXT)
+      .text(':', FX + LABEL_W - 1, cursorY, { width: 4, lineBreak: false });
+    if (wrap) {
+      const { lines, fontSize: valueSize } = splitSchoolName(doc, value || '—', fieldWidth, 'Helvetica-Bold', 5.6, 4.2, 2);
+      const pitch = valueSize + 1.2;
+      lines.forEach((line, i) => {
+        doc.font('Helvetica-Bold').fontSize(valueSize).fillColor(TEXT)
+          .text(line, VALUE_X, cursorY + i * pitch, { width: fieldWidth, lineBreak: false });
+      });
+      cursorY += Math.max(ROW_H, lines.length * pitch);
+    } else {
+      const { text: valueText, fontSize: valueSize } = fitValueShrink(doc, value || '—', fieldWidth, 'Helvetica-Bold', 5.6, 4.2);
+      doc.font('Helvetica-Bold').fontSize(valueSize).fillColor(TEXT)
+        .text(valueText, VALUE_X, cursorY, { width: fieldWidth, lineBreak: false });
+      cursorY += ROW_H;
+    }
+  });
+
+  // ── Principal Signature — the space freed by dropping the old text-only
+  // "Authorized by" row and the Student UID strip. A real signature image
+  // now sits above the designation label instead of plain text standing in
+  // for it. (Address, when shown, is now just another row above, in
+  // restFields.)
+  const sigBandY = cursorY + 2;
   const sigW = 42, sigH = 11, sigX = FX + 74;
   const sigLineY = sigBandY + sigH;
   if (canDraw(signaturePath)) {
@@ -363,7 +410,6 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
     // flush against its left edge (pdfkit's default for `fit`).
     try { doc.image(signaturePath, sigX, sigBandY, { width: sigW, height: sigH, fit: [sigW, sigH], align: 'center', valign: 'bottom' }); } catch (e) {}
   }
-  doc.save().moveTo(sigX, sigLineY).lineTo(sigX + sigW, sigLineY).lineWidth(0.4).strokeColor('#9ca3af').stroke().restore();
   doc.font('Helvetica').fontSize(4.2).fillColor(GREY)
     .text(safe(school.idcard_signature_label, 'Principal'), sigX, sigLineY + 1, { width: sigW, align: 'center', lineBreak: false });
 
@@ -382,24 +428,38 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   // remaining visible ones spread evenly across the full width, and no
   // other element on the card reflows (the card's standard size is
   // unaffected either way).
+  //
+  // The school's own address sits as its own line across the top of this
+  // band (FTR_H was grown by schoolAddressRowH to make room for it) — this
+  // is the actual card "footer", distinct from the student's own address
+  // shown as a field above.
   const featureY = CONTENT_BOTTOM;
   doc.rect(0, featureY, W, FTR_H).fillColor(WHITE).fill();
+  const schoolAddressFooter = buildSchoolAddress(school);
+  let iconRowY = featureY;
+  if (schoolAddressFooter) {
+    doc.save().moveTo(10, featureY).lineTo(W - 10, featureY).lineWidth(0.3).strokeColor('#e5e7eb').stroke().restore();
+    const addrFooterText = fitSingleLine(doc, schoolAddressFooter, W - 10, 'Helvetica', 4.4);
+    doc.font('Helvetica').fontSize(4.4).fillColor(TEXT)
+      .text(addrFooterText, 5, featureY + 2.5, { width: W - 10, align: 'center', lineBreak: false });
+    iconRowY += schoolAddressRowH;
+  }
   const features = showFeatureStrip ? featureIcons.filter(f => f.visible !== false) : [];
   const featureW = W / (features.length || 1);
   features.forEach((feature, index) => {
     const x = index * featureW;
     if (index > 0) {
-      doc.save().moveTo(x, featureY + 4).lineTo(x, H - 4)
+      doc.save().moveTo(x, iconRowY + 4).lineTo(x, H - 4)
         .lineWidth(0.3).strokeColor('#e5e7eb').stroke().restore();
     }
-    drawFeatureIcon(doc, feature.key, x + featureW / 2, featureY + 7, headerColor);
+    drawFeatureIcon(doc, feature.key, x + featureW / 2, iconRowY + 7, headerColor);
     if (feature.caption1) {
       doc.font('Helvetica-Bold').fontSize(3.4).fillColor(TEXT)
-        .text(feature.caption1, x + 1, featureY + 13, { width: featureW - 2, align: 'center', lineBreak: false });
+        .text(feature.caption1, x + 1, iconRowY + 13, { width: featureW - 2, align: 'center', lineBreak: false });
     }
     if (feature.caption2) {
       doc.font('Helvetica-Bold').fontSize(3.1).fillColor(TEXT)
-        .text(feature.caption2, x + 1, featureY + 17, { width: featureW - 2, align: 'center', lineBreak: false });
+        .text(feature.caption2, x + 1, iconRowY + 17, { width: featureW - 2, align: 'center', lineBreak: false });
     }
   });
 
@@ -415,7 +475,8 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
 // two-column layout), then the same UID strip and feature strip conventions
 // as the landscape design, just re-flowed for a narrower width.
 function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school, student, certificate, photoPath, logoPath, signaturePath, stampPath, qrBuffer, bgBuf, bgOpacity, borderColor, showFeatureStrip, featureIcons, watermarkBuf, watermarkOpacity, GREY, TEXT, WHITE }) {
-  const FTR_H = 24;
+  const schoolAddressRowH = buildSchoolAddress(school) ? 9 : 0;
+  const FTR_H = 24 + schoolAddressRowH;
   const CONTENT_BOTTOM = H - FTR_H;
   const CARD_TOP = 8;
   const HDR_H = 50;
@@ -457,23 +518,15 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
     doc.font('Helvetica-Bold').fontSize(nameSize).fillColor(WHITE)
       .text(line, nameX, CARD_TOP + 10 + index * namePitch, { width: nameW, align: 'center', lineBreak: false });
   });
-  // Subtitle and school address both positioned relative to where the name
-  // actually ended (1, 2, or 3 lines), same reasoning as the horizontal
-  // layout — both still sit inside the header band (HDR_H), which has
-  // enough slack below even a 3-line name + subtitle for one more short line.
-  let afterVertNameY = CARD_TOP + 10 + nameLines.length * namePitch + 1;
+  // Subtitle positioned relative to where the name actually ended (1, 2, or
+  // 3 lines), same reasoning as the horizontal layout. School address lives
+  // in the card's footer now (see featureY below), not here.
+  const afterVertNameY = CARD_TOP + 10 + nameLines.length * namePitch + 1;
   const subtitleValue = safe(school.id_card_subtitle) || (school.recog_no ? `Recog. No. ${school.recog_no}` : '');
   if (subtitleValue) {
     const subtitle = fitSingleLine(doc, subtitleValue, nameW, 'Helvetica', 5);
     doc.font('Helvetica').fontSize(5).fillColor('#dbe4f5')
       .text(subtitle, nameX, afterVertNameY, { width: nameW, align: 'center', lineBreak: false });
-    afterVertNameY += 6;
-  }
-  const schoolAddress = buildSchoolAddress(school);
-  if (schoolAddress) {
-    const addressText = fitSingleLine(doc, schoolAddress, nameW, 'Helvetica', 4.8);
-    doc.font('Helvetica').fontSize(4.8).fillColor('#dbe4f5')
-      .text(addressText, nameX, afterVertNameY, { width: nameW, align: 'center', lineBreak: false });
   }
 
   // Separator between the school-identity header band and the student
@@ -494,40 +547,68 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   }
 
   // ── Full-width label:value rows ───────────────────────────────────────────
+  // Same Student Name wrap-then-shrink treatment as the horizontal layout —
+  // see the comment there for why.
   const FX = 12, LABEL_W = 46, VALUE_X = FX + LABEL_W + 4;
   const fieldWidth = W - VALUE_X - 10;
-  const fields = [
-    ['Student Name', safe(student.full_name)],
-    ['GR No.', safe(student.gr_number || student.register_number)],
-    ['Date of Birth', fmtDate(student.dob)],
-    ["Father's Mobile", safe(student.parent_mobile)],
-    ["Father's Name", safe(student.father_name)],
-    ['Standard', formatStandardLabel(student.current_standard || student.admission_standard)],
-  ];
+  const ROW_H = 9;
   const rowY0 = PH_Y + PH_H + 8;
-  fields.forEach(([label, value], index) => {
-    const y = rowY0 + index * 9;
-    doc.font('Helvetica').fontSize(6.4).fillColor(TEXT)
-      .text(label, FX, y, { width: LABEL_W, lineBreak: false, ellipsis: true });
-    doc.font('Helvetica').fontSize(6.4).fillColor(TEXT)
-      .text(':', FX + LABEL_W - 1, y, { width: 4, lineBreak: false });
-    const valueText = fitSingleLine(doc, value || '—', fieldWidth, 'Helvetica-Bold', 6.4);
-    doc.font('Helvetica-Bold').fontSize(6.4).fillColor(TEXT)
-      .text(valueText, VALUE_X, y, { width: fieldWidth, lineBreak: false });
+
+  const nameValueV = safe(student.full_name, '—');
+  const { lines: studentNameLinesV, fontSize: studentNameSizeV } = splitSchoolName(doc, nameValueV, fieldWidth, 'Helvetica-Bold', 6.4, 4.8, 2);
+  const studentNamePitchV = studentNameSizeV + 1.2;
+
+  doc.font('Helvetica').fontSize(6.4).fillColor(TEXT)
+    .text('Student Name', FX, rowY0, { width: LABEL_W, lineBreak: false, ellipsis: true });
+  doc.font('Helvetica').fontSize(6.4).fillColor(TEXT)
+    .text(':', FX + LABEL_W - 1, rowY0, { width: 4, lineBreak: false });
+  studentNameLinesV.forEach((line, i) => {
+    doc.font('Helvetica-Bold').fontSize(studentNameSizeV).fillColor(TEXT)
+      .text(line, VALUE_X, rowY0 + i * studentNamePitchV, { width: fieldWidth, lineBreak: false });
   });
 
-  // ── Address, then QR (left) + Principal Signature (right) ─────────────────
+  // Father's Name gets the same 2-line wrap treatment as Student Name — see
+  // the matching comment in drawFront for why.
+  const restFieldsV = [
+    ['GR No.', safe(student.gr_number || student.register_number), false],
+    ['Date of Birth', fmtDate(student.dob), false],
+    ["Father's Mobile", safe(student.parent_mobile), false],
+    ["Father's Name", safe(student.father_name), true],
+    ['Standard', formatStandardLabel(student.current_standard || student.admission_standard), false],
+  ];
+  // Same column-aligned treatment as every other field — see the matching
+  // comment in drawFront.
+  if (school.id_card_show_address && student.address) {
+    restFieldsV.push(['Address', safe(student.address), false]);
+  }
+  let cursorYV = rowY0 + Math.max(ROW_H, studentNameLinesV.length * studentNamePitchV);
+  restFieldsV.forEach(([label, value, wrap]) => {
+    doc.font('Helvetica').fontSize(6.4).fillColor(TEXT)
+      .text(label, FX, cursorYV, { width: LABEL_W, lineBreak: false, ellipsis: true });
+    doc.font('Helvetica').fontSize(6.4).fillColor(TEXT)
+      .text(':', FX + LABEL_W - 1, cursorYV, { width: 4, lineBreak: false });
+    if (wrap) {
+      const { lines, fontSize: valueSize } = splitSchoolName(doc, value || '—', fieldWidth, 'Helvetica-Bold', 6.4, 4.8, 2);
+      const pitch = valueSize + 1.2;
+      lines.forEach((line, i) => {
+        doc.font('Helvetica-Bold').fontSize(valueSize).fillColor(TEXT)
+          .text(line, VALUE_X, cursorYV + i * pitch, { width: fieldWidth, lineBreak: false });
+      });
+      cursorYV += Math.max(ROW_H, lines.length * pitch);
+    } else {
+      const { text: valueText, fontSize: valueSize } = fitValueShrink(doc, value || '—', fieldWidth, 'Helvetica-Bold', 6.4, 4.8);
+      doc.font('Helvetica-Bold').fontSize(valueSize).fillColor(TEXT)
+        .text(valueText, VALUE_X, cursorYV, { width: fieldWidth, lineBreak: false });
+      cursorYV += ROW_H;
+    }
+  });
+
+  // ── QR (left) + Principal Signature (right) ────────────────────────────────
   // QR moved down from the header (see above) to sit at the left instead of
   // the top, and the signature moved from centered to the right, so neither
-  // ever collides with a long school name or with each other.
-  let bandY = rowY0 + fields.length * 9 + 2;
-  if (school.id_card_show_address && student.address) {
-    const addrW = W - FX * 2;
-    const addrText = fitSingleLine(doc, `Address: ${student.address}`, addrW, 'Helvetica', 5.2);
-    doc.font('Helvetica').fontSize(5.2).fillColor(TEXT)
-      .text(addrText, FX, bandY, { width: addrW, lineBreak: false });
-    bandY += 7;
-  }
+  // ever collides with a long school name or with each other. (Address, when
+  // shown, is now just another row above, in restFieldsV.)
+  const bandY = cursorYV + 2;
 
   const qrSz = Math.max(20, Math.min(26, CONTENT_BOTTOM - bandY - 2));
   const qrX = FX, qrY = bandY;
@@ -544,28 +625,39 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
     // image narrower than sigW sits flush left instead of over the line.
     try { doc.image(signaturePath, sigX, sigY, { width: sigW, height: sigH, fit: [sigW, sigH], align: 'center', valign: 'bottom' }); } catch (e) {}
   }
-  doc.save().moveTo(sigX, sigLineY).lineTo(sigX + sigW, sigLineY).lineWidth(0.4).strokeColor('#9ca3af').stroke().restore();
   doc.font('Helvetica').fontSize(4.8).fillColor(GREY)
     .text(safe(school.idcard_signature_label, 'Principal'), sigX, sigLineY + 1, { width: sigW, align: 'center', lineBreak: false });
 
   // ── Feature strip ──────────────────────────────────────────────────────────
+  // School's own address runs across the top of this band when set — the
+  // card's actual footer (distinct from the student's own address field
+  // above). See the matching comment in drawFront.
   const featureY = CONTENT_BOTTOM;
   doc.rect(0, featureY, W, FTR_H).fillColor(WHITE).fill();
+  const schoolAddressFooterV = buildSchoolAddress(school);
+  let iconRowYV = featureY;
+  if (schoolAddressFooterV) {
+    doc.save().moveTo(10, featureY).lineTo(W - 10, featureY).lineWidth(0.3).strokeColor('#e5e7eb').stroke().restore();
+    const addrFooterTextV = fitSingleLine(doc, schoolAddressFooterV, W - 10, 'Helvetica', 4.6);
+    doc.font('Helvetica').fontSize(4.6).fillColor(TEXT)
+      .text(addrFooterTextV, 5, featureY + 2.5, { width: W - 10, align: 'center', lineBreak: false });
+    iconRowYV += schoolAddressRowH;
+  }
   const features = showFeatureStrip ? featureIcons.filter(f => f.visible !== false) : [];
   const featureW = W / (features.length || 1);
   features.forEach((feature, index) => {
     const x = index * featureW;
     if (index > 0) {
-      doc.save().moveTo(x, featureY + 4).lineTo(x, H - 4).lineWidth(0.3).strokeColor('#e5e7eb').stroke().restore();
+      doc.save().moveTo(x, iconRowYV + 4).lineTo(x, H - 4).lineWidth(0.3).strokeColor('#e5e7eb').stroke().restore();
     }
-    drawFeatureIcon(doc, feature.key, x + featureW / 2, featureY + 7, headerColor);
+    drawFeatureIcon(doc, feature.key, x + featureW / 2, iconRowYV + 7, headerColor);
     if (feature.caption1) {
       doc.font('Helvetica-Bold').fontSize(3.2).fillColor(TEXT)
-        .text(feature.caption1, x + 1, featureY + 13, { width: featureW - 2, align: 'center', lineBreak: false });
+        .text(feature.caption1, x + 1, iconRowYV + 13, { width: featureW - 2, align: 'center', lineBreak: false });
     }
     if (feature.caption2) {
       doc.font('Helvetica-Bold').fontSize(2.9).fillColor(TEXT)
-        .text(feature.caption2, x + 1, featureY + 17, { width: featureW - 2, align: 'center', lineBreak: false });
+        .text(feature.caption2, x + 1, iconRowYV + 17, { width: featureW - 2, align: 'center', lineBreak: false });
     }
   });
 
@@ -634,6 +726,27 @@ function fitSingleLine(doc, value, maxWidth, font, fontSize) {
   return `${shortened}...`;
 }
 
+// Shrinks a single-line field value's font size until it fits, only
+// falling back to fitSingleLine's "..." truncation if it still doesn't fit
+// even at the minimum size (an unrealistically long value with no spaces
+// to break on) — same shrink-before-truncate principle as the school/
+// student name, just kept to one line since these fields sit in a uniform
+// label:value row grid. Returns { text, fontSize } — draw at the returned
+// size, not the one passed in.
+function fitValueShrink(doc, value, maxWidth, font, fontSize, minFontSize) {
+  const original = safe(value, '—');
+  doc.font(font);
+  const safeWidth = maxWidth - 1;
+  let size = fontSize;
+  while (size > minFontSize && doc.fontSize(size).widthOfString(original) > safeWidth) {
+    size -= 0.2;
+  }
+  if (doc.fontSize(size).widthOfString(original) <= safeWidth) {
+    return { text: original, fontSize: size };
+  }
+  return { text: fitSingleLine(doc, original, maxWidth, font, size), fontSize: size };
+}
+
 // Splits a school name across up to `maxLines` lines at the best word
 // boundaries, shrinking the font size (like every shrink-to-fit block in
 // certificatePdf.js) until the lines actually fit at that size — a long name
@@ -649,32 +762,26 @@ function splitSchoolName(doc, value, maxWidth, font, fontSize, minFontSize = 6, 
   doc.font(font);
 
   // Best way to break `words` into exactly `parts` contiguous, non-empty
-  // lines, minimizing the widest resulting line. Brute-forced over all
-  // combinations of split points — school names rarely have more than a
-  // dozen words, so this is always cheap (at most a few hundred combinations
-  // for parts=3).
+  // lines, minimizing the widest resulting line. Recursive brute force over
+  // every valid position for the first line's break, then the best split of
+  // the remainder into the other `parts - 1` lines — school/student names
+  // rarely have more than a dozen words, so this stays cheap at any
+  // realistic `parts` count (unlike an earlier version of this function
+  // that only special-cased parts 1/2/3 and silently fell through to a
+  // 3-way split for anything higher, so a 4th line was never actually used).
   const bestSplitInto = (words, parts) => {
-    if (parts === 1) return [words.join(' ')];
+    if (parts <= 1) return [words.join(' ')];
     if (words.length < parts) return null;
-    if (parts === 2) {
-      let best = null;
-      for (let i = 1; i < words.length; i += 1) {
-        const lines = [words.slice(0, i).join(' '), words.slice(i).join(' ')];
-        const score = Math.max(...lines.map((l) => doc.widthOfString(l)));
-        if (!best || score < best.score) best = { lines, score };
-      }
-      return best.lines;
-    }
-    // parts === 3
     let best = null;
-    for (let i = 1; i < words.length - 1; i += 1) {
-      for (let j = i + 1; j < words.length; j += 1) {
-        const lines = [words.slice(0, i).join(' '), words.slice(i, j).join(' '), words.slice(j).join(' ')];
-        const score = Math.max(...lines.map((l) => doc.widthOfString(l)));
-        if (!best || score < best.score) best = { lines, score };
-      }
+    for (let i = 1; i <= words.length - (parts - 1); i += 1) {
+      const firstLine = words.slice(0, i).join(' ');
+      const restLines = bestSplitInto(words.slice(i), parts - 1);
+      if (!restLines) continue;
+      const lines = [firstLine, ...restLines];
+      const score = Math.max(...lines.map((l) => doc.widthOfString(l)));
+      if (!best || score < best.score) best = { lines, score };
     }
-    return best.lines;
+    return best ? best.lines : null;
   };
 
   const words = original.split(/\s+/).filter(Boolean);

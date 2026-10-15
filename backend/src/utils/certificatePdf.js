@@ -794,9 +794,6 @@ async function generateLcPdf({
       // only the ID Card carries a printed/uploaded signature.
       drawStampIfAvailable(doc, safeStampPath, 46 + contentWidth / 2 - 18, sigLineY - 36, 36);
 
-      doc.moveTo(C1, sigLineY).lineTo(C1 + C1W, sigLineY).lineWidth(0.7).strokeColor('#9ca3af').stroke();
-      doc.moveTo(C3, sigLineY).lineTo(C3 + C3W, sigLineY).lineWidth(0.7).strokeColor('#9ca3af').stroke();
-
       doc.font('Helvetica').fontSize(9).fillColor(TEXT)
         .text('Checked by', C1, sigLineY + 5, { width: C1W, align: 'center', lineBreak: false });
       // Designation label only (Principal / Mukhyadhyapak / Headmaster / a
@@ -1200,12 +1197,11 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
   // paragraph above, so it was pure repetition.
   const footerY = bodyBottomY + 20;
 
-  doc.font('Helvetica-Bold').fontSize(8).fillColor(NAVY).text('DATE OF ISSUE', left, footerY, { lineBreak: false });
-  doc.font('Helvetica').fontSize(9.5).fillColor(black).text(fmtDate(new Date()), left, footerY + 11, { lineBreak: false });
-  doc.font('Helvetica-Bold').fontSize(8).fillColor(NAVY).text('PLACE', left, footerY + 26, { lineBreak: false });
-  doc.font('Helvetica').fontSize(9.5).fillColor(black)
-    .text(`${safe(school.city || school.village || school.taluka, '-')}, Dist. ${safe(school.district, '-')}`,
-      left, footerY + 37, { width: contentW - 10, lineBreak: false, ellipsis: true });
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(NAVY)
+    .text(`Date of Issue : ${fmtDate(new Date())}`, left, footerY, { lineBreak: false });
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(NAVY)
+    .text(`Place : ${safe(school.city || school.village || school.taluka, '-')}, Dist. ${safe(school.district, '-')}`,
+      left, footerY + 14, { width: contentW - 10, lineBreak: false, ellipsis: true });
 
   // Signature row sits at a fixed gap below Date/Place — no longer
   // dependent on whether the optional footer text below exists, since that
@@ -1216,10 +1212,9 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
   // Signature images are intentionally NOT drawn here — Bonafide is meant to
   // be hand-signed on the printed hard copy; only the ID Card carries a
   // printed/uploaded signature.
-  const sigLineY = footerY + 37 + 40;
+  const sigLineY = footerY + 14 + 40;
   const sigColW = contentW / 3;
 
-  doc.save().moveTo(left + 10, sigLineY).lineTo(left + sigColW - 15, sigLineY).lineWidth(0.8).strokeColor('#94A3B8').stroke().restore();
   doc.font('Helvetica-Bold').fontSize(8.5).fillColor(black)
     .text('Class Teacher', left + 10, sigLineY + 4, { width: sigColW - 25, align: 'center', lineBreak: false });
 
@@ -1238,7 +1233,6 @@ function renderSingleBonafide(doc, ctx, qrBuffer) {
       .text('PHOTO', photoX, photoY + photoH / 2 - 3, { width: photoW, align: 'center', lineBreak: false });
   }
 
-  doc.save().moveTo(right - sigColW + 15, sigLineY).lineTo(right - 10, sigLineY).lineWidth(0.8).strokeColor('#94A3B8').stroke().restore();
   doc.font('Helvetica-Bold').fontSize(8.5).fillColor(black)
     .text(safe(school.bonafide_signature_label, 'Principal'), right - sigColW + 15, sigLineY + 4, { width: sigColW - 25, align: 'center', lineBreak: false });
 
