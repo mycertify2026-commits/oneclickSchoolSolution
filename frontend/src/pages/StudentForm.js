@@ -18,6 +18,15 @@ const SUB_CASTE_OPTIONS = [
   ['SEBC', 'SEBC'], ['VJ-A', 'VJ-A'], ['NT-B', 'NT-B'], ['NT-C', 'NT-C'], ['NT-D', 'NT-D']
 ];
 
+// Accepts whatever date shape the API returns (a full ISO datetime string,
+// an already-correct YYYY-MM-DD, or null/undefined) and returns exactly
+// what <input type="date"> needs, or '' if there's nothing to show.
+function toDateInputValue(v) {
+  if (!v) return '';
+  const s = String(v);
+  return s.length >= 10 ? s.slice(0, 10) : s;
+}
+
 function validateIdentifiers(form) {
   const checks = [
     { field: 'apaar_id', label: 'APAAR ID', pattern: /^\d{12}$/ },
@@ -58,7 +67,17 @@ export default function StudentForm() {
   useEffect(() => {
     if (isEdit) {
       api.get(`/students/${id}`).then(res => {
-        setForm({ ...BLANK, ...res.data.student });
+        // The API returns dob/admission_date as a full ISO datetime string
+        // (DATE columns round-trip through JS Date -> toISOString() on the
+        // way to JSON) — an <input type="date"> only accepts exactly
+        // YYYY-MM-DD and silently renders blank for anything else, which is
+        // why the birth date looked empty when editing an existing student.
+        const student = {
+          ...res.data.student,
+          dob: toDateInputValue(res.data.student.dob),
+          admission_date: toDateInputValue(res.data.student.admission_date),
+        };
+        setForm({ ...BLANK, ...student });
         if (res.data.student.photo_url) {
           const filename = res.data.student.photo_url.split('/').pop();
           setPhotoPreview(`/uploads/photos/${filename}`);

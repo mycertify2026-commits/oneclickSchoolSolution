@@ -4,8 +4,11 @@
  * The card is intentionally generated as one page only. Its aspect ratio and
  * footer feature strip follow the supplied reference image.
  *
- * The active front layout follows the supplied reference labels, including
- * Valid Till, and keeps every dynamic value inside a bounded region.
+ * The active front layout follows the supplied reference labels and keeps
+ * every dynamic value inside a bounded region. The last field is labeled
+ * "Standard" (current standard, falling back to admission standard) — it
+ * used to be labeled "Valid Till" while already showing the standard value,
+ * which was just a mislabel, not a real expiry date.
  */
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
@@ -74,6 +77,14 @@ function formatStandardLabel(std) {
 
 function acadYear(y) {
   return `${y}-${String(y + 1).slice(-2)}`;
+}
+
+// School address line for the ID card header — composed the same way every
+// certificate PDF already builds one (city/village, taluka, district), since
+// schools has no single `address` column. No phone/mobile number in here;
+// that's handled separately (see the "remove phone" change at the contact line).
+function buildSchoolAddress(school) {
+  return [school.city || school.village, school.taluka, school.district].filter(Boolean).join(', ');
 }
 
 function currentAcadStartYear() {
@@ -251,29 +262,42 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   // Designer); blank/unset keeps the original 9.2pt default. Either way the
   // shrink-to-fit loop below still applies on top, so a chosen size that's
   // too big for a particular long name degrades gracefully instead of
-  // overflowing or getting silently ignored.
+  // overflowing or getting silently ignored. Minimum lowered from 5.5 to 4.6
+  // so a genuinely long name keeps shrinking and wrapping instead of ever
+  // reaching fitSingleLine's last-resort "..." truncation.
   const requestedNameSize = Number(school.id_card_school_name_font_size);
   const startNameSize = Number.isFinite(requestedNameSize) && requestedNameSize > 0 ? requestedNameSize : 9.2;
-  const { lines: schoolNameLines, fontSize: schoolNameSize } = splitSchoolName(doc, schoolName.toUpperCase(), 117, 'Helvetica-Bold', startNameSize, 5.5);
+  const { lines: schoolNameLines, fontSize: schoolNameSize } = splitSchoolName(doc, schoolName.toUpperCase(), 117, 'Helvetica-Bold', startNameSize, 4.6);
   schoolNameLines.forEach((line, index) => {
     doc.font('Helvetica-Bold').fontSize(schoolNameSize).fillColor(headerColor)
       .text(line, 66, 19 + idSanshaOffset + index * schoolNameSize, { width: 117, lineBreak: false });
   });
+
+  // Subtitle and the new school-address line are positioned relative to
+  // where the (possibly 1- or 2-line) name actually ended, not a hardcoded
+  // offset — a long 2-line name used to risk running into a subtitle fixed
+  // at y=39, which is exactly the "name looks cut off" symptom being fixed.
+  let afterNameY = 19 + idSanshaOffset + schoolNameLines.length * schoolNameSize + 1;
   const defaultSubtitle = school.recog_no ? `CBSE Affiliation No. ${school.recog_no}` : '';
   const configuredSubtitle = safe(school.id_card_subtitle);
   const subtitleValue = !configuredSubtitle || configuredSubtitle === 'Student ID Card'
     ? defaultSubtitle
     : configuredSubtitle;
   if (subtitleValue) {
-    const subtitle = fitSingleLine(doc, subtitleValue, 118, 'Helvetica', 5.2);
-    doc.font('Helvetica').fontSize(5.2).fillColor(TEXT)
-      .text(subtitle, 66, 39 + idSanshaOffset, { width: 118, lineBreak: false });
+    const subtitle = fitSingleLine(doc, subtitleValue, 118, 'Helvetica', 5);
+    doc.font('Helvetica').fontSize(5).fillColor(TEXT)
+      .text(subtitle, 66, afterNameY, { width: 118, lineBreak: false });
+    afterNameY += 6;
   }
-  const contact = [school.website, school.phone || school.email].filter(Boolean).join('  |  ');
-  if (contact) {
-    const contactText = fitSingleLine(doc, contact, 118, 'Helvetica', 4.8);
-    doc.font('Helvetica').fontSize(4.8).fillColor(TEXT)
-      .text(contactText, 66, 48 + idSanshaOffset, { width: 118, lineBreak: false });
+  // School address (city/village, taluka, district) — replaces the old
+  // website/phone contact line. No phone or mobile number is shown here
+  // anymore, per requirement; Father's Mobile below is a different field
+  // (the student's own contact, not the school's).
+  const schoolAddress = buildSchoolAddress(school);
+  if (schoolAddress) {
+    const addressText = fitSingleLine(doc, schoolAddress, 118, 'Helvetica', 4.6);
+    doc.font('Helvetica').fontSize(4.6).fillColor(TEXT)
+      .text(addressText, 66, afterNameY, { width: 118, lineBreak: false });
   }
 
   // Separator between the school-identity block above and the student
@@ -307,7 +331,7 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
     ['Date of Birth', fmtDate(student.dob)],
     ["Father's Mobile", safe(student.parent_mobile)],
     ["Father's Name", safe(student.father_name)],
-    ['Valid Till', safe(student.id_card_valid_till || formatStandardLabel(student.current_standard || student.admission_standard))],
+    ['Standard', formatStandardLabel(student.current_standard || student.admission_standard)],
   ];
   fields.forEach(([label, value], index) => {
     const y = 65 + index * 9;
@@ -407,7 +431,7 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
     } catch (e) {}
   }
 
-  // ── Header band: logo | school name (wraps to 2 lines) ────────────────────
+  // ── Header band: logo | school name (wraps up to 3 lines) ─────────────────
   // The QR code used to share this header with the school name, which meant
   // a long school name either overlapped it or got truncated/hidden. The QR
   // now lives lower on the card (left of the signature, see below) so the
@@ -427,17 +451,29 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   // means the same relative size on either orientation.
   const requestedVertNameSize = Number(school.id_card_school_name_font_size);
   const startVertNameSize = Number.isFinite(requestedVertNameSize) && requestedVertNameSize > 0 ? requestedVertNameSize * (7.2 / 9.2) : 7.2;
-  const { lines: nameLines, fontSize: nameSize } = splitSchoolName(doc, schoolName, nameW, 'Helvetica-Bold', startVertNameSize, 5.5);
+  const { lines: nameLines, fontSize: nameSize } = splitSchoolName(doc, schoolName, nameW, 'Helvetica-Bold', startVertNameSize, 4.6);
   const namePitch = nameSize * (8.4 / 7.2);
-  nameLines.slice(0, 2).forEach((line, index) => {
+  nameLines.forEach((line, index) => {
     doc.font('Helvetica-Bold').fontSize(nameSize).fillColor(WHITE)
       .text(line, nameX, CARD_TOP + 10 + index * namePitch, { width: nameW, align: 'center', lineBreak: false });
   });
+  // Subtitle and school address both positioned relative to where the name
+  // actually ended (1, 2, or 3 lines), same reasoning as the horizontal
+  // layout — both still sit inside the header band (HDR_H), which has
+  // enough slack below even a 3-line name + subtitle for one more short line.
+  let afterVertNameY = CARD_TOP + 10 + nameLines.length * namePitch + 1;
   const subtitleValue = safe(school.id_card_subtitle) || (school.recog_no ? `Recog. No. ${school.recog_no}` : '');
   if (subtitleValue) {
     const subtitle = fitSingleLine(doc, subtitleValue, nameW, 'Helvetica', 5);
     doc.font('Helvetica').fontSize(5).fillColor('#dbe4f5')
-      .text(subtitle, nameX, CARD_TOP + 10 + nameLines.slice(0, 2).length * namePitch + 1, { width: nameW, align: 'center', lineBreak: false });
+      .text(subtitle, nameX, afterVertNameY, { width: nameW, align: 'center', lineBreak: false });
+    afterVertNameY += 6;
+  }
+  const schoolAddress = buildSchoolAddress(school);
+  if (schoolAddress) {
+    const addressText = fitSingleLine(doc, schoolAddress, nameW, 'Helvetica', 4.8);
+    doc.font('Helvetica').fontSize(4.8).fillColor('#dbe4f5')
+      .text(addressText, nameX, afterVertNameY, { width: nameW, align: 'center', lineBreak: false });
   }
 
   // Separator between the school-identity header band and the student
@@ -466,7 +502,7 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
     ['Date of Birth', fmtDate(student.dob)],
     ["Father's Mobile", safe(student.parent_mobile)],
     ["Father's Name", safe(student.father_name)],
-    ['Valid Till', safe(student.id_card_valid_till || formatStandardLabel(student.current_standard || student.admission_standard))],
+    ['Standard', formatStandardLabel(student.current_standard || student.admission_standard)],
   ];
   const rowY0 = PH_Y + PH_H + 8;
   fields.forEach(([label, value], index) => {
@@ -598,54 +634,79 @@ function fitSingleLine(doc, value, maxWidth, font, fontSize) {
   return `${shortened}...`;
 }
 
-// Splits a school name across up to 2 lines at the best word boundary,
-// shrinking the font size (like every shrink-to-fit block in certificatePdf.js)
-// until both lines actually fit at that size — a long name used to keep the
-// caller's fixed font size and fall straight to per-line ellipsis truncation
-// (e.g. "JAY GURUDEV MADHYA...") instead of ever trying a smaller size first.
+// Splits a school name across up to `maxLines` lines at the best word
+// boundaries, shrinking the font size (like every shrink-to-fit block in
+// certificatePdf.js) until the lines actually fit at that size — a long name
+// used to keep the caller's fixed font size and only ever try a 2-line split
+// before falling straight to per-line ellipsis truncation (e.g. "JAY GURUDEV
+// MADHYA..."), which is exactly the "shows half and ..." complaint this
+// fixes: try 3 lines too, at a shrinking size, before ever truncating.
 // Returns { lines, fontSize } since the size may have shrunk from what was
 // requested — the caller must draw at the returned size, not the one it
 // passed in, or the wrapping this computed would no longer be valid.
-function splitSchoolName(doc, value, maxWidth, font, fontSize, minFontSize = 6) {
+function splitSchoolName(doc, value, maxWidth, font, fontSize, minFontSize = 6, maxLines = 3) {
   const original = safe(value, 'SCHOOL NAME');
   doc.font(font);
 
-  const bestSplit = (words) => {
-    let best = null;
-    for (let split = 1; split < words.length; split += 1) {
-      const first = words.slice(0, split).join(' ');
-      const second = words.slice(split).join(' ');
-      const score = Math.max(doc.widthOfString(first), doc.widthOfString(second));
-      if (!best || score < best.score) best = { first, second };
+  // Best way to break `words` into exactly `parts` contiguous, non-empty
+  // lines, minimizing the widest resulting line. Brute-forced over all
+  // combinations of split points — school names rarely have more than a
+  // dozen words, so this is always cheap (at most a few hundred combinations
+  // for parts=3).
+  const bestSplitInto = (words, parts) => {
+    if (parts === 1) return [words.join(' ')];
+    if (words.length < parts) return null;
+    if (parts === 2) {
+      let best = null;
+      for (let i = 1; i < words.length; i += 1) {
+        const lines = [words.slice(0, i).join(' '), words.slice(i).join(' ')];
+        const score = Math.max(...lines.map((l) => doc.widthOfString(l)));
+        if (!best || score < best.score) best = { lines, score };
+      }
+      return best.lines;
     }
-    return best;
+    // parts === 3
+    let best = null;
+    for (let i = 1; i < words.length - 1; i += 1) {
+      for (let j = i + 1; j < words.length; j += 1) {
+        const lines = [words.slice(0, i).join(' '), words.slice(i, j).join(' '), words.slice(j).join(' ')];
+        const score = Math.max(...lines.map((l) => doc.widthOfString(l)));
+        if (!best || score < best.score) best = { lines, score };
+      }
+    }
+    return best.lines;
   };
 
   const words = original.split(/\s+/).filter(Boolean);
-  let size = fontSize;
 
   if (words.length < 2) {
+    let size = fontSize;
     while (size > minFontSize && doc.fontSize(size).widthOfString(original) > maxWidth) size -= 0.5;
     return { lines: [fitSingleLine(doc, original, maxWidth, font, size)], fontSize: size };
   }
 
+  let size = fontSize;
   while (size > minFontSize) {
     doc.fontSize(size);
     if (doc.widthOfString(original) <= maxWidth) return { lines: [original], fontSize: size };
-    const { first, second } = bestSplit(words);
-    if (doc.widthOfString(first) <= maxWidth && doc.widthOfString(second) <= maxWidth) {
-      return { lines: [first, second], fontSize: size };
+    for (let parts = 2; parts <= Math.min(maxLines, words.length); parts += 1) {
+      const lines = bestSplitInto(words, parts);
+      if (lines && lines.every((l) => doc.widthOfString(l) <= maxWidth)) {
+        return { lines, fontSize: size };
+      }
     }
     size -= 0.5;
   }
 
-  // Even at the minimum size one line still doesn't fit (an unrealistically
-  // long single word with no spaces) — fall back to the same per-line
-  // ellipsis truncation as a last resort, at the minimum size.
+  // Even at the minimum size no split into up to `maxLines` lines fits (an
+  // unrealistically long single word with no spaces, or a name with more
+  // words than `maxLines` can hold even shrunk all the way down) — fall
+  // back to per-line ellipsis truncation as a last resort, at the minimum
+  // size, on the most-balanced split available.
   doc.fontSize(size);
-  const { first, second } = bestSplit(words);
+  const lines = bestSplitInto(words, Math.min(maxLines, words.length)) || [original];
   return {
-    lines: [fitSingleLine(doc, first, maxWidth, font, size), fitSingleLine(doc, second, maxWidth, font, size)],
+    lines: lines.map((l) => fitSingleLine(doc, l, maxWidth, font, size)),
     fontSize: size,
   };
 }

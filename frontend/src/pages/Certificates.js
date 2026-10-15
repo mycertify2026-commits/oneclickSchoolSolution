@@ -337,7 +337,7 @@ export default function Certificates() {
                 ) : students.map(s => (
                   <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: '1px solid var(--border)', cursor: 'pointer', fontSize: 13 }}>
                     <input type="checkbox" checked={hardCopyStudentIds.includes(s.id)} onChange={() => toggleHardCopyStudent(s.id)} />
-                    {s.full_name} ({s.admission_standard}-{s.admission_division})
+                    {s.full_name} ({s.current_standard || s.admission_standard}-{s.current_division || s.admission_division})
                   </label>
                 ))}
               </div>
@@ -354,7 +354,7 @@ export default function Certificates() {
                 <select className="form-control" value={selectedStudent} onChange={e => { setSelectedStudent(e.target.value); setError(''); }}>
                   <option value="">-- Select --</option>
                   {students.map(s => (
-                    <option key={s.id} value={s.id}>{s.full_name} ({s.admission_standard}-{s.admission_division})</option>
+                    <option key={s.id} value={s.id}>{s.full_name} ({s.current_standard || s.admission_standard}-{s.current_division || s.admission_division})</option>
                   ))}
                 </select>
               </div>

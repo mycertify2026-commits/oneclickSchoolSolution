@@ -72,7 +72,7 @@ export default function StudentDetail() {
           <p style={{ margin: '2px 0', color: 'var(--text-secondary)', fontSize: 13 }}>Serial No.: {student.serial_id || '-'}</p>
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
             <span className="profile-badge" style={{ background: 'var(--bg-secondary)', padding: '4px 12px', borderRadius: 14, fontSize: 12 }}>{student.gender === 'Male' ? 'Male' : 'Female'}</span>
-            <span className="profile-badge" style={{ background: 'var(--bg-secondary)', padding: '4px 12px', borderRadius: 14, fontSize: 12 }}>Standard {student.admission_standard || '-'} - {student.admission_division || '-'}</span>
+            <span className="profile-badge" style={{ background: 'var(--bg-secondary)', padding: '4px 12px', borderRadius: 14, fontSize: 12 }}>Standard {student.current_standard || student.admission_standard || '-'} - {student.current_division || student.admission_division || '-'}</span>
             <span className="profile-badge" style={{ background: 'var(--bg-secondary)', padding: '4px 12px', borderRadius: 14, fontSize: 12 }}>{student.religion || '-'}</span>
           </div>
         </div>

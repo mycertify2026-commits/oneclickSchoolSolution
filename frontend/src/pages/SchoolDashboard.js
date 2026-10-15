@@ -308,9 +308,9 @@ export default function SchoolDashboard() {
                   <td style={{ fontWeight: 600 }}>{s.full_name}</td>
                   <td>{s.gender || '-'}</td>
                   <td>
-                    <span className="badge badge-primary" style={{ fontSize: 11 }}>{s.admission_standard || '-'}</span>
+                    <span className="badge badge-primary" style={{ fontSize: 11 }}>{s.current_standard || s.admission_standard || '-'}</span>
                   </td>
-                  <td>{s.admission_division || '-'}</td>
+                  <td>{s.current_division || s.admission_division || '-'}</td>
                   <td>
                     <button className="btn-icon" title="Edit" onClick={() => navigate(`/students/${s.id}/edit`)}>
                       <i className="fas fa-edit"></i>

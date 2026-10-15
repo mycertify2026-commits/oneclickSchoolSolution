@@ -63,8 +63,12 @@ export default function Students() {
     setImportResult(null);
   }
 
-  const standards = [...new Set(students.map(s => s.admission_standard).filter(Boolean))];
-  const divisions = [...new Set(students.map(s => s.admission_division).filter(Boolean))];
+  // Current standard/division (set each academic year on the student's
+  // profile) takes priority over the admission-time value everywhere a
+  // "Standard" is shown, falling back to admission only for a student whose
+  // current value was never set.
+  const standards = [...new Set(students.map(s => s.current_standard || s.admission_standard).filter(Boolean))];
+  const divisions = [...new Set(students.map(s => s.current_division || s.admission_division).filter(Boolean))];
 
   return (
     <Layout role="schoolAdmin">
@@ -126,8 +130,8 @@ export default function Students() {
                   <td><span style={{ color: 'var(--primary)', cursor: 'pointer' }} onClick={() => navigate(`/students/${s.id}`)}>{s.full_name}</span></td>
                   <td>{s.mother_name || '-'}</td>
                   <td>{s.gender || '-'}</td>
-                  <td>{s.admission_standard || '-'}</td>
-                  <td>{s.admission_division || '-'}</td>
+                  <td>{s.current_standard || s.admission_standard || '-'}</td>
+                  <td>{s.current_division || s.admission_division || '-'}</td>
                   <td>
                     <button className="btn-icon" onClick={() => navigate(`/students/${s.id}/edit`)}><i className="fas fa-edit"></i></button>
                     <button className="btn-icon" onClick={() => navigate(`/certificates?studentId=${s.id}`)}><i className="fas fa-certificate"></i></button>

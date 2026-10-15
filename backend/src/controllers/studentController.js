@@ -43,8 +43,11 @@ async function listStudents(req, res) {
       params.push(`%${search}%`, `%${search}%`);
       countParams.push(`%${search}%`, `%${search}%`);
     }
-    if (standard) { query += ' AND admission_standard = ?'; countQuery += ' AND admission_standard = ?'; params.push(standard); countParams.push(standard); }
-    if (division) { query += ' AND admission_division = ?'; countQuery += ' AND admission_division = ?'; params.push(division); countParams.push(division); }
+    // Filters against the EFFECTIVE standard/division (current, falling back
+    // to admission) — matches what the Students list actually displays, so a
+    // value only present via current_standard is still filterable.
+    if (standard) { query += ' AND COALESCE(current_standard, admission_standard) = ?'; countQuery += ' AND COALESCE(current_standard, admission_standard) = ?'; params.push(standard); countParams.push(standard); }
+    if (division) { query += ' AND COALESCE(current_division, admission_division) = ?'; countQuery += ' AND COALESCE(current_division, admission_division) = ?'; params.push(division); countParams.push(division); }
     if (gender) { query += ' AND gender = ?'; countQuery += ' AND gender = ?'; params.push(gender); countParams.push(gender); }
 
     query += ` ORDER BY ${sortBy} ${sortDir} LIMIT ? OFFSET ?`;
