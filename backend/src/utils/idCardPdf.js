@@ -174,6 +174,37 @@ async function generateIdCardPdf({ school, student, certificate, outputPath, pho
   });
 }
 
+// Circular, ringed logo badge — a white backdrop disc (so a transparent-PNG
+// logo never shows the page behind it), the logo image clipped to the
+// circle, an inner ring in the school's own header color, then a thin outer
+// ring in its border/accent color. Rings still draw even with no logo image
+// so an unbranded school gets a consistent empty-badge placeholder instead
+// of nothing, matching how the LC/Bonafide logo circle already behaves.
+function drawCircularLogo(doc, logoPath, cx, cy, r, ringColor, outerRingColor) {
+  doc.save().circle(cx, cy, r + 1.6).fillColor(WHITE).fill().restore();
+  if (canDraw(logoPath)) {
+    doc.save();
+    doc.circle(cx, cy, r).clip();
+    try { doc.image(logoPath, cx - r, cy - r, { width: r * 2, height: r * 2 }); } catch (e) {}
+    doc.restore();
+  }
+  doc.save().circle(cx, cy, r).lineWidth(0.9).strokeColor(ringColor).stroke().restore();
+  doc.save().circle(cx, cy, r + 1.6).lineWidth(0.6).strokeColor(outerRingColor).stroke().restore();
+}
+
+// Small filled map-pin marker drawn as a teardrop with a hollow center,
+// used beside the school address in the card footer.
+function drawPinIcon(doc, cx, cy, size, color) {
+  const r = size / 2;
+  doc.save().fillColor(color);
+  doc.moveTo(cx, cy + r * 1.7)
+    .bezierCurveTo(cx - r * 1.25, cy + r * 0.25, cx - r, cy - r * 0.95, cx, cy - r * 1.1)
+    .bezierCurveTo(cx + r, cy - r * 0.95, cx + r * 1.25, cy + r * 0.25, cx, cy + r * 1.7)
+    .closePath().fill();
+  doc.fillColor(WHITE).circle(cx, cy - r * 0.25, r * 0.4).fill();
+  doc.restore();
+}
+
 // ── FRONT ────────────────────────────────────────────────────────────────────
 function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, student, certificate, photoPath, logoPath, signaturePath, stampPath, qrBuffer, bgBuf, bgOpacity, borderColor, showFeatureStrip, featureIcons, watermarkBuf, watermarkOpacity, GOLD, ORANGE, NAVY, GREY, TEXT, WHITE }) {
   // The feature-strip footer grows by schoolAddressRowH only when there's
@@ -246,11 +277,11 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   }
 
   // School logo and branding. Logo and QR are kept the same size (32pt) so
-  // neither reads as more "official" than the other.
+  // neither reads as more "official" than the other. Logo renders as a
+  // circular ringed badge (header color inner ring, border/gold outer ring)
+  // instead of a plain square image.
   const logoX = 13, logoY = 19, logoSize = 32;
-  if (canDraw(logoPath)) {
-    try { doc.image(logoPath, logoX, logoY, { width: logoSize, height: logoSize }); } catch (e) {}
-  }
+  drawCircularLogo(doc, logoPath, logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2, headerColor, borderColor || GOLD);
   // Sanstha name (optional, School Settings > Certificate Header) is a tiny
   // line above the school name — shifts everything below it down by a fixed
   // amount only when set, so a school that never uses it sees no layout
@@ -288,9 +319,17 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
     ? defaultSubtitle
     : configuredSubtitle;
   if (subtitleValue) {
-    const subtitle = fitSingleLine(doc, subtitleValue, 118, 'Helvetica', 5);
-    doc.font('Helvetica').fontSize(5).fillColor(TEXT)
-      .text(subtitle, 66, afterNameY, { width: 118, lineBreak: false });
+    // Rendered as a small rounded pill (light tint of the header color)
+    // instead of plain text, so it reads as a badge rather than a caption.
+    doc.font('Helvetica-Bold').fontSize(4.6);
+    const subtitle = fitSingleLine(doc, subtitleValue, 110, 'Helvetica-Bold', 4.6);
+    const subtitleW = doc.widthOfString(subtitle);
+    const pillPadX = 3, pillH = 6.6;
+    const pillW = Math.min(118, subtitleW + pillPadX * 2);
+    doc.save().roundedRect(66, afterNameY, pillW, pillH, pillH / 2)
+      .fillColor(headerColor).fillOpacity(0.12).fill().restore();
+    doc.font('Helvetica-Bold').fontSize(4.6).fillColor(headerColor).fillOpacity(1)
+      .text(subtitle, 66, afterNameY + 1.5, { width: pillW, align: 'center', lineBreak: false });
   }
   // School address lives in the card's footer now (see featureY below),
   // not here — no phone/mobile number is shown anywhere on the card either
@@ -439,9 +478,14 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   let iconRowY = featureY;
   if (schoolAddressFooter) {
     doc.save().moveTo(10, featureY).lineTo(W - 10, featureY).lineWidth(0.3).strokeColor('#e5e7eb').stroke().restore();
-    const addrFooterText = fitSingleLine(doc, schoolAddressFooter, W - 10, 'Helvetica', 4.4);
-    doc.font('Helvetica').fontSize(4.4).fillColor(TEXT)
-      .text(addrFooterText, 5, featureY + 2.5, { width: W - 10, align: 'center', lineBreak: false });
+    const pinSize = 4, pinGap = 1.5;
+    const addrFooterText = fitSingleLine(doc, schoolAddressFooter, W - 10 - pinSize - pinGap, 'Helvetica', 4.4);
+    doc.font('Helvetica').fontSize(4.4);
+    const addrTextW = doc.widthOfString(addrFooterText);
+    const groupX = (W - (pinSize + pinGap + addrTextW)) / 2;
+    const addrY = featureY + 2.5;
+    drawPinIcon(doc, groupX + pinSize / 2, addrY + 2, pinSize, headerColor);
+    doc.fillColor(TEXT).text(addrFooterText, groupX + pinSize + pinGap, addrY, { width: addrTextW + 1, lineBreak: false });
     iconRowY += schoolAddressRowH;
   }
   const features = showFeatureStrip ? featureIcons.filter(f => f.visible !== false) : [];
@@ -474,7 +518,7 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
 // full-width label:value rows (more breathing room than the landscape
 // two-column layout), then the same UID strip and feature strip conventions
 // as the landscape design, just re-flowed for a narrower width.
-function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school, student, certificate, photoPath, logoPath, signaturePath, stampPath, qrBuffer, bgBuf, bgOpacity, borderColor, showFeatureStrip, featureIcons, watermarkBuf, watermarkOpacity, GREY, TEXT, WHITE }) {
+function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school, student, certificate, photoPath, logoPath, signaturePath, stampPath, qrBuffer, bgBuf, bgOpacity, borderColor, showFeatureStrip, featureIcons, watermarkBuf, watermarkOpacity, GOLD, GREY, TEXT, WHITE }) {
   const schoolAddressRowH = buildSchoolAddress(school) ? 9 : 0;
   const FTR_H = 24 + schoolAddressRowH;
   const CONTENT_BOTTOM = H - FTR_H;
@@ -499,10 +543,11 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   // full header width is always available to the name.
   doc.save().rect(0, CARD_TOP, W, HDR_H).fillColor(headerColor).fill().restore();
 
+  // Logo renders as a circular ringed badge, same as the horizontal layout —
+  // the inner ring is white here (not the header color) since this logo
+  // sits directly on the colored header band and needs contrast against it.
   const logoSz = 32;
-  if (canDraw(logoPath)) {
-    try { doc.image(logoPath, 10, CARD_TOP + 9, { width: logoSz, height: logoSz }); } catch (e) {}
-  }
+  drawCircularLogo(doc, logoPath, 10 + logoSz / 2, CARD_TOP + 9 + logoSz / 2, logoSz / 2, WHITE, borderColor || GOLD);
 
   const nameX = 10 + logoSz + 6;
   const nameW = W - 8 - nameX;
@@ -524,9 +569,19 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   const afterVertNameY = CARD_TOP + 10 + nameLines.length * namePitch + 1;
   const subtitleValue = safe(school.id_card_subtitle) || (school.recog_no ? `Recog. No. ${school.recog_no}` : '');
   if (subtitleValue) {
-    const subtitle = fitSingleLine(doc, subtitleValue, nameW, 'Helvetica', 5);
-    doc.font('Helvetica').fontSize(5).fillColor('#dbe4f5')
-      .text(subtitle, nameX, afterVertNameY, { width: nameW, align: 'center', lineBreak: false });
+    // Same rounded-pill badge treatment as the horizontal layout, but in a
+    // translucent white tint since this sits on the colored header band
+    // rather than white page background.
+    doc.font('Helvetica-Bold').fontSize(4.6);
+    const subtitle = fitSingleLine(doc, subtitleValue, nameW - 6, 'Helvetica-Bold', 4.6);
+    const subtitleW = doc.widthOfString(subtitle);
+    const pillPadX = 3, pillH = 6.6;
+    const pillW = Math.min(nameW, subtitleW + pillPadX * 2);
+    const pillX = nameX + (nameW - pillW) / 2;
+    doc.save().roundedRect(pillX, afterVertNameY, pillW, pillH, pillH / 2)
+      .fillColor(WHITE).fillOpacity(0.18).fill().restore();
+    doc.font('Helvetica-Bold').fontSize(4.6).fillColor(WHITE).fillOpacity(1)
+      .text(subtitle, pillX, afterVertNameY + 1.5, { width: pillW, align: 'center', lineBreak: false });
   }
 
   // Separator between the school-identity header band and the student
@@ -638,9 +693,14 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   let iconRowYV = featureY;
   if (schoolAddressFooterV) {
     doc.save().moveTo(10, featureY).lineTo(W - 10, featureY).lineWidth(0.3).strokeColor('#e5e7eb').stroke().restore();
-    const addrFooterTextV = fitSingleLine(doc, schoolAddressFooterV, W - 10, 'Helvetica', 4.6);
-    doc.font('Helvetica').fontSize(4.6).fillColor(TEXT)
-      .text(addrFooterTextV, 5, featureY + 2.5, { width: W - 10, align: 'center', lineBreak: false });
+    const pinSizeV = 4.2, pinGapV = 1.5;
+    const addrFooterTextV = fitSingleLine(doc, schoolAddressFooterV, W - 10 - pinSizeV - pinGapV, 'Helvetica', 4.6);
+    doc.font('Helvetica').fontSize(4.6);
+    const addrTextWV = doc.widthOfString(addrFooterTextV);
+    const groupXV = (W - (pinSizeV + pinGapV + addrTextWV)) / 2;
+    const addrYV = featureY + 2.5;
+    drawPinIcon(doc, groupXV + pinSizeV / 2, addrYV + 2.1, pinSizeV, headerColor);
+    doc.fillColor(TEXT).text(addrFooterTextV, groupXV + pinSizeV + pinGapV, addrYV, { width: addrTextWV + 1, lineBreak: false });
     iconRowYV += schoolAddressRowH;
   }
   const features = showFeatureStrip ? featureIcons.filter(f => f.visible !== false) : [];
