@@ -14,7 +14,7 @@ function normaliseColor(val) {
 }
 
 const BLANK = { name: '', udise_code: '', village: '', city: '', district: '', taluka: '', pin_code: '', phone: '', email: '', medium: '', board: '', principal_name: '', recog_no: '', lc_signature_label: '', bonafide_signature_label: '', sanstha_name: '', board_name: '', lc_show_photo: 1 };
-const SIGNATURE_DESIGNATION_PRESETS = ['Principal', 'Mukhyadhyapak', 'Headmaster'];
+const SIGNATURE_DESIGNATION_PRESETS = ['Principal', 'Mukhyadhyapak', 'Head Master'];
 const ID_CARD_PRESET_COLORS = [
   '#1a6fd4','#1557b0','#059669','#047857','#7c3aed','#5b21b6',
   '#dc2626','#b91c1c','#0891b2','#0e7490','#1f2937','#d97706',
@@ -449,8 +449,29 @@ export default function SchoolSettings() {
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">School Name (on card)</label>
-                    <input type="text" className="form-control" value={idCardForm.id_card_school_name} onChange={e => setIdCardForm(p => ({ ...p, id_card_school_name: e.target.value }))} />
+                    <label className="form-label">School Name (on card) — up to 3 lines</label>
+                    {[0, 1, 2].map(i => {
+                      const lines = idCardForm.id_card_school_name.split('\n');
+                      return (
+                        <input
+                          key={i}
+                          type="text"
+                          className="form-control"
+                          style={{ marginBottom: i < 2 ? 6 : 0 }}
+                          placeholder={i === 0 ? 'Line 1' : `Line ${i + 1} (optional)`}
+                          value={lines[i] || ''}
+                          onChange={e => {
+                            const newLines = idCardForm.id_card_school_name.split('\n');
+                            while (newLines.length < 3) newLines.push('');
+                            newLines[i] = e.target.value;
+                            setIdCardForm(p => ({ ...p, id_card_school_name: newLines.join('\n').replace(/\n+$/, '') }));
+                          }}
+                        />
+                      );
+                    })}
+                    <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
+                      Type exactly where the name should break across lines. Leave Line 2 and 3 blank to have it wrap automatically instead.
+                    </p>
                   </div>
                   <div className="form-group">
                     <label className="form-label">School Name Font Size (optional)</label>

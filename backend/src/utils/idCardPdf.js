@@ -266,7 +266,12 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   // reaching fitSingleLine's last-resort "..." truncation.
   const requestedNameSize = Number(school.id_card_school_name_font_size);
   const startNameSize = Number.isFinite(requestedNameSize) && requestedNameSize > 0 ? requestedNameSize : 9.2;
-  const { lines: schoolNameLines, fontSize: schoolNameSize } = splitSchoolName(doc, schoolName.toUpperCase(), nameW, 'Helvetica-Bold', startNameSize, 4.6);
+  // Admin-entered explicit line breaks (the 3-line Designer inputs, joined
+  // with "\n") render exactly as given instead of being re-wrapped.
+  const manualNameLines = schoolName.split('\n').map((l) => l.trim().toUpperCase()).filter(Boolean).slice(0, 3);
+  const { lines: schoolNameLines, fontSize: schoolNameSize } = manualNameLines.length > 1
+    ? fitFixedLines(doc, manualNameLines, nameW, 'Helvetica-Bold', startNameSize, 4.6)
+    : splitSchoolName(doc, schoolName.toUpperCase(), nameW, 'Helvetica-Bold', startNameSize, 4.6);
   schoolNameLines.forEach((line, index) => {
     doc.font('Helvetica-Bold').fontSize(schoolNameSize).fillColor(headerColor)
       .text(line, nameX, 10 + idSanshaOffset + index * schoolNameSize, { width: nameW, lineBreak: false });
@@ -538,7 +543,12 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   // means the same relative size on either orientation.
   const requestedVertNameSize = Number(school.id_card_school_name_font_size);
   const startVertNameSize = Number.isFinite(requestedVertNameSize) && requestedVertNameSize > 0 ? requestedVertNameSize * (7.2 / 9.2) : 7.2;
-  const { lines: nameLines, fontSize: nameSize } = splitSchoolName(doc, schoolName, nameW, 'Helvetica-Bold', startVertNameSize, 4.6);
+  // Admin-entered explicit line breaks render exactly as given — see the
+  // matching comment in drawFront.
+  const manualNameLinesV = schoolName.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 3);
+  const { lines: nameLines, fontSize: nameSize } = manualNameLinesV.length > 1
+    ? fitFixedLines(doc, manualNameLinesV, nameW, 'Helvetica-Bold', startVertNameSize, 4.6)
+    : splitSchoolName(doc, schoolName, nameW, 'Helvetica-Bold', startVertNameSize, 4.6);
   const namePitch = nameSize * (8.4 / 7.2);
   // Left-aligned next to the logo (not centered under it) — per the
   // school's reference design.
@@ -754,6 +764,27 @@ function fitValueShrink(doc, value, maxWidth, font, fontSize, minFontSize) {
     return { text: original, fontSize: size };
   }
   return { text: fitSingleLine(doc, original, maxWidth, font, size), fontSize: size };
+}
+
+// School Admin can type the name pre-broken across up to 3 lines (School
+// Settings > ID Card Designer, three separate line inputs) instead of
+// relying on automatic word-wrap — the three inputs are joined with "\n"
+// into the one stored id_card_school_name value. Renders each given line
+// as-is (no re-wrapping), shrinking a single shared font size until every
+// line fits, so the configured/default starting size is honored exactly
+// the same way splitSchoolName honors it, just without re-breaking the
+// admin's own chosen line breaks. Falls back to fitSingleLine's ellipsis
+// truncation per line only if a line still doesn't fit at minFontSize.
+function fitFixedLines(doc, lines, maxWidth, font, fontSize, minFontSize) {
+  doc.font(font);
+  let size = fontSize;
+  const widest = () => Math.max(...lines.map((l) => doc.fontSize(size).widthOfString(l)));
+  while (size > minFontSize && widest() > maxWidth) size -= 0.5;
+  doc.fontSize(size);
+  return {
+    lines: lines.map((l) => fitSingleLine(doc, l, maxWidth, font, size)),
+    fontSize: size,
+  };
 }
 
 // Splits a school name across up to `maxLines` lines at the best word
