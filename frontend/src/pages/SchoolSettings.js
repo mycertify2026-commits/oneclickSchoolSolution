@@ -20,31 +20,12 @@ const ID_CARD_PRESET_COLORS = [
   '#dc2626','#b91c1c','#0891b2','#0e7490','#1f2937','#d97706',
   '#be185d','#0f766e','#4338ca','#b45309',
 ];
-const DEFAULT_FEATURE_ICONS = [
-  { key: 'shield', visible: true, caption1: '760 MICRON PVC', caption2: '' },
-  { key: 'drop', visible: true, caption1: 'WATER RESISTANT', caption2: '' },
-  { key: 'sun', visible: true, caption1: 'ANTI FADE PRINT', caption2: '' },
-  { key: 'arrows', visible: true, caption1: 'SCRATCH RESISTANT', caption2: '' },
-  { key: 'hourglass', visible: true, caption1: 'LONG LIFE', caption2: '(5-10 YEARS)' },
-];
-const FEATURE_ICON_LABELS = { shield: 'Shield', drop: 'Water drop', sun: 'Sun', arrows: 'Arrows', hourglass: 'Hourglass' };
-
-function parseFeatureIcons(raw) {
-  if (!raw) return DEFAULT_FEATURE_ICONS;
-  try {
-    const arr = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    return Array.isArray(arr) && arr.length > 0 ? arr : DEFAULT_FEATURE_ICONS;
-  } catch (e) {
-    return DEFAULT_FEATURE_ICONS;
-  }
-}
 const ID_CARD_BLANK = {
   id_card_primary_color: '#1a6fd4', id_card_school_name: '', id_card_school_name_font_size: '', id_card_subtitle: 'Student ID Card',
   id_card_footer_text: 'If found, please contact the school office.',
   id_card_show_register_number: true, id_card_show_aadhaar: true, id_card_show_dob: true,
   id_card_show_address: false, id_card_show_emergency_contact: true,
-  id_card_border_color: '', id_card_bg_opacity: 0.15, id_card_show_feature_strip: true,
-  id_card_feature_icons: DEFAULT_FEATURE_ICONS,
+  id_card_border_color: '', id_card_bg_opacity: 0.15,
   id_card_orientation: 'horizontal', idcard_signature_label: '',
   id_card_watermark_enabled: false, id_card_watermark_opacity: 0.1
 };
@@ -93,8 +74,6 @@ export default function SchoolSettings() {
       id_card_border_color: res.data.school.id_card_border_color || '',
       id_card_bg_opacity: res.data.school.id_card_bg_opacity !== null && res.data.school.id_card_bg_opacity !== undefined
         ? Number(res.data.school.id_card_bg_opacity) : ID_CARD_BLANK.id_card_bg_opacity,
-      id_card_show_feature_strip: Boolean(res.data.school.id_card_show_feature_strip ?? true),
-      id_card_feature_icons: parseFeatureIcons(res.data.school.id_card_feature_icons),
       id_card_orientation: res.data.school.id_card_orientation || ID_CARD_BLANK.id_card_orientation,
       idcard_signature_label: res.data.school.idcard_signature_label || '',
       id_card_watermark_enabled: Boolean(res.data.school.id_card_watermark_enabled),
@@ -511,30 +490,8 @@ export default function SchoolSettings() {
                       <CheckboxRow label="Date of Birth" checked={idCardForm.id_card_show_dob} onChange={v => setIdCardForm(p => ({ ...p, id_card_show_dob: v }))} />
                       <CheckboxRow label="Address" checked={idCardForm.id_card_show_address} onChange={v => setIdCardForm(p => ({ ...p, id_card_show_address: v }))} />
                       <CheckboxRow label="Emergency Contact" checked={idCardForm.id_card_show_emergency_contact} onChange={v => setIdCardForm(p => ({ ...p, id_card_show_emergency_contact: v }))} />
-                      <CheckboxRow label="Card material feature strip (master on/off)" checked={idCardForm.id_card_show_feature_strip} onChange={v => setIdCardForm(p => ({ ...p, id_card_show_feature_strip: v }))} />
                     </div>
                   </div>
-
-                  {idCardForm.id_card_show_feature_strip && (
-                    <div className="form-group">
-                      <label className="form-label">Feature Strip Icons — show/hide and relabel each one</label>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        {idCardForm.id_card_feature_icons.map((icon, i) => (
-                          <div key={icon.key} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: 8, background: 'var(--bg-secondary)', borderRadius: 8 }}>
-                            <input type="checkbox" checked={icon.visible !== false}
-                              onChange={e => setIdCardForm(p => ({ ...p, id_card_feature_icons: p.id_card_feature_icons.map((ic, j) => j === i ? { ...ic, visible: e.target.checked } : ic) }))} />
-                            <span style={{ fontSize: 11, width: 60, flexShrink: 0, color: 'var(--text-secondary)' }}>{FEATURE_ICON_LABELS[icon.key] || icon.key}</span>
-                            <input type="text" className="form-control" placeholder="Line 1 (e.g. WATER RESISTANT)" style={{ fontSize: 11, padding: '4px 8px' }}
-                              value={icon.caption1} disabled={icon.visible === false}
-                              onChange={e => setIdCardForm(p => ({ ...p, id_card_feature_icons: p.id_card_feature_icons.map((ic, j) => j === i ? { ...ic, caption1: e.target.value } : ic) }))} />
-                            <input type="text" className="form-control" placeholder="Line 2 (optional)" style={{ fontSize: 11, padding: '4px 8px' }}
-                              value={icon.caption2} disabled={icon.visible === false}
-                              onChange={e => setIdCardForm(p => ({ ...p, id_card_feature_icons: p.id_card_feature_icons.map((ic, j) => j === i ? { ...ic, caption2: e.target.value } : ic) }))} />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
 
                   {error && activePanel === 'idDesigner' && <div style={{ background: '#FEE2E2', color: 'var(--danger)', padding: 10, borderRadius: 8, fontSize: 13 }}>{error}</div>}
                   {success && activePanel === 'idDesigner' && <div style={{ background: '#ECFDF5', color: 'var(--success)', padding: 10, borderRadius: 8, fontSize: 13 }}>{success}</div>}

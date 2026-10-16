@@ -41,30 +41,6 @@ function parseColor(c, def) {
   return m ? m[0] : def;
 }
 
-const DEFAULT_FEATURE_ICONS = [
-  { key: 'shield', visible: true, caption1: '760 MICRON PVC', caption2: '' },
-  { key: 'drop', visible: true, caption1: 'WATER RESISTANT', caption2: '' },
-  { key: 'sun', visible: true, caption1: 'ANTI FADE PRINT', caption2: '' },
-  { key: 'arrows', visible: true, caption1: 'SCRATCH RESISTANT', caption2: '' },
-  { key: 'hourglass', visible: true, caption1: 'LONG LIFE', caption2: '(5-10 YEARS)' },
-];
-
-// Each school can individually show/hide and relabel each of the 5
-// card-material icons — stored as a JSON array (see
-// migrate-add-idcard-feature-icons.js). Falls back to the original fixed
-// set if unset or malformed, so a school that never touches this setting
-// renders exactly as before this feature existed.
-function parseFeatureIcons(raw) {
-  if (!raw) return DEFAULT_FEATURE_ICONS;
-  try {
-    const arr = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    if (!Array.isArray(arr) || arr.length === 0) return DEFAULT_FEATURE_ICONS;
-    return arr;
-  } catch (e) {
-    return DEFAULT_FEATURE_ICONS;
-  }
-}
-
 // A stored standard is usually already ordinal ("9th"), so blindly
 // appending "th Standard" produced "9thth Standard" whenever the value
 // itself carried a suffix — only add the suffix when the value is a bare
@@ -160,10 +136,8 @@ async function generateIdCardPdf({ school, student, certificate, outputPath, pho
          ? Math.min(1, Math.max(0, Number(school.id_card_bg_opacity)))
          : 0.15;
        const borderColor = parseColor(school.id_card_border_color, null);
-       const showFeatureStrip = school.id_card_show_feature_strip !== 0 && school.id_card_show_feature_strip !== false;
-       const featureIcons = parseFeatureIcons(school.id_card_feature_icons);
 
-       const drawArgs = { W, H, MARGIN, headerColor, accentColor, school, student, certificate, photoPath, logoPath, signaturePath, stampPath, qrBuffer, bgBuf, bgOpacity, borderColor, showFeatureStrip, featureIcons, watermarkBuf, watermarkOpacity, GOLD, ORANGE, NAVY, GREY, TEXT, WHITE };
+       const drawArgs = { W, H, MARGIN, headerColor, accentColor, school, student, certificate, photoPath, logoPath, signaturePath, stampPath, qrBuffer, bgBuf, bgOpacity, borderColor, watermarkBuf, watermarkOpacity, GOLD, ORANGE, NAVY, GREY, TEXT, WHITE };
        if (isVertical) drawFrontVertical(doc, drawArgs);
        else drawFront(doc, drawArgs);
 
@@ -191,12 +165,15 @@ function drawCircularLogo(doc, logoPath, cx, cy, r) {
 }
 
 // ── FRONT ────────────────────────────────────────────────────────────────────
-function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, student, certificate, photoPath, logoPath, signaturePath, stampPath, qrBuffer, bgBuf, bgOpacity, borderColor, showFeatureStrip, featureIcons, watermarkBuf, watermarkOpacity, GOLD, ORANGE, NAVY, GREY, TEXT, WHITE }) {
-  // The feature-strip footer grows by schoolAddressRowH only when there's
-  // an actual school address to show in it (a school with no
-  // city/taluka/district filled in renders exactly as before this existed).
+function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, student, certificate, photoPath, logoPath, signaturePath, stampPath, qrBuffer, bgBuf, bgOpacity, borderColor, watermarkBuf, watermarkOpacity, GOLD, ORANGE, NAVY, GREY, TEXT, WHITE }) {
+  // Footer is just the school-address band now — the feature-strip icon
+  // row (material/durability captions) was dropped entirely per explicit
+  // request: with the Address field also shown, the two together left no
+  // room for the Principal signature and QR without cramming everything,
+  // and read as cluttered. A school with no city/taluka/district filled in
+  // (so nothing to show here) gets no footer band at all.
   const schoolAddressRowH = buildSchoolAddress(school) ? 11 : 0;
-  const FTR_H = 24 + schoolAddressRowH;
+  const FTR_H = schoolAddressRowH;
   const CARD_TOP = 12;
   const RIGHT_X = 188;
   // No separate Student UID strip — that band was removed (it duplicated the
@@ -460,26 +437,13 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
     }
   });
 
-  // Feature strip shown on the supplied reference image — the School Admin
-  // controls this from Settings: a master on/off switch
-  // (id_card_show_feature_strip) plus per-icon visibility and caption text
-  // (id_card_feature_icons). Hidden icons are simply omitted; the
-  // remaining visible ones spread evenly across the full width, and no
-  // other element on the card reflows (the card's standard size is
-  // unaffected either way).
-  //
-  // The school's own address sits as its own line across the top of this
-  // band (FTR_H was grown by schoolAddressRowH to make room for it) — this
-  // is the actual card "footer", distinct from the student's own address
-  // shown as a field above.
+  // Footer: just the school's own address, as a solid header-color band —
+  // the material/durability feature-strip icons that used to sit below it
+  // were removed entirely (see the FTR_H comment above). Nothing is drawn
+  // at all when the school has no address to show.
   const featureY = CONTENT_BOTTOM;
-  doc.rect(0, featureY, W, FTR_H).fillColor(WHITE).fill();
   const schoolAddressFooter = buildSchoolAddress(school);
-  let iconRowY = featureY;
   if (schoolAddressFooter) {
-    // Solid header-color band (not a white strip with a divider line) —
-    // matches the school's reference design, where the whole footer reads
-    // as one colored block rather than a separate white caption line.
     doc.save().rect(0, featureY, W, schoolAddressRowH).fillColor(headerColor).fill().restore();
     const addrLabel = 'Address:';
     doc.font('Helvetica').fontSize(5).fillColor(WHITE);
@@ -491,34 +455,15 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
     const addrY = featureY + (schoolAddressRowH - 5) / 2;
     doc.font('Helvetica').fontSize(5).fillColor(WHITE).text(addrLabel, groupX, addrY, { lineBreak: false });
     doc.font('Helvetica-Bold').fontSize(5).fillColor(WHITE).text(addrValue, groupX + labelW, addrY, { width: valueW + 1, lineBreak: false });
-    iconRowY += schoolAddressRowH;
   }
-  const features = showFeatureStrip ? featureIcons.filter(f => f.visible !== false) : [];
-  const featureW = W / (features.length || 1);
-  features.forEach((feature, index) => {
-    const x = index * featureW;
-    if (index > 0) {
-      doc.save().moveTo(x, iconRowY + 4).lineTo(x, H - 4)
-        .lineWidth(0.3).strokeColor('#e5e7eb').stroke().restore();
-    }
-    drawFeatureIcon(doc, feature.key, x + featureW / 2, iconRowY + 7, headerColor);
-    if (feature.caption1) {
-      doc.font('Helvetica-Bold').fontSize(3.4).fillColor(TEXT)
-        .text(feature.caption1, x + 1, iconRowY + 13, { width: featureW - 2, align: 'center', lineBreak: false });
-    }
-    if (feature.caption2) {
-      doc.font('Helvetica-Bold').fontSize(3.1).fillColor(TEXT)
-        .text(feature.caption2, x + 1, iconRowY + 17, { width: featureW - 2, align: 'center', lineBreak: false });
-    }
-  });
 
-  // ── Principal Signature + QR — drawn after the footer/feature strip, not
-  // before, so they always render on top of it. The dynamic ROW_H above
-  // keeps them clear of the footer in the normal case, but this ordering
-  // (plus the sigBandY clamp below) is the guarantee: even in an extreme
-  // edge case these never end up silently painted over and invisible, which
-  // is what happened when they were drawn first and the footer — drawn
-  // last — covered whatever had spilled into its space.
+  // ── Principal Signature + QR — drawn after the footer, not before, so
+  // they always render on top of it. The dynamic ROW_H above keeps them
+  // clear of the footer in the normal case, but this ordering (plus the
+  // sigBandY clamp below) is the guarantee: even in an extreme edge case
+  // these never end up silently painted over and invisible, which is what
+  // happened when they were drawn first and the footer — drawn last —
+  // covered whatever had spilled into its space.
   const sigW = 42, sigH = 11, sigX = FX + 74;
   const sigBandY = Math.min(cursorY + 2, CONTENT_BOTTOM - sigH - 7);
   const sigLineY = sigBandY + sigH;
@@ -550,9 +495,11 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
 // full-width label:value rows (more breathing room than the landscape
 // two-column layout), then the same UID strip and feature strip conventions
 // as the landscape design, just re-flowed for a narrower width.
-function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school, student, certificate, photoPath, logoPath, signaturePath, stampPath, qrBuffer, bgBuf, bgOpacity, borderColor, showFeatureStrip, featureIcons, watermarkBuf, watermarkOpacity, GOLD, GREY, TEXT, WHITE }) {
+function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school, student, certificate, photoPath, logoPath, signaturePath, stampPath, qrBuffer, bgBuf, bgOpacity, borderColor, watermarkBuf, watermarkOpacity, GOLD, GREY, TEXT, WHITE }) {
+  // Footer is just the school-address band — the feature-strip icon row
+  // was dropped entirely, see the matching comment in drawFront.
   const schoolAddressRowH = buildSchoolAddress(school) ? 11 : 0;
-  const FTR_H = 24 + schoolAddressRowH;
+  const FTR_H = schoolAddressRowH;
   const CONTENT_BOTTOM = H - FTR_H;
   const CARD_TOP = 8;
   const HDR_H = 50;
@@ -712,17 +659,12 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
     }
   });
 
-  // ── Feature strip ──────────────────────────────────────────────────────────
-  // School's own address runs across the top of this band when set — the
-  // card's actual footer (distinct from the student's own address field
-  // above). See the matching comment in drawFront.
+  // Footer: just the school's own address, as a solid header-color band —
+  // see the matching comment in drawFront for why the feature-strip icons
+  // that used to sit below it were removed entirely.
   const featureY = CONTENT_BOTTOM;
-  doc.rect(0, featureY, W, FTR_H).fillColor(WHITE).fill();
   const schoolAddressFooterV = buildSchoolAddress(school);
-  let iconRowYV = featureY;
   if (schoolAddressFooterV) {
-    // Solid header-color band, same as the horizontal layout — see the
-    // matching comment in drawFront.
     doc.save().rect(0, featureY, W, schoolAddressRowH).fillColor(headerColor).fill().restore();
     const addrLabelV = 'Address:';
     doc.font('Helvetica').fontSize(5.2).fillColor(WHITE);
@@ -734,25 +676,7 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
     const addrYV = featureY + (schoolAddressRowH - 5.2) / 2;
     doc.font('Helvetica').fontSize(5.2).fillColor(WHITE).text(addrLabelV, groupXV, addrYV, { lineBreak: false });
     doc.font('Helvetica-Bold').fontSize(5.2).fillColor(WHITE).text(addrValueV, groupXV + labelWV, addrYV, { width: valueWV + 1, lineBreak: false });
-    iconRowYV += schoolAddressRowH;
   }
-  const features = showFeatureStrip ? featureIcons.filter(f => f.visible !== false) : [];
-  const featureW = W / (features.length || 1);
-  features.forEach((feature, index) => {
-    const x = index * featureW;
-    if (index > 0) {
-      doc.save().moveTo(x, iconRowYV + 4).lineTo(x, H - 4).lineWidth(0.3).strokeColor('#e5e7eb').stroke().restore();
-    }
-    drawFeatureIcon(doc, feature.key, x + featureW / 2, iconRowYV + 7, headerColor);
-    if (feature.caption1) {
-      doc.font('Helvetica-Bold').fontSize(3.2).fillColor(TEXT)
-        .text(feature.caption1, x + 1, iconRowYV + 13, { width: featureW - 2, align: 'center', lineBreak: false });
-    }
-    if (feature.caption2) {
-      doc.font('Helvetica-Bold').fontSize(2.9).fillColor(TEXT)
-        .text(feature.caption2, x + 1, iconRowYV + 17, { width: featureW - 2, align: 'center', lineBreak: false });
-    }
-  });
 
   // ── QR (left) + Principal Signature (right) ────────────────────────────────
   // QR moved down from the header (see above) to sit at the left instead of
@@ -782,42 +706,6 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
     .text(safe(school.idcard_signature_label, 'Principal'), sigX, sigLineY + 1, { width: sigW, align: 'center', lineBreak: false });
 
   doc.save().rect(1, CARD_TOP, W - 2, H - CARD_TOP - 1).lineWidth(1.2).strokeColor(borderColor || '#d1d5db').stroke().restore();
-}
-
-// Draw these as vectors instead of Unicode glyphs. Helvetica does not contain
-// the symbols used by the reference, so glyphs render as broken text in PDFs.
-function drawFeatureIcon(doc, type, cx, cy, color) {
-  doc.save().lineWidth(0.8).strokeColor(color).fillColor(WHITE);
-  if (type === 'shield') {
-    doc.moveTo(cx, cy - 6).lineTo(cx + 5, cy - 4).lineTo(cx + 4, cy + 2)
-      .lineTo(cx, cy + 6).lineTo(cx - 4, cy + 2).lineTo(cx - 5, cy - 4)
-      .closePath().fillAndStroke();
-    doc.lineWidth(0.5).moveTo(cx - 2, cy).lineTo(cx - 0.5, cy + 1.5)
-      .lineTo(cx + 2.5, cy - 2).stroke();
-  } else if (type === 'drop') {
-    doc.moveTo(cx, cy - 7).bezierCurveTo(cx - 5, cy - 1, cx - 5, cy + 4, cx, cy + 5)
-      .bezierCurveTo(cx + 5, cy + 4, cx + 5, cy - 1, cx, cy - 7).fillAndStroke();
-  } else if (type === 'sun') {
-    doc.circle(cx, cy, 3).fillAndStroke();
-    for (let i = 0; i < 8; i += 1) {
-      const angle = (Math.PI * 2 * i) / 8;
-      doc.moveTo(cx + Math.cos(angle) * 5, cy + Math.sin(angle) * 5)
-        .lineTo(cx + Math.cos(angle) * 7, cy + Math.sin(angle) * 7).stroke();
-    }
-  } else if (type === 'arrows') {
-    doc.moveTo(cx - 7, cy).lineTo(cx + 7, cy)
-      .moveTo(cx - 7, cy).lineTo(cx - 3, cy - 3)
-      .moveTo(cx - 7, cy).lineTo(cx - 3, cy + 3)
-      .moveTo(cx + 7, cy).lineTo(cx + 3, cy - 3)
-      .moveTo(cx + 7, cy).lineTo(cx + 3, cy + 3).stroke();
-    doc.rect(cx - 3, cy - 3, 6, 6).stroke();
-  } else {
-    doc.moveTo(cx - 3, cy - 6).lineTo(cx + 3, cy - 6).lineTo(cx + 2, cy - 1)
-      .lineTo(cx - 2, cy + 1).lineTo(cx - 3, cy + 6).lineTo(cx + 3, cy + 6)
-      .moveTo(cx - 4, cy - 7).lineTo(cx + 4, cy - 7)
-      .moveTo(cx - 4, cy + 7).lineTo(cx + 4, cy + 7).stroke();
-  }
-  doc.restore();
 }
 
 function drawPhotoPlaceholder(doc, x, y, width, height, color) {

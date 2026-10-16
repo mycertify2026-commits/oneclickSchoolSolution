@@ -281,7 +281,7 @@ async function updateMySchool(req, res) {
 const ID_CARD_DESIGN_FIELDS = [
   'id_card_primary_color', 'id_card_school_name', 'id_card_subtitle', 'id_card_footer_text',
   'id_card_show_register_number', 'id_card_show_aadhaar', 'id_card_show_dob', 'id_card_show_address', 'id_card_show_emergency_contact',
-  'id_card_border_color', 'id_card_bg_opacity', 'id_card_show_feature_strip', 'id_card_feature_icons',
+  'id_card_border_color', 'id_card_bg_opacity',
   'id_card_orientation', 'idcard_signature_label', 'id_card_watermark_enabled', 'id_card_watermark_opacity',
   'id_card_school_name_font_size'
 ];
@@ -301,21 +301,6 @@ function normalizeIdCardFontSize(raw) {
   if (raw === '' || raw === null || raw === undefined) return null;
   const n = Number(raw);
   return Number.isFinite(n) ? Math.min(MAX_ID_CARD_NAME_FONT, Math.max(MIN_ID_CARD_NAME_FONT, n)) : null;
-}
-
-// Validates/normalizes the 5-slot per-icon feature-strip config so a
-// malformed value can never reach the database or the PDF renderer.
-function normalizeFeatureIcons(raw) {
-  let arr;
-  try { arr = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { return null; }
-  if (!Array.isArray(arr)) return null;
-  const allowedKeys = ['shield', 'drop', 'sun', 'arrows', 'hourglass'];
-  return JSON.stringify(arr.slice(0, 5).map((slot, i) => ({
-    key: allowedKeys.includes(slot?.key) ? slot.key : allowedKeys[i] || 'shield',
-    visible: Boolean(slot?.visible ?? true),
-    caption1: String(slot?.caption1 ?? '').slice(0, 40),
-    caption2: String(slot?.caption2 ?? '').slice(0, 40),
-  })));
 }
 
 // PUT /api/schools/me/id-card-bg  (schoolAdmin) — upload background image for ID card
@@ -468,10 +453,6 @@ async function updateIdCardDesign(req, res) {
       } else if (field === 'id_card_watermark_opacity') {
         const n = Number(req.body[field]);
         values.push(Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.1);
-      } else if (field === 'id_card_feature_icons') {
-        const normalized = normalizeFeatureIcons(req.body[field]);
-        if (normalized === null) { updates.pop(); return; } // skip malformed value rather than corrupt the column
-        values.push(normalized);
       } else if (field === 'id_card_orientation') {
         if (!VALID_ID_CARD_ORIENTATIONS.includes(req.body[field])) { updates.pop(); return; }
         values.push(req.body[field]);
@@ -528,9 +509,6 @@ async function previewIdCard(req, res) {
       } else if (field === 'id_card_bg_opacity') {
         const n = Number(req.body[field]);
         overrides[field] = Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : school.id_card_bg_opacity;
-      } else if (field === 'id_card_feature_icons') {
-        const normalized = normalizeFeatureIcons(req.body[field]);
-        if (normalized !== null) overrides[field] = normalized;
       } else if (field === 'id_card_school_name_font_size') {
         overrides[field] = normalizeIdCardFontSize(req.body[field]);
       } else {
