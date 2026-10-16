@@ -283,7 +283,7 @@ const ID_CARD_DESIGN_FIELDS = [
   'id_card_show_register_number', 'id_card_show_aadhaar', 'id_card_show_dob', 'id_card_show_address', 'id_card_show_emergency_contact',
   'id_card_border_color', 'id_card_bg_opacity',
   'id_card_orientation', 'idcard_signature_label', 'id_card_watermark_enabled', 'id_card_watermark_opacity',
-  'id_card_school_name_font_size'
+  'id_card_school_name_font_size', 'id_card_school_name_align'
 ];
 // Clamped to a legible-but-flexible range for a CR80-sized card — the PDF
 // renderer's own shrink-to-fit still applies on top of this as a safety net
@@ -291,6 +291,7 @@ const ID_CARD_DESIGN_FIELDS = [
 // particular long name still degrades gracefully instead of overflowing.
 const MIN_ID_CARD_NAME_FONT = 6, MAX_ID_CARD_NAME_FONT = 14;
 const VALID_ID_CARD_ORIENTATIONS = ['horizontal', 'vertical'];
+const VALID_ID_CARD_NAME_ALIGNS = ['left', 'center', 'right'];
 
 // Shared by updateIdCardDesign (persists to the DB) and previewIdCard (an
 // in-memory override for the live preview only) — previewIdCard used to
@@ -455,6 +456,9 @@ async function updateIdCardDesign(req, res) {
         values.push(Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.1);
       } else if (field === 'id_card_orientation') {
         if (!VALID_ID_CARD_ORIENTATIONS.includes(req.body[field])) { updates.pop(); return; }
+        values.push(req.body[field]);
+      } else if (field === 'id_card_school_name_align') {
+        if (!VALID_ID_CARD_NAME_ALIGNS.includes(req.body[field])) { updates.pop(); return; }
         values.push(req.body[field]);
       } else if (field === 'id_card_school_name_font_size') {
         // Blank/invalid means "auto-fit" (the PDF's own default shrink-to-fit

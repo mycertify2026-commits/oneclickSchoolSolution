@@ -532,13 +532,18 @@ async function migrate() {
     console.log(`  + cleared stale distributor_id on ${r1.rowCount} school(s), stale super_distributor_id on ${r2.rowCount} school(s) and ${r3.rowCount} distributor(s)`);
   });
 
+  await step(27, 'schools — ID card school name text alignment (left/center/right)', async () => {
+    await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS id_card_school_name_align VARCHAR(10) DEFAULT 'left'`);
+    console.log('  + schools.id_card_school_name_align ensured');
+  });
+
   await client.end();
 
   if (failures > 0) {
     console.error(`\nPostgreSQL catch-up migration finished with ${failures} failed section(s) — see ✗ lines above. Every other section still applied.`);
     process.exitCode = 1;
   } else {
-    console.log('\nPostgreSQL catch-up migration completed successfully — all 26 sections applied.');
+    console.log('\nPostgreSQL catch-up migration completed successfully — all 27 sections applied.');
   }
 }
 

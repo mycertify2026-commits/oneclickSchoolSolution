@@ -40,6 +40,9 @@ function parseColor(c, def) {
   const m = (c + '').match(/#[0-9a-fA-F]{3,8}/);
   return m ? m[0] : def;
 }
+function parseNameAlign(v) {
+  return v === 'center' || v === 'right' ? v : 'left';
+}
 
 // A stored standard is usually already ordinal ("9th"), so blindly
 // appending "th Standard" produced "9thth Standard" whenever the value
@@ -272,9 +275,10 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   const { lines: schoolNameLines, fontSize: schoolNameSize } = manualNameLines.length > 1
     ? fitFixedLines(doc, manualNameLines, nameW, 'Helvetica-Bold', startNameSize, 4.6)
     : splitSchoolName(doc, schoolName.toUpperCase(), nameW, 'Helvetica-Bold', startNameSize, 4.6);
+  const nameAlign = parseNameAlign(school.id_card_school_name_align);
   schoolNameLines.forEach((line, index) => {
     doc.font('Helvetica-Bold').fontSize(schoolNameSize).fillColor(headerColor)
-      .text(line, nameX, 10 + idSanshaOffset + index * schoolNameSize, { width: nameW, lineBreak: false });
+      .text(line, nameX, 10 + idSanshaOffset + index * schoolNameSize, { width: nameW, align: nameAlign, lineBreak: false });
   });
 
   // Subtitle and the new school-address line are positioned relative to
@@ -450,7 +454,7 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   const schoolAddressFooter = buildSchoolAddress(school);
   if (schoolAddressFooter) {
     doc.save().rect(0, featureY, W, schoolAddressRowH).fillColor(headerColor).fill().restore();
-    const addrLabel = 'Address:';
+    const addrLabel = 'School Address:';
     doc.font('Helvetica').fontSize(5).fillColor(WHITE);
     const labelW = doc.widthOfString(addrLabel + ' ');
     const addrValue = fitSingleLine(doc, schoolAddressFooter, W - 10 - labelW, 'Helvetica-Bold', 5);
@@ -478,7 +482,7 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
     // flush against its left edge (pdfkit's default for `fit`).
     try { doc.image(signaturePath, sigX, sigBandY, { width: sigW, height: sigH, fit: [sigW, sigH], align: 'center', valign: 'bottom' }); } catch (e) {}
   }
-  doc.font('Helvetica').fontSize(4.2).fillColor(GREY)
+  doc.font('Helvetica-Bold').fontSize(4.2).fillColor(GREY)
     .text(safe(school.idcard_signature_label, 'Principal'), sigX, sigLineY + 1, { width: sigW, align: 'center', lineBreak: false });
 
   // QR code — now equal-sized to the logo and no longer needs to overlap
@@ -550,11 +554,13 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
     ? fitFixedLines(doc, manualNameLinesV, nameW, 'Helvetica-Bold', startVertNameSize, 4.6)
     : splitSchoolName(doc, schoolName, nameW, 'Helvetica-Bold', startVertNameSize, 4.6);
   const namePitch = nameSize * (8.4 / 7.2);
-  // Left-aligned next to the logo (not centered under it) — per the
-  // school's reference design.
+  // Left-aligned next to the logo by default (not centered under it, per
+  // the school's reference design) — School Admin can change this to
+  // center/right in School Settings.
+  const nameAlignV = parseNameAlign(school.id_card_school_name_align);
   nameLines.forEach((line, index) => {
     doc.font('Helvetica-Bold').fontSize(nameSize).fillColor(WHITE)
-      .text(line, nameX, CARD_TOP + 10 + index * namePitch, { width: nameW, lineBreak: false });
+      .text(line, nameX, CARD_TOP + 10 + index * namePitch, { width: nameW, align: nameAlignV, lineBreak: false });
   });
   // Subtitle positioned relative to where the name actually ended (1, 2, or
   // 3 lines), same reasoning as the horizontal layout. School address lives
@@ -677,7 +683,7 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   const schoolAddressFooterV = buildSchoolAddress(school);
   if (schoolAddressFooterV) {
     doc.save().rect(0, featureY, W, schoolAddressRowH).fillColor(headerColor).fill().restore();
-    const addrLabelV = 'Address:';
+    const addrLabelV = 'School Address:';
     doc.font('Helvetica').fontSize(5.2).fillColor(WHITE);
     const labelWV = doc.widthOfString(addrLabelV + ' ');
     const addrValueV = fitSingleLine(doc, schoolAddressFooterV, W - 10 - labelWV, 'Helvetica-Bold', 5.2);
@@ -713,7 +719,7 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
     // image narrower than sigW sits flush left instead of over the line.
     try { doc.image(signaturePath, sigX, sigY, { width: sigW, height: sigH, fit: [sigW, sigH], align: 'center', valign: 'bottom' }); } catch (e) {}
   }
-  doc.font('Helvetica').fontSize(4.8).fillColor(GREY)
+  doc.font('Helvetica-Bold').fontSize(4.8).fillColor(GREY)
     .text(safe(school.idcard_signature_label, 'Principal'), sigX, sigLineY + 1, { width: sigW, align: 'center', lineBreak: false });
 
   doc.save().rect(1, CARD_TOP, W - 2, H - CARD_TOP - 1).lineWidth(1.2).strokeColor(borderColor || '#d1d5db').stroke().restore();

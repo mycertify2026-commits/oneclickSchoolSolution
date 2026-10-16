@@ -21,7 +21,7 @@ const ID_CARD_PRESET_COLORS = [
   '#be185d','#0f766e','#4338ca','#b45309',
 ];
 const ID_CARD_BLANK = {
-  id_card_primary_color: '#1a6fd4', id_card_school_name: '', id_card_school_name_font_size: '', id_card_subtitle: 'Student ID Card',
+  id_card_primary_color: '#1a6fd4', id_card_school_name: '', id_card_school_name_font_size: '', id_card_school_name_align: 'left', id_card_subtitle: 'Student ID Card',
   id_card_footer_text: 'If found, please contact the school office.',
   id_card_show_register_number: true, id_card_show_aadhaar: true, id_card_show_dob: true,
   id_card_show_address: false, id_card_show_emergency_contact: true,
@@ -64,6 +64,7 @@ export default function SchoolSettings() {
       id_card_primary_color: normaliseColor(res.data.school.id_card_primary_color) || ID_CARD_BLANK.id_card_primary_color,
       id_card_school_name: res.data.school.id_card_school_name || res.data.school.name || '',
       id_card_school_name_font_size: res.data.school.id_card_school_name_font_size ?? '',
+      id_card_school_name_align: res.data.school.id_card_school_name_align || 'left',
       id_card_subtitle: res.data.school.id_card_subtitle || ID_CARD_BLANK.id_card_subtitle,
       id_card_footer_text: res.data.school.id_card_footer_text || ID_CARD_BLANK.id_card_footer_text,
       id_card_show_register_number: Boolean(res.data.school.id_card_show_register_number ?? true),
@@ -472,6 +473,19 @@ export default function SchoolSettings() {
                     <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
                       Type exactly where the name should break across lines. Leave Line 2 and 3 blank to have it wrap automatically instead.
                     </p>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">School Name Alignment</label>
+                    <div style={{ display: 'flex', gap: 16 }}>
+                      {['left', 'center', 'right'].map(a => (
+                        <label key={a} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer', textTransform: 'capitalize' }}>
+                          <input type="radio" name="idCardNameAlign" value={a}
+                            checked={idCardForm.id_card_school_name_align === a}
+                            onChange={() => setIdCardForm(p => ({ ...p, id_card_school_name_align: a }))} />
+                          {a}
+                        </label>
+                      ))}
+                    </div>
                   </div>
                   <div className="form-group">
                     <label className="form-label">School Name Font Size (optional)</label>
