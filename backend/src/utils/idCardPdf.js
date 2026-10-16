@@ -174,35 +174,20 @@ async function generateIdCardPdf({ school, student, certificate, outputPath, pho
   });
 }
 
-// Circular, ringed logo badge — a white backdrop disc (so a transparent-PNG
-// logo never shows the page behind it), the logo image clipped to the
-// circle, an inner ring in the school's own header color, then a thin outer
-// ring in its border/accent color. Rings still draw even with no logo image
-// so an unbranded school gets a consistent empty-badge placeholder instead
-// of nothing, matching how the LC/Bonafide logo circle already behaves.
-function drawCircularLogo(doc, logoPath, cx, cy, r, ringColor, outerRingColor) {
-  doc.save().circle(cx, cy, r + 1.6).fillColor(WHITE).fill().restore();
+// Circular logo badge — a white backdrop disc (so a transparent-PNG logo
+// never shows the page/colored-band behind it, and so an unbranded school
+// still gets a clean placeholder circle) with the logo image clipped to the
+// circle. No added ring/border stroke — most uploaded school logos/seals
+// already carry their own border artwork, so drawing another ring around
+// them read as a redundant, unwanted halo.
+function drawCircularLogo(doc, logoPath, cx, cy, r) {
+  doc.save().circle(cx, cy, r).fillColor(WHITE).fill().restore();
   if (canDraw(logoPath)) {
     doc.save();
     doc.circle(cx, cy, r).clip();
     try { doc.image(logoPath, cx - r, cy - r, { width: r * 2, height: r * 2 }); } catch (e) {}
     doc.restore();
   }
-  doc.save().circle(cx, cy, r).lineWidth(0.9).strokeColor(ringColor).stroke().restore();
-  doc.save().circle(cx, cy, r + 1.6).lineWidth(0.6).strokeColor(outerRingColor).stroke().restore();
-}
-
-// Small filled map-pin marker drawn as a teardrop with a hollow center,
-// used beside the school address in the card footer.
-function drawPinIcon(doc, cx, cy, size, color) {
-  const r = size / 2;
-  doc.save().fillColor(color);
-  doc.moveTo(cx, cy + r * 1.7)
-    .bezierCurveTo(cx - r * 1.25, cy + r * 0.25, cx - r, cy - r * 0.95, cx, cy - r * 1.1)
-    .bezierCurveTo(cx + r, cy - r * 0.95, cx + r * 1.25, cy + r * 0.25, cx, cy + r * 1.7)
-    .closePath().fill();
-  doc.fillColor(WHITE).circle(cx, cy - r * 0.25, r * 0.4).fill();
-  doc.restore();
 }
 
 // ── FRONT ────────────────────────────────────────────────────────────────────
@@ -210,7 +195,7 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   // The feature-strip footer grows by schoolAddressRowH only when there's
   // an actual school address to show in it (a school with no
   // city/taluka/district filled in renders exactly as before this existed).
-  const schoolAddressRowH = buildSchoolAddress(school) ? 9 : 0;
+  const schoolAddressRowH = buildSchoolAddress(school) ? 11 : 0;
   const FTR_H = 24 + schoolAddressRowH;
   const CARD_TOP = 12;
   const RIGHT_X = 188;
@@ -276,21 +261,21 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
     } catch (e) {}
   }
 
-  // School logo and branding. Logo and QR are kept the same size (32pt) so
-  // neither reads as more "official" than the other. Logo renders as a
-  // circular ringed badge (header color inner ring, border/gold outer ring)
-  // instead of a plain square image.
-  const logoX = 13, logoY = 19, logoSize = 32;
-  drawCircularLogo(doc, logoPath, logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2, headerColor, borderColor || GOLD);
+  // School logo — large and prominent (per the school's reference design),
+  // deliberately bigger than the QR code rather than matched to it, as a
+  // plain circular-clipped image with no added ring/border.
+  const logoX = 13, logoY = 8, logoSize = 40;
+  drawCircularLogo(doc, logoPath, logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2);
   // Sanstha name (optional, School Settings > Certificate Header) is a tiny
   // line above the school name — shifts everything below it down by a fixed
   // amount only when set, so a school that never uses it sees no layout
   // change at all.
+  const nameX = logoX + logoSize + 8, nameW = RIGHT_X - 5 - nameX;
   const idSanshaOffset = school.sanstha_name ? 7 : 0;
   if (school.sanstha_name) {
-    const sanstha = fitSingleLine(doc, safe(school.sanstha_name).toUpperCase(), 118, 'Helvetica-Bold', 5);
+    const sanstha = fitSingleLine(doc, safe(school.sanstha_name).toUpperCase(), nameW, 'Helvetica-Bold', 5);
     doc.font('Helvetica-Bold').fontSize(5).fillColor(GREY)
-      .text(sanstha, 66, 19, { width: 118, lineBreak: false });
+      .text(sanstha, nameX, 10, { width: nameW, lineBreak: false });
   }
   const schoolName = safe(school.id_card_school_name || school.name, 'School name');
   // School Admin can pin a starting font size (School Settings > ID Card
@@ -302,34 +287,36 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   // reaching fitSingleLine's last-resort "..." truncation.
   const requestedNameSize = Number(school.id_card_school_name_font_size);
   const startNameSize = Number.isFinite(requestedNameSize) && requestedNameSize > 0 ? requestedNameSize : 9.2;
-  const { lines: schoolNameLines, fontSize: schoolNameSize } = splitSchoolName(doc, schoolName.toUpperCase(), 117, 'Helvetica-Bold', startNameSize, 4.6);
+  const { lines: schoolNameLines, fontSize: schoolNameSize } = splitSchoolName(doc, schoolName.toUpperCase(), nameW, 'Helvetica-Bold', startNameSize, 4.6);
   schoolNameLines.forEach((line, index) => {
     doc.font('Helvetica-Bold').fontSize(schoolNameSize).fillColor(headerColor)
-      .text(line, 66, 19 + idSanshaOffset + index * schoolNameSize, { width: 117, lineBreak: false });
+      .text(line, nameX, 10 + idSanshaOffset + index * schoolNameSize, { width: nameW, lineBreak: false });
   });
 
   // Subtitle and the new school-address line are positioned relative to
   // where the (possibly 1- or 2-line) name actually ended, not a hardcoded
   // offset — a long 2-line name used to risk running into a subtitle fixed
   // at y=39, which is exactly the "name looks cut off" symptom being fixed.
-  let afterNameY = 19 + idSanshaOffset + schoolNameLines.length * schoolNameSize + 1;
-  const defaultSubtitle = school.recog_no ? `CBSE Affiliation No. ${school.recog_no}` : '';
+  let afterNameY = 10 + idSanshaOffset + schoolNameLines.length * schoolNameSize + 2;
+  const defaultSubtitle = school.recog_no ? `CBSE Affiliation No.: ${school.recog_no}` : '';
   const configuredSubtitle = safe(school.id_card_subtitle);
   const subtitleValue = !configuredSubtitle || configuredSubtitle === 'Student ID Card'
     ? defaultSubtitle
     : configuredSubtitle;
   if (subtitleValue) {
-    // Rendered as a small rounded pill (light tint of the header color)
-    // instead of plain text, so it reads as a badge rather than a caption.
-    doc.font('Helvetica-Bold').fontSize(4.6);
-    const subtitle = fitSingleLine(doc, subtitleValue, 110, 'Helvetica-Bold', 4.6);
-    const subtitleW = doc.widthOfString(subtitle);
-    const pillPadX = 3, pillH = 6.6;
-    const pillW = Math.min(118, subtitleW + pillPadX * 2);
-    doc.save().roundedRect(66, afterNameY, pillW, pillH, pillH / 2)
-      .fillColor(headerColor).fillOpacity(0.12).fill().restore();
-    doc.font('Helvetica-Bold').fontSize(4.6).fillColor(headerColor).fillOpacity(1)
-      .text(subtitle, 66, afterNameY + 1.5, { width: pillW, align: 'center', lineBreak: false });
+    // Plain two-tone caption (grey label, bold dark value) rather than a
+    // badge — matches the school's reference design, which shows this as
+    // ordinary text, not a pill.
+    const [subLabel, subValRaw] = subtitleValue.includes(':')
+      ? [subtitleValue.slice(0, subtitleValue.indexOf(':') + 1), subtitleValue.slice(subtitleValue.indexOf(':') + 1).trim()]
+      : [subtitleValue, ''];
+    doc.font('Helvetica').fontSize(5.2).fillColor(GREY).text(subLabel, nameX, afterNameY, { width: nameW, lineBreak: false });
+    if (subValRaw) {
+      const labelW = doc.widthOfString(subLabel + ' ');
+      const subVal = fitSingleLine(doc, subValRaw, Math.max(10, nameW - labelW), 'Helvetica-Bold', 5.2);
+      doc.font('Helvetica-Bold').fontSize(5.2).fillColor(TEXT)
+        .text(subVal, nameX + labelW, afterNameY, { width: nameW - labelW, lineBreak: false });
+    }
   }
   // School address lives in the card's footer now (see featureY below),
   // not here — no phone/mobile number is shown anywhere on the card either
@@ -358,47 +345,43 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
     drawPhotoPlaceholder(doc, PH_X, PH_Y, PH_W, PH_H, GREY);
   }
 
-  // Compact, consistently aligned key/value fields. Student Name gets the
-  // same wrap-then-shrink treatment as the school name (up to 2 lines,
-  // shrinking font before ever truncating) — a long student name is just
-  // as common as a long school name, and was hitting the same "..."
-  // truncation. Every other field value still shrinks to fit on one line
-  // before ever truncating (fitValueShrink) — GR No./DOB/mobile/Standard
-  // are all naturally short, and Father's Name benefits from the same
-  // protection without needing a second line.
-  const FX = 68, LABEL_W = 39, VALUE_X = FX + LABEL_W + 4;
-  const fieldWidth = RIGHT_X - VALUE_X - 3;
+  // Fields flow as inline "Label: Value" pairs — the value starts right
+  // after its own label's measured width, not a fixed shared column — per
+  // the school's reference design, which reads as prose rather than a
+  // form grid. Student Name still gets the wrap-then-shrink treatment (up
+  // to 4 lines, shrinking font before ever truncating), since a long
+  // student name is as common as a long school name and was hitting the
+  // same "..." truncation. Every other value shrinks to fit one line
+  // before ever truncating (fitValueShrink); Father's Name gets the same
+  // 2-line wrap as Student Name since a compound name can outrun even the
+  // minimum single-line font size.
+  const FX = 68, LABEL_GAP = 3;
   const ROW_H = 9;
 
   // The decorative panel's left edge isn't a straight vertical line — it's
   // diagonal from (RIGHT_X, CARD_TOP) down to a notch at (166, 88), only
   // becoming the flat RIGHT_X boundary below y=88 (see the panel polygon
-  // above). `fieldWidth` assumes the flat boundary, which single short
-  // values never reached anyway — but a 2-line wrapped Student Name sits
-  // right in that diagonal zone and, at fieldWidth, can run under the
-  // panel. Use the panel's actual edge at this field's lowest point
-  // instead of the flat assumption.
+  // above). A value sitting in that diagonal zone can run under the panel
+  // at the flat-boundary width, so it's capped to the panel's actual edge
+  // at that field's lowest point instead.
   const panelLeftEdgeAt = (y) => (y >= 88 ? RIGHT_X : RIGHT_X + (166 - RIGHT_X) * ((y - CARD_TOP) / (88 - CARD_TOP)));
-  const nameFieldWidth = Math.min(fieldWidth, panelLeftEdgeAt(80) - VALUE_X - 3);
+
+  doc.font('Helvetica').fontSize(5.6);
+  const studentNameLabel = 'Student Name:';
+  const studentNameValueX = FX + doc.widthOfString(studentNameLabel) + LABEL_GAP;
+  const nameFieldWidth = Math.min(RIGHT_X - studentNameValueX - 3, panelLeftEdgeAt(80) - studentNameValueX - 3);
 
   const nameValue = safe(student.full_name, '—');
   const { lines: studentNameLines, fontSize: studentNameSize } = splitSchoolName(doc, nameValue, nameFieldWidth, 'Helvetica-Bold', 5.6, 4.2, 4);
   const studentNamePitch = studentNameSize + 1.2;
 
-  doc.font('Helvetica').fontSize(5.6).fillColor(TEXT)
-    .text('Student Name', FX, 65, { width: LABEL_W, lineBreak: false, ellipsis: true });
-  doc.font('Helvetica').fontSize(5.6).fillColor(TEXT)
-    .text(':', FX + LABEL_W - 1, 65, { width: 4, lineBreak: false });
+  doc.font('Helvetica').fontSize(5.6).fillColor(GREY)
+    .text(studentNameLabel, FX, 65, { lineBreak: false });
   studentNameLines.forEach((line, i) => {
     doc.font('Helvetica-Bold').fontSize(studentNameSize).fillColor(TEXT)
-      .text(line, VALUE_X, 65 + i * studentNamePitch, { width: nameFieldWidth, lineBreak: false });
+      .text(line, studentNameValueX, 65 + i * studentNamePitch, { width: nameFieldWidth, lineBreak: false });
   });
 
-  // Father's Name is a person's full name too, exactly as prone to running
-  // long as Student Name (confirmed: a realistic compound name doesn't fit
-  // even at minFontSize on one line) — gets the same 2-line wrap treatment.
-  // GR No./Date of Birth/Father's Mobile/Standard stay single-line shrink,
-  // since they're all naturally short, format-bound values.
   const restFields = [
     ['GR No.', safe(student.gr_number || student.register_number), false],
     ['Date of Birth', fmtDate(student.dob), false],
@@ -407,30 +390,30 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
     ['Standard', formatStandardLabel(student.current_standard || student.admission_standard), false],
   ];
   // Student's own address (opt-in per school) renders as just another
-  // label:value row now, same column alignment and shrink-before-truncate
-  // as every other field — it used to be a differently-formatted free-text
-  // line ("Address: ...") that didn't match the rest of the card.
+  // inline row now — it used to be a differently-formatted free-text line
+  // ("Address: ...") that didn't match the rest of the card.
   if (school.id_card_show_address && student.address) {
     restFields.push(['Address', safe(student.address), false]);
   }
   let cursorY = 65 + Math.max(ROW_H, studentNameLines.length * studentNamePitch);
   restFields.forEach(([label, value, wrap]) => {
-    doc.font('Helvetica').fontSize(5.6).fillColor(TEXT)
-      .text(label, FX, cursorY, { width: LABEL_W, lineBreak: false, ellipsis: true });
-    doc.font('Helvetica').fontSize(5.6).fillColor(TEXT)
-      .text(':', FX + LABEL_W - 1, cursorY, { width: 4, lineBreak: false });
+    const labelText = `${label}:`;
+    doc.font('Helvetica').fontSize(5.6);
+    const valueX = FX + doc.widthOfString(labelText) + LABEL_GAP;
+    const availWidth = RIGHT_X - valueX - 3;
+    doc.fillColor(GREY).text(labelText, FX, cursorY, { lineBreak: false });
     if (wrap) {
-      const { lines, fontSize: valueSize } = splitSchoolName(doc, value || '—', fieldWidth, 'Helvetica-Bold', 5.6, 4.2, 2);
+      const { lines, fontSize: valueSize } = splitSchoolName(doc, value || '—', availWidth, 'Helvetica-Bold', 5.6, 4.2, 2);
       const pitch = valueSize + 1.2;
       lines.forEach((line, i) => {
         doc.font('Helvetica-Bold').fontSize(valueSize).fillColor(TEXT)
-          .text(line, VALUE_X, cursorY + i * pitch, { width: fieldWidth, lineBreak: false });
+          .text(line, valueX, cursorY + i * pitch, { width: availWidth, lineBreak: false });
       });
       cursorY += Math.max(ROW_H, lines.length * pitch);
     } else {
-      const { text: valueText, fontSize: valueSize } = fitValueShrink(doc, value || '—', fieldWidth, 'Helvetica-Bold', 5.6, 4.2);
+      const { text: valueText, fontSize: valueSize } = fitValueShrink(doc, value || '—', availWidth, 'Helvetica-Bold', 5.6, 4.2);
       doc.font('Helvetica-Bold').fontSize(valueSize).fillColor(TEXT)
-        .text(valueText, VALUE_X, cursorY, { width: fieldWidth, lineBreak: false });
+        .text(valueText, valueX, cursorY, { width: availWidth, lineBreak: false });
       cursorY += ROW_H;
     }
   });
@@ -477,15 +460,20 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   const schoolAddressFooter = buildSchoolAddress(school);
   let iconRowY = featureY;
   if (schoolAddressFooter) {
-    doc.save().moveTo(10, featureY).lineTo(W - 10, featureY).lineWidth(0.3).strokeColor('#e5e7eb').stroke().restore();
-    const pinSize = 4, pinGap = 1.5;
-    const addrFooterText = fitSingleLine(doc, schoolAddressFooter, W - 10 - pinSize - pinGap, 'Helvetica', 4.4);
-    doc.font('Helvetica').fontSize(4.4);
-    const addrTextW = doc.widthOfString(addrFooterText);
-    const groupX = (W - (pinSize + pinGap + addrTextW)) / 2;
-    const addrY = featureY + 2.5;
-    drawPinIcon(doc, groupX + pinSize / 2, addrY + 2, pinSize, headerColor);
-    doc.fillColor(TEXT).text(addrFooterText, groupX + pinSize + pinGap, addrY, { width: addrTextW + 1, lineBreak: false });
+    // Solid header-color band (not a white strip with a divider line) —
+    // matches the school's reference design, where the whole footer reads
+    // as one colored block rather than a separate white caption line.
+    doc.save().rect(0, featureY, W, schoolAddressRowH).fillColor(headerColor).fill().restore();
+    const addrLabel = 'Address:';
+    doc.font('Helvetica').fontSize(5).fillColor(WHITE);
+    const labelW = doc.widthOfString(addrLabel + ' ');
+    const addrValue = fitSingleLine(doc, schoolAddressFooter, W - 10 - labelW, 'Helvetica-Bold', 5);
+    doc.font('Helvetica-Bold').fontSize(5);
+    const valueW = doc.widthOfString(addrValue);
+    const groupX = (W - (labelW + valueW)) / 2;
+    const addrY = featureY + (schoolAddressRowH - 5) / 2;
+    doc.font('Helvetica').fontSize(5).fillColor(WHITE).text(addrLabel, groupX, addrY, { lineBreak: false });
+    doc.font('Helvetica-Bold').fontSize(5).fillColor(WHITE).text(addrValue, groupX + labelW, addrY, { width: valueW + 1, lineBreak: false });
     iconRowY += schoolAddressRowH;
   }
   const features = showFeatureStrip ? featureIcons.filter(f => f.visible !== false) : [];
@@ -519,7 +507,7 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
 // two-column layout), then the same UID strip and feature strip conventions
 // as the landscape design, just re-flowed for a narrower width.
 function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school, student, certificate, photoPath, logoPath, signaturePath, stampPath, qrBuffer, bgBuf, bgOpacity, borderColor, showFeatureStrip, featureIcons, watermarkBuf, watermarkOpacity, GOLD, GREY, TEXT, WHITE }) {
-  const schoolAddressRowH = buildSchoolAddress(school) ? 9 : 0;
+  const schoolAddressRowH = buildSchoolAddress(school) ? 11 : 0;
   const FTR_H = 24 + schoolAddressRowH;
   const CONTENT_BOTTOM = H - FTR_H;
   const CARD_TOP = 8;
@@ -543,13 +531,12 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   // full header width is always available to the name.
   doc.save().rect(0, CARD_TOP, W, HDR_H).fillColor(headerColor).fill().restore();
 
-  // Logo renders as a circular ringed badge, same as the horizontal layout —
-  // the inner ring is white here (not the header color) since this logo
-  // sits directly on the colored header band and needs contrast against it.
-  const logoSz = 32;
-  drawCircularLogo(doc, logoPath, 10 + logoSz / 2, CARD_TOP + 9 + logoSz / 2, logoSz / 2, WHITE, borderColor || GOLD);
+  // Large plain circular logo (no added ring), same reasoning as the
+  // horizontal layout — most uploaded logos already carry their own border.
+  const logoSz = 42;
+  drawCircularLogo(doc, logoPath, 10 + logoSz / 2, CARD_TOP + HDR_H / 2, logoSz / 2);
 
-  const nameX = 10 + logoSz + 6;
+  const nameX = 10 + logoSz + 7;
   const nameW = W - 8 - nameX;
   const schoolName = safe(school.id_card_school_name || school.name, 'School name').toUpperCase();
   // Same School Settings override as the horizontal layout, scaled from its
@@ -559,29 +546,34 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   const startVertNameSize = Number.isFinite(requestedVertNameSize) && requestedVertNameSize > 0 ? requestedVertNameSize * (7.2 / 9.2) : 7.2;
   const { lines: nameLines, fontSize: nameSize } = splitSchoolName(doc, schoolName, nameW, 'Helvetica-Bold', startVertNameSize, 4.6);
   const namePitch = nameSize * (8.4 / 7.2);
+  // Left-aligned next to the logo (not centered under it) — per the
+  // school's reference design.
   nameLines.forEach((line, index) => {
     doc.font('Helvetica-Bold').fontSize(nameSize).fillColor(WHITE)
-      .text(line, nameX, CARD_TOP + 10 + index * namePitch, { width: nameW, align: 'center', lineBreak: false });
+      .text(line, nameX, CARD_TOP + 10 + index * namePitch, { width: nameW, lineBreak: false });
   });
   // Subtitle positioned relative to where the name actually ended (1, 2, or
   // 3 lines), same reasoning as the horizontal layout. School address lives
   // in the card's footer now (see featureY below), not here.
-  const afterVertNameY = CARD_TOP + 10 + nameLines.length * namePitch + 1;
-  const subtitleValue = safe(school.id_card_subtitle) || (school.recog_no ? `Recog. No. ${school.recog_no}` : '');
+  const afterVertNameY = CARD_TOP + 10 + nameLines.length * namePitch + 2;
+  const subtitleValue = safe(school.id_card_subtitle) || (school.recog_no ? `Recog. No.: ${school.recog_no}` : '');
   if (subtitleValue) {
-    // Same rounded-pill badge treatment as the horizontal layout, but in a
-    // translucent white tint since this sits on the colored header band
-    // rather than white page background.
-    doc.font('Helvetica-Bold').fontSize(4.6);
-    const subtitle = fitSingleLine(doc, subtitleValue, nameW - 6, 'Helvetica-Bold', 4.6);
-    const subtitleW = doc.widthOfString(subtitle);
-    const pillPadX = 3, pillH = 6.6;
-    const pillW = Math.min(nameW, subtitleW + pillPadX * 2);
-    const pillX = nameX + (nameW - pillW) / 2;
-    doc.save().roundedRect(pillX, afterVertNameY, pillW, pillH, pillH / 2)
-      .fillColor(WHITE).fillOpacity(0.18).fill().restore();
-    doc.font('Helvetica-Bold').fontSize(4.6).fillColor(WHITE).fillOpacity(1)
-      .text(subtitle, pillX, afterVertNameY + 1.5, { width: pillW, align: 'center', lineBreak: false });
+    // Plain two-tone caption (translucent white label, solid white bold
+    // value), left-aligned — matches the school's reference design, which
+    // shows this as ordinary text rather than a badge.
+    const [subLabelV, subValRawV] = subtitleValue.includes(':')
+      ? [subtitleValue.slice(0, subtitleValue.indexOf(':') + 1), subtitleValue.slice(subtitleValue.indexOf(':') + 1).trim()]
+      : [subtitleValue, ''];
+    doc.font('Helvetica').fontSize(5.4).fillColor(WHITE).fillOpacity(0.78)
+      .text(subLabelV, nameX, afterVertNameY, { width: nameW, lineBreak: false });
+    if (subValRawV) {
+      doc.font('Helvetica').fontSize(5.4);
+      const labelWV = doc.widthOfString(subLabelV + ' ');
+      const subValV = fitSingleLine(doc, subValRawV, Math.max(10, nameW - labelWV), 'Helvetica-Bold', 5.4);
+      doc.font('Helvetica-Bold').fontSize(5.4).fillColor(WHITE).fillOpacity(1)
+        .text(subValV, nameX + labelWV, afterVertNameY, { width: nameW - labelWV, lineBreak: false });
+    }
+    doc.fillOpacity(1);
   }
 
   // Separator between the school-identity header band and the student
@@ -601,25 +593,27 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
     drawPhotoPlaceholder(doc, PH_X, PH_Y, PH_W, PH_H, GREY);
   }
 
-  // ── Full-width label:value rows ───────────────────────────────────────────
-  // Same Student Name wrap-then-shrink treatment as the horizontal layout —
-  // see the comment there for why.
-  const FX = 12, LABEL_W = 46, VALUE_X = FX + LABEL_W + 4;
-  const fieldWidth = W - VALUE_X - 10;
+  // ── Inline "Label: Value" rows ────────────────────────────────────────────
+  // Value starts right after its own label's measured width, not a fixed
+  // shared column — same reasoning as the horizontal layout. Same Student
+  // Name wrap-then-shrink treatment too.
+  const FX = 12;
   const ROW_H = 9;
   const rowY0 = PH_Y + PH_H + 8;
 
+  doc.font('Helvetica').fontSize(6.4);
+  const studentNameLabelV = 'Student Name:';
+  const studentNameValueXV = FX + doc.widthOfString(studentNameLabelV) + 3;
+
   const nameValueV = safe(student.full_name, '—');
-  const { lines: studentNameLinesV, fontSize: studentNameSizeV } = splitSchoolName(doc, nameValueV, fieldWidth, 'Helvetica-Bold', 6.4, 4.8, 2);
+  const { lines: studentNameLinesV, fontSize: studentNameSizeV } = splitSchoolName(doc, nameValueV, W - studentNameValueXV - 10, 'Helvetica-Bold', 6.4, 4.8, 2);
   const studentNamePitchV = studentNameSizeV + 1.2;
 
-  doc.font('Helvetica').fontSize(6.4).fillColor(TEXT)
-    .text('Student Name', FX, rowY0, { width: LABEL_W, lineBreak: false, ellipsis: true });
-  doc.font('Helvetica').fontSize(6.4).fillColor(TEXT)
-    .text(':', FX + LABEL_W - 1, rowY0, { width: 4, lineBreak: false });
+  doc.font('Helvetica').fontSize(6.4).fillColor(GREY)
+    .text(studentNameLabelV, FX, rowY0, { lineBreak: false });
   studentNameLinesV.forEach((line, i) => {
     doc.font('Helvetica-Bold').fontSize(studentNameSizeV).fillColor(TEXT)
-      .text(line, VALUE_X, rowY0 + i * studentNamePitchV, { width: fieldWidth, lineBreak: false });
+      .text(line, studentNameValueXV, rowY0 + i * studentNamePitchV, { width: W - studentNameValueXV - 10, lineBreak: false });
   });
 
   // Father's Name gets the same 2-line wrap treatment as Student Name — see
@@ -631,29 +625,28 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
     ["Father's Name", safe(student.father_name), true],
     ['Standard', formatStandardLabel(student.current_standard || student.admission_standard), false],
   ];
-  // Same column-aligned treatment as every other field — see the matching
-  // comment in drawFront.
   if (school.id_card_show_address && student.address) {
     restFieldsV.push(['Address', safe(student.address), false]);
   }
   let cursorYV = rowY0 + Math.max(ROW_H, studentNameLinesV.length * studentNamePitchV);
   restFieldsV.forEach(([label, value, wrap]) => {
-    doc.font('Helvetica').fontSize(6.4).fillColor(TEXT)
-      .text(label, FX, cursorYV, { width: LABEL_W, lineBreak: false, ellipsis: true });
-    doc.font('Helvetica').fontSize(6.4).fillColor(TEXT)
-      .text(':', FX + LABEL_W - 1, cursorYV, { width: 4, lineBreak: false });
+    const labelTextV = `${label}:`;
+    doc.font('Helvetica').fontSize(6.4);
+    const valueXV = FX + doc.widthOfString(labelTextV) + 3;
+    const availWidthV = W - valueXV - 10;
+    doc.fillColor(GREY).text(labelTextV, FX, cursorYV, { lineBreak: false });
     if (wrap) {
-      const { lines, fontSize: valueSize } = splitSchoolName(doc, value || '—', fieldWidth, 'Helvetica-Bold', 6.4, 4.8, 2);
+      const { lines, fontSize: valueSize } = splitSchoolName(doc, value || '—', availWidthV, 'Helvetica-Bold', 6.4, 4.8, 2);
       const pitch = valueSize + 1.2;
       lines.forEach((line, i) => {
         doc.font('Helvetica-Bold').fontSize(valueSize).fillColor(TEXT)
-          .text(line, VALUE_X, cursorYV + i * pitch, { width: fieldWidth, lineBreak: false });
+          .text(line, valueXV, cursorYV + i * pitch, { width: availWidthV, lineBreak: false });
       });
       cursorYV += Math.max(ROW_H, lines.length * pitch);
     } else {
-      const { text: valueText, fontSize: valueSize } = fitValueShrink(doc, value || '—', fieldWidth, 'Helvetica-Bold', 6.4, 4.8);
+      const { text: valueText, fontSize: valueSize } = fitValueShrink(doc, value || '—', availWidthV, 'Helvetica-Bold', 6.4, 4.8);
       doc.font('Helvetica-Bold').fontSize(valueSize).fillColor(TEXT)
-        .text(valueText, VALUE_X, cursorYV, { width: fieldWidth, lineBreak: false });
+        .text(valueText, valueXV, cursorYV, { width: availWidthV, lineBreak: false });
       cursorYV += ROW_H;
     }
   });
@@ -692,15 +685,19 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   const schoolAddressFooterV = buildSchoolAddress(school);
   let iconRowYV = featureY;
   if (schoolAddressFooterV) {
-    doc.save().moveTo(10, featureY).lineTo(W - 10, featureY).lineWidth(0.3).strokeColor('#e5e7eb').stroke().restore();
-    const pinSizeV = 4.2, pinGapV = 1.5;
-    const addrFooterTextV = fitSingleLine(doc, schoolAddressFooterV, W - 10 - pinSizeV - pinGapV, 'Helvetica', 4.6);
-    doc.font('Helvetica').fontSize(4.6);
-    const addrTextWV = doc.widthOfString(addrFooterTextV);
-    const groupXV = (W - (pinSizeV + pinGapV + addrTextWV)) / 2;
-    const addrYV = featureY + 2.5;
-    drawPinIcon(doc, groupXV + pinSizeV / 2, addrYV + 2.1, pinSizeV, headerColor);
-    doc.fillColor(TEXT).text(addrFooterTextV, groupXV + pinSizeV + pinGapV, addrYV, { width: addrTextWV + 1, lineBreak: false });
+    // Solid header-color band, same as the horizontal layout — see the
+    // matching comment in drawFront.
+    doc.save().rect(0, featureY, W, schoolAddressRowH).fillColor(headerColor).fill().restore();
+    const addrLabelV = 'Address:';
+    doc.font('Helvetica').fontSize(5.2).fillColor(WHITE);
+    const labelWV = doc.widthOfString(addrLabelV + ' ');
+    const addrValueV = fitSingleLine(doc, schoolAddressFooterV, W - 10 - labelWV, 'Helvetica-Bold', 5.2);
+    doc.font('Helvetica-Bold').fontSize(5.2);
+    const valueWV = doc.widthOfString(addrValueV);
+    const groupXV = (W - (labelWV + valueWV)) / 2;
+    const addrYV = featureY + (schoolAddressRowH - 5.2) / 2;
+    doc.font('Helvetica').fontSize(5.2).fillColor(WHITE).text(addrLabelV, groupXV, addrYV, { lineBreak: false });
+    doc.font('Helvetica-Bold').fontSize(5.2).fillColor(WHITE).text(addrValueV, groupXV + labelWV, addrYV, { width: valueWV + 1, lineBreak: false });
     iconRowYV += schoolAddressRowH;
   }
   const features = showFeatureStrip ? featureIcons.filter(f => f.visible !== false) : [];
