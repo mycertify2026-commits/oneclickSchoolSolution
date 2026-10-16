@@ -356,7 +356,26 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   // 2-line wrap as Student Name since a compound name can outrun even the
   // minimum single-line font size.
   const FX = 68, LABEL_GAP = 3;
-  const ROW_H = 9;
+  const ROWS_TOP = 65;
+
+  // Row height used to be a fixed 9pt regardless of how many fields were
+  // shown, which let 7 rows (GR No./DOB/Mobile/Father's Name/Standard plus
+  // an opt-in Address row) run past the space actually available before the
+  // signature block and footer — the footer is drawn last, so it silently
+  // painted over the Principal signature (and, on the vertical layout, the
+  // QR) instead of making room for them. Row height now shrinks to fit the
+  // real number of rows within the space left after reserving room for the
+  // signature block, with a readable floor so it degrades gracefully
+  // instead of disappearing.
+  const restFieldsCountH = (() => {
+    let n = 1; // Student Name
+    if (school.id_card_show_address && student.address) n += 1;
+    return n + 5; // GR No., DOB, Father's Mobile, Father's Name, Standard
+  })();
+  const SIG_RESERVE = 23;
+  const availableForRows = CONTENT_BOTTOM - ROWS_TOP - SIG_RESERVE;
+  const ROW_H = Math.max(6.5, Math.min(9, availableForRows / restFieldsCountH));
+  const FIELD_FONT = Math.max(4.6, Math.min(5.6, ROW_H - 2.4));
 
   // The decorative panel's left edge isn't a straight vertical line — it's
   // diagonal from (RIGHT_X, CARD_TOP) down to a notch at (166, 88), only
@@ -366,7 +385,9 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   // at that field's lowest point instead.
   const panelLeftEdgeAt = (y) => (y >= 88 ? RIGHT_X : RIGHT_X + (166 - RIGHT_X) * ((y - CARD_TOP) / (88 - CARD_TOP)));
 
-  doc.font('Helvetica').fontSize(5.6);
+  const FIELD_MIN = Math.max(4.0, FIELD_FONT - 1.4);
+
+  doc.font('Helvetica').fontSize(FIELD_FONT);
   const studentNameLabel = 'Student Name:';
   const studentNameValueX = FX + doc.widthOfString(studentNameLabel) + LABEL_GAP;
   // A short 2-3 word name (e.g. "Sample Student Name") was wrapping to an
@@ -376,13 +397,13 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   // much higher, where the panel's diagonal edge is still wide open. Try a
   // one-line fit against that wider, first-line-specific width before ever
   // falling back to the conservative multi-line width.
-  const line1Width = panelLeftEdgeAt(65) - studentNameValueX - 3;
+  const line1Width = panelLeftEdgeAt(ROWS_TOP) - studentNameValueX - 3;
   const conservativeWidth = Math.min(RIGHT_X - studentNameValueX - 3, panelLeftEdgeAt(80) - studentNameValueX - 3);
 
   const nameValue = safe(student.full_name, '—');
   doc.font('Helvetica-Bold');
   let oneLineSize = null;
-  for (let s = 5.6; s >= 4.2; s -= 0.5) {
+  for (let s = FIELD_FONT; s >= FIELD_MIN; s -= 0.5) {
     if (doc.fontSize(s).widthOfString(nameValue) <= line1Width) { oneLineSize = s; break; }
   }
   let studentNameLines, studentNameSize, nameFieldWidth;
@@ -391,16 +412,16 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
     studentNameSize = oneLineSize;
     nameFieldWidth = line1Width;
   } else {
-    ({ lines: studentNameLines, fontSize: studentNameSize } = splitSchoolName(doc, nameValue, conservativeWidth, 'Helvetica-Bold', 5.6, 4.2, 4));
+    ({ lines: studentNameLines, fontSize: studentNameSize } = splitSchoolName(doc, nameValue, conservativeWidth, 'Helvetica-Bold', FIELD_FONT, FIELD_MIN, 4));
     nameFieldWidth = conservativeWidth;
   }
   const studentNamePitch = studentNameSize + 1.2;
 
-  doc.font('Helvetica').fontSize(5.6).fillColor(GREY)
-    .text(studentNameLabel, FX, 65, { lineBreak: false });
+  doc.font('Helvetica').fontSize(FIELD_FONT).fillColor(GREY)
+    .text(studentNameLabel, FX, ROWS_TOP, { lineBreak: false });
   studentNameLines.forEach((line, i) => {
     doc.font('Helvetica-Bold').fontSize(studentNameSize).fillColor(TEXT)
-      .text(line, studentNameValueX, 65 + i * studentNamePitch, { width: nameFieldWidth, lineBreak: false });
+      .text(line, studentNameValueX, ROWS_TOP + i * studentNamePitch, { width: nameFieldWidth, lineBreak: false });
   });
 
   const restFields = [
@@ -416,15 +437,15 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   if (school.id_card_show_address && student.address) {
     restFields.push(['Address', safe(student.address), false]);
   }
-  let cursorY = 65 + Math.max(ROW_H, studentNameLines.length * studentNamePitch);
+  let cursorY = ROWS_TOP + Math.max(ROW_H, studentNameLines.length * studentNamePitch);
   restFields.forEach(([label, value, wrap]) => {
     const labelText = `${label}:`;
-    doc.font('Helvetica').fontSize(5.6);
+    doc.font('Helvetica').fontSize(FIELD_FONT);
     const valueX = FX + doc.widthOfString(labelText) + LABEL_GAP;
     const availWidth = RIGHT_X - valueX - 3;
     doc.fillColor(GREY).text(labelText, FX, cursorY, { lineBreak: false });
     if (wrap) {
-      const { lines, fontSize: valueSize } = splitSchoolName(doc, value || '—', availWidth, 'Helvetica-Bold', 5.6, 4.2, 2);
+      const { lines, fontSize: valueSize } = splitSchoolName(doc, value || '—', availWidth, 'Helvetica-Bold', FIELD_FONT, FIELD_MIN, 2);
       const pitch = valueSize + 1.2;
       lines.forEach((line, i) => {
         doc.font('Helvetica-Bold').fontSize(valueSize).fillColor(TEXT)
@@ -432,37 +453,12 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
       });
       cursorY += Math.max(ROW_H, lines.length * pitch);
     } else {
-      const { text: valueText, fontSize: valueSize } = fitValueShrink(doc, value || '—', availWidth, 'Helvetica-Bold', 5.6, 4.2);
+      const { text: valueText, fontSize: valueSize } = fitValueShrink(doc, value || '—', availWidth, 'Helvetica-Bold', FIELD_FONT, FIELD_MIN);
       doc.font('Helvetica-Bold').fontSize(valueSize).fillColor(TEXT)
         .text(valueText, valueX, cursorY, { width: availWidth, lineBreak: false });
       cursorY += ROW_H;
     }
   });
-
-  // ── Principal Signature — the space freed by dropping the old text-only
-  // "Authorized by" row and the Student UID strip. A real signature image
-  // now sits above the designation label instead of plain text standing in
-  // for it. (Address, when shown, is now just another row above, in
-  // restFields.)
-  const sigBandY = cursorY + 2;
-  const sigW = 42, sigH = 11, sigX = FX + 74;
-  const sigLineY = sigBandY + sigH;
-  if (canDraw(signaturePath)) {
-    // align/valign so a signature image whose own aspect ratio isn't
-    // exactly sigW:sigH sits centered over the underline below it, not
-    // flush against its left edge (pdfkit's default for `fit`).
-    try { doc.image(signaturePath, sigX, sigBandY, { width: sigW, height: sigH, fit: [sigW, sigH], align: 'center', valign: 'bottom' }); } catch (e) {}
-  }
-  doc.font('Helvetica').fontSize(4.2).fillColor(GREY)
-    .text(safe(school.idcard_signature_label, 'Principal'), sigX, sigLineY + 1, { width: sigW, align: 'center', lineBreak: false });
-
-  // QR code — now equal-sized to the logo and no longer needs to overlap
-  // a Student UID strip (removed above), so it sits cleanly in the panel.
-  const QR_SZ = 32, QR_X = RIGHT_X + (W - RIGHT_X - QR_SZ) / 2, QR_Y = 92;
-  doc.save().roundedRect(QR_X - 3, QR_Y - 3, QR_SZ + 6, QR_SZ + 6, 2).fillColor(WHITE).fill().restore();
-  if (qrBuffer) {
-    try { doc.image(qrBuffer, QR_X, QR_Y, { width: QR_SZ, height: QR_SZ }); } catch (e) {}
-  }
 
   // Feature strip shown on the supplied reference image — the School Admin
   // controls this from Settings: a master on/off switch
@@ -515,6 +511,33 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
         .text(feature.caption2, x + 1, iconRowY + 17, { width: featureW - 2, align: 'center', lineBreak: false });
     }
   });
+
+  // ── Principal Signature + QR — drawn after the footer/feature strip, not
+  // before, so they always render on top of it. The dynamic ROW_H above
+  // keeps them clear of the footer in the normal case, but this ordering
+  // (plus the sigBandY clamp below) is the guarantee: even in an extreme
+  // edge case these never end up silently painted over and invisible, which
+  // is what happened when they were drawn first and the footer — drawn
+  // last — covered whatever had spilled into its space.
+  const sigW = 42, sigH = 11, sigX = FX + 74;
+  const sigBandY = Math.min(cursorY + 2, CONTENT_BOTTOM - sigH - 7);
+  const sigLineY = sigBandY + sigH;
+  if (canDraw(signaturePath)) {
+    // align/valign so a signature image whose own aspect ratio isn't
+    // exactly sigW:sigH sits centered over the underline below it, not
+    // flush against its left edge (pdfkit's default for `fit`).
+    try { doc.image(signaturePath, sigX, sigBandY, { width: sigW, height: sigH, fit: [sigW, sigH], align: 'center', valign: 'bottom' }); } catch (e) {}
+  }
+  doc.font('Helvetica').fontSize(4.2).fillColor(GREY)
+    .text(safe(school.idcard_signature_label, 'Principal'), sigX, sigLineY + 1, { width: sigW, align: 'center', lineBreak: false });
+
+  // QR code — now equal-sized to the logo and no longer needs to overlap
+  // a Student UID strip (removed above), so it sits cleanly in the panel.
+  const QR_SZ = 32, QR_X = RIGHT_X + (W - RIGHT_X - QR_SZ) / 2, QR_Y = 92;
+  doc.save().roundedRect(QR_X - 3, QR_Y - 3, QR_SZ + 6, QR_SZ + 6, 2).fillColor(WHITE).fill().restore();
+  if (qrBuffer) {
+    try { doc.image(qrBuffer, QR_X, QR_Y, { width: QR_SZ, height: QR_SZ }); } catch (e) {}
+  }
 
   // Single clean border line (the old two-tone gray+gold frame is gone,
   // per explicit request to remove the yellow border) - color follows the
@@ -619,18 +642,35 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   // shared column — same reasoning as the horizontal layout. Same Student
   // Name wrap-then-shrink treatment too.
   const FX = 12;
-  const ROW_H = 9;
   const rowY0 = PH_Y + PH_H + 8;
 
-  doc.font('Helvetica').fontSize(6.4);
+  // Same reasoning as the horizontal layout: row height used to be a fixed
+  // 9pt regardless of row count, which let 7 rows (an opt-in Address row
+  // included) run past the space actually available before the QR/signature
+  // band and footer — those are drawn after the fields but the footer,
+  // drawn last of all, painted over whatever had spilled into its space.
+  // Row height now shrinks to fit the real row count within what's left
+  // after reserving room for the QR/signature band, with a readable floor.
+  const restFieldsCountV = (() => {
+    let n = 1; // Student Name
+    if (school.id_card_show_address && student.address) n += 1;
+    return n + 5; // GR No., DOB, Father's Mobile, Father's Name, Standard
+  })();
+  const SIG_RESERVE_V = 26;
+  const availableForRowsV = CONTENT_BOTTOM - rowY0 - SIG_RESERVE_V;
+  const ROW_H = Math.max(6.5, Math.min(9, availableForRowsV / restFieldsCountV));
+  const FIELD_FONT_V = Math.max(5.2, Math.min(6.4, ROW_H - 2.2));
+  const FIELD_MIN_V = Math.max(4.4, FIELD_FONT_V - 1.6);
+
+  doc.font('Helvetica').fontSize(FIELD_FONT_V);
   const studentNameLabelV = 'Student Name:';
   const studentNameValueXV = FX + doc.widthOfString(studentNameLabelV) + 3;
 
   const nameValueV = safe(student.full_name, '—');
-  const { lines: studentNameLinesV, fontSize: studentNameSizeV } = splitSchoolName(doc, nameValueV, W - studentNameValueXV - 10, 'Helvetica-Bold', 6.4, 4.8, 2);
+  const { lines: studentNameLinesV, fontSize: studentNameSizeV } = splitSchoolName(doc, nameValueV, W - studentNameValueXV - 10, 'Helvetica-Bold', FIELD_FONT_V, FIELD_MIN_V, 2);
   const studentNamePitchV = studentNameSizeV + 1.2;
 
-  doc.font('Helvetica').fontSize(6.4).fillColor(GREY)
+  doc.font('Helvetica').fontSize(FIELD_FONT_V).fillColor(GREY)
     .text(studentNameLabelV, FX, rowY0, { lineBreak: false });
   studentNameLinesV.forEach((line, i) => {
     doc.font('Helvetica-Bold').fontSize(studentNameSizeV).fillColor(TEXT)
@@ -652,12 +692,12 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   let cursorYV = rowY0 + Math.max(ROW_H, studentNameLinesV.length * studentNamePitchV);
   restFieldsV.forEach(([label, value, wrap]) => {
     const labelTextV = `${label}:`;
-    doc.font('Helvetica').fontSize(6.4);
+    doc.font('Helvetica').fontSize(FIELD_FONT_V);
     const valueXV = FX + doc.widthOfString(labelTextV) + 3;
     const availWidthV = W - valueXV - 10;
     doc.fillColor(GREY).text(labelTextV, FX, cursorYV, { lineBreak: false });
     if (wrap) {
-      const { lines, fontSize: valueSize } = splitSchoolName(doc, value || '—', availWidthV, 'Helvetica-Bold', 6.4, 4.8, 2);
+      const { lines, fontSize: valueSize } = splitSchoolName(doc, value || '—', availWidthV, 'Helvetica-Bold', FIELD_FONT_V, FIELD_MIN_V, 2);
       const pitch = valueSize + 1.2;
       lines.forEach((line, i) => {
         doc.font('Helvetica-Bold').fontSize(valueSize).fillColor(TEXT)
@@ -665,37 +705,12 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
       });
       cursorYV += Math.max(ROW_H, lines.length * pitch);
     } else {
-      const { text: valueText, fontSize: valueSize } = fitValueShrink(doc, value || '—', availWidthV, 'Helvetica-Bold', 6.4, 4.8);
+      const { text: valueText, fontSize: valueSize } = fitValueShrink(doc, value || '—', availWidthV, 'Helvetica-Bold', FIELD_FONT_V, FIELD_MIN_V);
       doc.font('Helvetica-Bold').fontSize(valueSize).fillColor(TEXT)
         .text(valueText, valueXV, cursorYV, { width: availWidthV, lineBreak: false });
       cursorYV += ROW_H;
     }
   });
-
-  // ── QR (left) + Principal Signature (right) ────────────────────────────────
-  // QR moved down from the header (see above) to sit at the left instead of
-  // the top, and the signature moved from centered to the right, so neither
-  // ever collides with a long school name or with each other. (Address, when
-  // shown, is now just another row above, in restFieldsV.)
-  const bandY = cursorYV + 2;
-
-  const qrSz = Math.max(20, Math.min(32, CONTENT_BOTTOM - bandY - 2));
-  const qrX = FX, qrY = bandY;
-  if (qrBuffer) {
-    try { doc.image(qrBuffer, qrX, qrY, { width: qrSz, height: qrSz }); } catch (e) {}
-  }
-
-  const sigW = 46, sigH = 11;
-  const sigX = W - FX - sigW;
-  const sigY = bandY + Math.max(0, (qrSz - sigH) / 2);
-  const sigLineY = sigY + sigH;
-  if (canDraw(signaturePath)) {
-    // Same centering fix as the horizontal layout — otherwise a signature
-    // image narrower than sigW sits flush left instead of over the line.
-    try { doc.image(signaturePath, sigX, sigY, { width: sigW, height: sigH, fit: [sigW, sigH], align: 'center', valign: 'bottom' }); } catch (e) {}
-  }
-  doc.font('Helvetica').fontSize(4.8).fillColor(GREY)
-    .text(safe(school.idcard_signature_label, 'Principal'), sigX, sigLineY + 1, { width: sigW, align: 'center', lineBreak: false });
 
   // ── Feature strip ──────────────────────────────────────────────────────────
   // School's own address runs across the top of this band when set — the
@@ -738,6 +753,33 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
         .text(feature.caption2, x + 1, iconRowYV + 17, { width: featureW - 2, align: 'center', lineBreak: false });
     }
   });
+
+  // ── QR (left) + Principal Signature (right) ────────────────────────────────
+  // QR moved down from the header (see above) to sit at the left instead of
+  // the top, and the signature moved from centered to the right, so neither
+  // ever collides with a long school name or with each other. (Address, when
+  // shown, is now just another row above, in restFieldsV.) Drawn after the
+  // footer/feature strip, not before, so they always render on top of it —
+  // see the matching comment in drawFront for why that ordering matters.
+  const bandY = Math.min(cursorYV + 2, CONTENT_BOTTOM - 20 - 2);
+
+  const qrSz = Math.max(20, Math.min(32, CONTENT_BOTTOM - bandY - 2));
+  const qrX = FX, qrY = bandY;
+  if (qrBuffer) {
+    try { doc.image(qrBuffer, qrX, qrY, { width: qrSz, height: qrSz }); } catch (e) {}
+  }
+
+  const sigW = 46, sigH = 11;
+  const sigX = W - FX - sigW;
+  const sigY = bandY + Math.max(0, (qrSz - sigH) / 2);
+  const sigLineY = sigY + sigH;
+  if (canDraw(signaturePath)) {
+    // Same centering fix as the horizontal layout — otherwise a signature
+    // image narrower than sigW sits flush left instead of over the line.
+    try { doc.image(signaturePath, sigX, sigY, { width: sigW, height: sigH, fit: [sigW, sigH], align: 'center', valign: 'bottom' }); } catch (e) {}
+  }
+  doc.font('Helvetica').fontSize(4.8).fillColor(GREY)
+    .text(safe(school.idcard_signature_label, 'Principal'), sigX, sigLineY + 1, { width: sigW, align: 'center', lineBreak: false });
 
   doc.save().rect(1, CARD_TOP, W - 2, H - CARD_TOP - 1).lineWidth(1.2).strokeColor(borderColor || '#d1d5db').stroke().restore();
 }
