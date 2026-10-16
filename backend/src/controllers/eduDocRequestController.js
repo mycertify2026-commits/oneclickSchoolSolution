@@ -256,10 +256,16 @@ async function submitRequest(req, res) {
     try {
       await sendEduDocOtpEmail(req.user.email, req.user.name, otp, { itemCount: snapshotItems.length, cartTotal: total });
     } catch (emailError) {
-      // Never leave an OTP in the database that the user never received.
-      await pool.query('DELETE FROM otp_verifications WHERE id=?', [otpId]);
       console.error('submitRequest OTP delivery failed:', emailError.message);
-      return res.status(503).json({ error: 'OTP could not be sent to your email. Please try again later.', code: 'OTP_DELIVERY_UNAVAILABLE' });
+      if (process.env.NODE_ENV === 'production') {
+        // Never leave an OTP in the database that the user never received.
+        await pool.query('DELETE FROM otp_verifications WHERE id=?', [otpId]);
+        return res.status(503).json({ error: 'OTP could not be sent to your email. Please try again later.', code: 'OTP_DELIVERY_UNAVAILABLE' });
+      }
+      // Local/dev: email delivery is commonly unconfigured there, which
+      // would otherwise block testing this whole flow. Keep the OTP valid
+      // and print it to the server console instead of failing.
+      console.warn(`[DEV OTP] edu_doc_request for ${req.user.email}: ${otp}`);
     }
 
     res.json({ otpRequired: true, cartTotal: total, itemCount: snapshotItems.length, expiresInMinutes: OTP_EXPIRY_MIN, email: req.user.email });
@@ -288,7 +294,10 @@ async function resendOtp(req, res) {
       await sendEduDocOtpEmail(req.user.email, req.user.name, otp, { itemCount: snapshot.items.length, cartTotal: snapshot.total });
     } catch (emailError) {
       console.error('resendOtp delivery failed:', emailError.message);
-      return res.status(503).json({ error: 'OTP could not be sent. Please try again later.', code: 'OTP_DELIVERY_UNAVAILABLE' });
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(503).json({ error: 'OTP could not be sent. Please try again later.', code: 'OTP_DELIVERY_UNAVAILABLE' });
+      }
+      console.warn(`[DEV OTP] edu_doc_request resend for ${req.user.email}: ${otp}`);
     }
     await pool.query(
       'UPDATE otp_verifications SET otp_hash=?, attempts=0, created_at=NOW(), expires_at=? WHERE id=?',

@@ -252,13 +252,19 @@ exports.submitCart = async (req, res) => {
         cartTotal: roundedTotal,
       });
     } catch (emailError) {
-      // Do not leave an OTP in the database that the user never received.
-      await pool.query('DELETE FROM otp_verifications WHERE id=?', [otpId]);
       console.error('submitCart OTP delivery failed:', emailError.message);
-      return res.status(503).json({
-        message: 'OTP could not be sent to the school email. Please configure email delivery and try again.',
-        code: 'OTP_DELIVERY_UNAVAILABLE',
-      });
+      if (process.env.NODE_ENV === 'production') {
+        // Do not leave an OTP in the database that the user never received.
+        await pool.query('DELETE FROM otp_verifications WHERE id=?', [otpId]);
+        return res.status(503).json({
+          message: 'OTP could not be sent to the school email. Please configure email delivery and try again.',
+          code: 'OTP_DELIVERY_UNAVAILABLE',
+        });
+      }
+      // Local/dev: email delivery is commonly unconfigured there, which
+      // would otherwise block testing this whole flow. Keep the OTP valid
+      // and print it to the server console instead of failing.
+      console.warn(`[DEV OTP] cart_submission for ${school.email}: ${otp}`);
     }
 
     res.json({ otpRequired: true, cartTotal: roundedTotal, itemCount: items.length, otpId, expiresInMinutes: OTP_EXPIRY_MIN, schoolEmail: school.email });
@@ -299,10 +305,13 @@ exports.resendOtp = async (req, res) => {
       });
     } catch (emailError) {
       console.error('resendOtp delivery failed:', emailError.message);
-      return res.status(503).json({
-        message: 'OTP could not be sent to the school email. Please try again after email delivery is configured.',
-        code: 'OTP_DELIVERY_UNAVAILABLE',
-      });
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(503).json({
+          message: 'OTP could not be sent to the school email. Please try again after email delivery is configured.',
+          code: 'OTP_DELIVERY_UNAVAILABLE',
+        });
+      }
+      console.warn(`[DEV OTP] cart_submission resend for ${school.email}: ${otp}`);
     }
     await pool.query(
       'UPDATE otp_verifications SET otp_hash=?, attempts=0, created_at=NOW(), expires_at=? WHERE id=?',
@@ -348,6 +357,19 @@ exports.verifyOtp = async (req, res) => {
     const snapshot = typeof record.cart_snapshot === 'string' ? JSON.parse(record.cart_snapshot) : record.cart_snapshot;
 
     await conn.beginTransaction();
+
+    // Atomically claim this OTP inside the same transaction as the wallet
+    // debit — previously `used=1` was only set in a separate query after
+    // commit, leaving a window where two concurrent verify requests for
+    // the same OTP (double-click, retry) could both pass the used=0 check
+    // above and each debit the wallet once, double-charging the school.
+    const [claim] = await conn.query('UPDATE otp_verifications SET used=1 WHERE id=? AND used=0', [record.id]);
+    if (claim.affectedRows !== 1) {
+      await conn.rollback();
+      releaseOnce();
+      return res.status(400).json({ message: 'This OTP has already been used. Please submit your cart again.' });
+    }
+
     const [walletRows] = await conn.query('SELECT * FROM wallets WHERE school_id=? FOR UPDATE', [school.id]);
     const wallet = walletRows[0];
     if (parseFloat(wallet.balance) < parseFloat(snapshot.total)) {
@@ -370,8 +392,6 @@ exports.verifyOtp = async (req, res) => {
     );
     await conn.commit();
     releaseOnce();
-
-    await pool.query('UPDATE otp_verifications SET used=1 WHERE id=?', [record.id]);
 
     const [generatedByRows] = await pool.query('SELECT name, email FROM users WHERE id=?', [req.user.id]);
     const generatedByName = generatedByRows[0]?.name || 'School Admin';
