@@ -488,8 +488,11 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
 
   // Single clean border line (the old two-tone gray+gold frame is gone,
   // per explicit request to remove the yellow border) - color follows the
-  // School Admin's choice, defaulting to a neutral gray.
-  doc.save().rect(1, CARD_TOP, W - 2, H - CARD_TOP - 1).lineWidth(1.2).strokeColor(borderColor || '#d1d5db').stroke().restore();
+  // School Admin's choice, defaulting to a neutral gray. Starts near the
+  // physical top edge (not CARD_TOP) — the logo and school name both start
+  // above CARD_TOP now that the logo is bigger, and a border starting at
+  // CARD_TOP cut straight through the top of both.
+  doc.save().rect(1, 2, W - 2, H - 3).lineWidth(1.2).strokeColor(borderColor || '#d1d5db').stroke().restore();
 }
 
 // ── FRONT — VERTICAL (portrait) ─────────────────────────────────────────────
