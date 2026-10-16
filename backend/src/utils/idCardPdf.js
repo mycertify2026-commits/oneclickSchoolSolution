@@ -253,11 +253,14 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   // amount only when set, so a school that never uses it sees no layout
   // change at all.
   const nameX = logoX + logoSize + 8, nameW = RIGHT_X - 5 - nameX;
+  // Shared by the Sanstha line, school name, and subtitle below, so the
+  // whole header block reads as one consistently-aligned unit.
+  const nameAlign = parseNameAlign(school.id_card_school_name_align);
   const idSanshaOffset = school.sanstha_name ? 7 : 0;
   if (school.sanstha_name) {
     const sanstha = fitSingleLine(doc, safe(school.sanstha_name).toUpperCase(), nameW, 'Helvetica-Bold', 5);
     doc.font('Helvetica-Bold').fontSize(5).fillColor(GREY)
-      .text(sanstha, nameX, 10, { width: nameW, lineBreak: false });
+      .text(sanstha, nameX, 10, { width: nameW, align: nameAlign, lineBreak: false });
   }
   const schoolName = safe(school.id_card_school_name || school.name, 'School name');
   // School Admin can pin a starting font size (School Settings > ID Card
@@ -275,7 +278,6 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   const { lines: schoolNameLines, fontSize: schoolNameSize } = manualNameLines.length > 1
     ? fitFixedLines(doc, manualNameLines, nameW, 'Helvetica-Bold', startNameSize, 4.6)
     : splitSchoolName(doc, schoolName.toUpperCase(), nameW, 'Helvetica-Bold', startNameSize, 4.6);
-  const nameAlign = parseNameAlign(school.id_card_school_name_align);
   schoolNameLines.forEach((line, index) => {
     doc.font('Helvetica-Bold').fontSize(schoolNameSize).fillColor(headerColor)
       .text(line, nameX, 10 + idSanshaOffset + index * schoolNameSize, { width: nameW, align: nameAlign, lineBreak: false });
@@ -294,16 +296,29 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   if (subtitleValue) {
     // Plain two-tone caption (grey label, bold dark value) rather than a
     // badge — matches the school's reference design, which shows this as
-    // ordinary text, not a pill.
+    // ordinary text, not a pill. Follows the same Left/Center/Right choice
+    // as the school name above it, so the whole header reads as one
+    // consistently-aligned block instead of the name moving but the
+    // subtitle staying pinned to the left.
     const [subLabel, subValRaw] = subtitleValue.includes(':')
       ? [subtitleValue.slice(0, subtitleValue.indexOf(':') + 1), subtitleValue.slice(subtitleValue.indexOf(':') + 1).trim()]
       : [subtitleValue, ''];
-    doc.font('Helvetica').fontSize(5.2).fillColor(GREY).text(subLabel, nameX, afterNameY, { width: nameW, lineBreak: false });
+    doc.font('Helvetica').fontSize(5.2);
+    const labelW = doc.widthOfString(subLabel + ' ');
+    let subVal = '', valW = 0;
     if (subValRaw) {
-      const labelW = doc.widthOfString(subLabel + ' ');
-      const subVal = fitSingleLine(doc, subValRaw, Math.max(10, nameW - labelW), 'Helvetica-Bold', 5.2);
+      subVal = fitSingleLine(doc, subValRaw, Math.max(10, nameW - labelW), 'Helvetica-Bold', 5.2);
+      doc.font('Helvetica-Bold').fontSize(5.2);
+      valW = doc.widthOfString(subVal);
+    }
+    const groupW = Math.min(nameW, labelW + valW);
+    const startX = nameAlign === 'center' ? nameX + (nameW - groupW) / 2
+      : nameAlign === 'right' ? nameX + nameW - groupW
+      : nameX;
+    doc.font('Helvetica').fontSize(5.2).fillColor(GREY).text(subLabel, startX, afterNameY, { width: labelW, lineBreak: false });
+    if (subVal) {
       doc.font('Helvetica-Bold').fontSize(5.2).fillColor(TEXT)
-        .text(subVal, nameX + labelW, afterNameY, { width: nameW - labelW, lineBreak: false });
+        .text(subVal, startX + labelW, afterNameY, { width: valW + 1, lineBreak: false });
     }
   }
   // School address lives in the card's footer now (see featureY below),
@@ -574,14 +589,23 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
     const [subLabelV, subValRawV] = subtitleValue.includes(':')
       ? [subtitleValue.slice(0, subtitleValue.indexOf(':') + 1), subtitleValue.slice(subtitleValue.indexOf(':') + 1).trim()]
       : [subtitleValue, ''];
-    doc.font('Helvetica').fontSize(5.4).fillColor(WHITE).fillOpacity(0.78)
-      .text(subLabelV, nameX, afterVertNameY, { width: nameW, lineBreak: false });
+    doc.font('Helvetica').fontSize(5.4);
+    const labelWV = doc.widthOfString(subLabelV + ' ');
+    let subValV = '', valWV = 0;
     if (subValRawV) {
-      doc.font('Helvetica').fontSize(5.4);
-      const labelWV = doc.widthOfString(subLabelV + ' ');
-      const subValV = fitSingleLine(doc, subValRawV, Math.max(10, nameW - labelWV), 'Helvetica-Bold', 5.4);
+      subValV = fitSingleLine(doc, subValRawV, Math.max(10, nameW - labelWV), 'Helvetica-Bold', 5.4);
+      doc.font('Helvetica-Bold').fontSize(5.4);
+      valWV = doc.widthOfString(subValV);
+    }
+    const groupWV = Math.min(nameW, labelWV + valWV);
+    const startXV = nameAlignV === 'center' ? nameX + (nameW - groupWV) / 2
+      : nameAlignV === 'right' ? nameX + nameW - groupWV
+      : nameX;
+    doc.font('Helvetica').fontSize(5.4).fillColor(WHITE).fillOpacity(0.78)
+      .text(subLabelV, startXV, afterVertNameY, { width: labelWV, lineBreak: false });
+    if (subValV) {
       doc.font('Helvetica-Bold').fontSize(5.4).fillColor(WHITE).fillOpacity(1)
-        .text(subValV, nameX + labelWV, afterVertNameY, { width: nameW - labelWV, lineBreak: false });
+        .text(subValV, startXV + labelWV, afterVertNameY, { width: valWV + 1, lineBreak: false });
     }
     doc.fillOpacity(1);
   }
