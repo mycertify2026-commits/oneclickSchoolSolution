@@ -403,9 +403,9 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
 
   const restFields = [
     ['GR No.', safe(student.gr_number || student.register_number), false],
+    ['Roll No.', safe(student.roll_number), false],
     ['Date of Birth', fmtDate(student.dob), false],
     ["Father's Mobile", safe(student.parent_mobile), false],
-    ['Roll No.', safe(student.roll_number), false],
     ['Standard', formatStandardLabel(student.current_standard || student.admission_standard), false],
   ];
   // Student's own address (opt-in per school) renders as just another
@@ -629,9 +629,9 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
 
   const restFieldsV = [
     ['GR No.', safe(student.gr_number || student.register_number), false],
+    ['Roll No.', safe(student.roll_number), false],
     ['Date of Birth', fmtDate(student.dob), false],
     ["Father's Mobile", safe(student.parent_mobile), false],
-    ['Roll No.', safe(student.roll_number), false],
     ['Standard', formatStandardLabel(student.current_standard || student.admission_standard), false],
   ];
   if (school.id_card_show_address && student.address) {
