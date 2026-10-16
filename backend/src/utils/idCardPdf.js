@@ -182,7 +182,7 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   // a few mm on every side — the footer used to sit flush against H with
   // zero margin, so it was the first thing lost. Nothing renders within
   // PRINT_MARGIN of the top or bottom edge now.
-  const PRINT_MARGIN = 20;
+  const PRINT_MARGIN = 5;
   const CARD_TOP = PRINT_MARGIN;
   const RIGHT_X = 188;
   // No separate Student UID strip — that band was removed (it duplicated the
@@ -291,9 +291,25 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   // Admin-entered explicit line breaks (the 3-line Designer inputs, joined
   // with "\n") render exactly as given instead of being re-wrapped.
   const manualNameLines = schoolName.split('\n').map((l) => l.trim().toUpperCase()).filter(Boolean).slice(0, 3);
-  const { lines: schoolNameLines, fontSize: schoolNameSize } = manualNameLines.length > 1
-    ? fitFixedLines(doc, manualNameLines, nameW, 'Helvetica-Bold', startNameSize, 4.6)
-    : splitSchoolName(doc, schoolName.toUpperCase(), nameW, 'Helvetica-Bold', startNameSize, 4.6);
+  // splitSchoolName/fitFixedLines only fit to WIDTH — with the font size
+  // range now going up to 18pt, a 2-3 line name at a large chosen size
+  // could grow tall enough to run past the divider into the photo/title
+  // band area below, even though it fit the width fine. (Duplicated here
+  // as CARD_TOP + 45 since dividerY itself isn't computed until further
+  // down.) Re-fit at a smaller starting size, as many times as it takes,
+  // until the block actually fits the vertical space available too — this
+  // is also why a chosen font size can render smaller than requested: it's
+  // being shrunk to avoid overlapping what's below it, not ignored.
+  const maxNameBlockH = (CARD_TOP + 45) - nameStartY - idSanshaOffset - 8;
+  let tryNameSize = startNameSize;
+  let schoolNameLines, schoolNameSize;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    ({ lines: schoolNameLines, fontSize: schoolNameSize } = manualNameLines.length > 1
+      ? fitFixedLines(doc, manualNameLines, nameW, 'Helvetica-Bold', tryNameSize, 4.6)
+      : splitSchoolName(doc, schoolName.toUpperCase(), nameW, 'Helvetica-Bold', tryNameSize, 4.6));
+    if (schoolNameLines.length * schoolNameSize <= maxNameBlockH || tryNameSize <= 4.6) break;
+    tryNameSize = Math.max(4.6, tryNameSize - 1);
+  }
   schoolNameLines.forEach((line, index) => {
     doc.font('Helvetica-Bold').fontSize(schoolNameSize).fillColor(headerColor)
       .text(line, nameX, nameStartY + idSanshaOffset + index * schoolNameSize, { width: nameW, align: nameAlign, lineBreak: false });
@@ -342,13 +358,12 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   // way; Father's Mobile below is a different field (the student's own
   // contact, not the school's).
 
-  // Separator between the school-identity block above and the student
-  // information block below — both sit on the plain white left side with
-  // no other visual boundary between them. Moved up from the photo's edge
-  // (was 1.5pt below it, reading as glued-on) so there's real padding on
-  // both sides of the line instead of nearly all of it stacked above it.
+  // No drawn separator line here any more — the "STUDENT ID CARD" title
+  // band directly below already reads as a clear boundary between the
+  // school-identity block above and the student info below, so a plain
+  // grey line on top of it was redundant clutter. dividerY is kept purely
+  // as a layout reference point for positioning the band and photo.
   const dividerY = CARD_TOP + 45;
-  doc.save().moveTo(13, dividerY).lineTo(160, dividerY).lineWidth(0.6).strokeColor('#d0d5dd').stroke().restore();
 
   // Student photo — slightly smaller than the original reference to make
   // room for a real Principal Signature image lower on the card.
@@ -549,7 +564,7 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   // Print-safe margin — see the matching comment in drawFront. Nothing
   // renders within PRINT_MARGIN of the top or bottom edge, so a plain
   // printer's unprintable edge border never clips the header or footer.
-  const PRINT_MARGIN = 20;
+  const PRINT_MARGIN = 5;
   const CONTENT_BOTTOM = H - PRINT_MARGIN - FTR_H;
   const CARD_TOP = PRINT_MARGIN;
   const HDR_H = 50;
@@ -596,10 +611,21 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   // Admin-entered explicit line breaks render exactly as given — see the
   // matching comment in drawFront.
   const manualNameLinesV = schoolName.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 3);
-  const { lines: nameLines, fontSize: nameSize } = manualNameLinesV.length > 1
-    ? fitFixedLines(doc, manualNameLinesV, nameW, 'Helvetica-Bold', startVertNameSize, 4.6)
-    : splitSchoolName(doc, schoolName, nameW, 'Helvetica-Bold', startVertNameSize, 4.6);
-  const namePitch = nameSize * (8.4 / 7.2);
+  // Same height safeguard as the horizontal layout — see the matching
+  // comment there. The header band here is a fixed HDR_H, so an oversized
+  // multi-line name would overflow the colored band into the white area
+  // below it instead of just running wide.
+  const maxNameBlockHV = HDR_H - 10 - 8;
+  let tryVertNameSize = startVertNameSize;
+  let nameLines, nameSize, namePitch;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    ({ lines: nameLines, fontSize: nameSize } = manualNameLinesV.length > 1
+      ? fitFixedLines(doc, manualNameLinesV, nameW, 'Helvetica-Bold', tryVertNameSize, 4.6)
+      : splitSchoolName(doc, schoolName, nameW, 'Helvetica-Bold', tryVertNameSize, 4.6));
+    namePitch = nameSize * (8.4 / 7.2);
+    if (nameLines.length * namePitch <= maxNameBlockHV || tryVertNameSize <= 4.6) break;
+    tryVertNameSize = Math.max(4.6, tryVertNameSize - 1);
+  }
   // Left-aligned next to the logo by default (not centered under it, per
   // the school's reference design) — School Admin can change this to
   // center/right in School Settings.
@@ -641,11 +667,9 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
     doc.fillOpacity(1);
   }
 
-  // Separator between the school-identity header band and the student
-  // information below it — the header already has its own fill color, but
-  // a thin line in the white gap makes the boundary explicit too.
+  // No drawn separator line here any more — see the matching comment in
+  // drawFront. dividerYV is kept purely as a layout reference point.
   const dividerYV = CARD_TOP + HDR_H + 5;
-  doc.save().moveTo(10, dividerYV).lineTo(W - 10, dividerYV).lineWidth(0.6).strokeColor('#d0d5dd').stroke().restore();
 
   // ── Student photo, centered ───────────────────────────────────────────────
   // Slightly smaller than the original reference to make room for a real
@@ -789,10 +813,17 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
 // a stray line of text.
 function drawPhotoTitleBand(doc, x, y, w, h, color) {
   doc.save().roundedRect(x, y, w, h, 1.5).fillColor(color).fill().restore();
-  // Shrinks the font to fit the band's actual width before ever truncating
-  // — a fixed starting size based only on the band's height let "STUDENT ID
-  // CARD" overflow a narrow photo column and get cut to "STUDENT ID C...".
-  const { text, fontSize } = fitValueShrink(doc, 'STUDENT ID CARD', w - 2, 'Helvetica-Bold', Math.min(h - 2.5, 5.5), 3.2);
+  // 3pt padding left/right so the text has real breathing room instead of
+  // sitting flush against the band's edges — the band itself is only
+  // ~8pt tall, with no room to spare for matching top/bottom padding
+  // without shrinking the text to the point of illegibility, so padding
+  // is horizontal only here.
+  const PAD = 3;
+  // Shrinks the font to fit the band's actual (padded) width before ever
+  // truncating — a fixed starting size based only on the band's height let
+  // "STUDENT ID CARD" overflow a narrow photo column and get cut to
+  // "STUDENT ID C...".
+  const { text, fontSize } = fitValueShrink(doc, 'STUDENT ID CARD', w - PAD * 2, 'Helvetica-Bold', Math.min(h - 2.5, 5.5), 3.2);
   doc.font('Helvetica-Bold').fontSize(fontSize).fillColor(WHITE)
     .text(text, x, y + (h - fontSize) / 2 - 0.2, { width: w, align: 'center', lineBreak: false });
 }
