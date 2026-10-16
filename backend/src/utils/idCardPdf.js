@@ -369,10 +369,31 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   doc.font('Helvetica').fontSize(5.6);
   const studentNameLabel = 'Student Name:';
   const studentNameValueX = FX + doc.widthOfString(studentNameLabel) + LABEL_GAP;
-  const nameFieldWidth = Math.min(RIGHT_X - studentNameValueX - 3, panelLeftEdgeAt(80) - studentNameValueX - 3);
+  // A short 2-3 word name (e.g. "Sample Student Name") was wrapping to an
+  // awkward 2 lines even though it would comfortably fit on one — the
+  // multi-line width has to assume the panel's narrowest point (worst case,
+  // a name that genuinely needs 3-4 lines), but the first line itself sits
+  // much higher, where the panel's diagonal edge is still wide open. Try a
+  // one-line fit against that wider, first-line-specific width before ever
+  // falling back to the conservative multi-line width.
+  const line1Width = panelLeftEdgeAt(65) - studentNameValueX - 3;
+  const conservativeWidth = Math.min(RIGHT_X - studentNameValueX - 3, panelLeftEdgeAt(80) - studentNameValueX - 3);
 
   const nameValue = safe(student.full_name, '—');
-  const { lines: studentNameLines, fontSize: studentNameSize } = splitSchoolName(doc, nameValue, nameFieldWidth, 'Helvetica-Bold', 5.6, 4.2, 4);
+  doc.font('Helvetica-Bold');
+  let oneLineSize = null;
+  for (let s = 5.6; s >= 4.2; s -= 0.5) {
+    if (doc.fontSize(s).widthOfString(nameValue) <= line1Width) { oneLineSize = s; break; }
+  }
+  let studentNameLines, studentNameSize, nameFieldWidth;
+  if (oneLineSize !== null) {
+    studentNameLines = [nameValue];
+    studentNameSize = oneLineSize;
+    nameFieldWidth = line1Width;
+  } else {
+    ({ lines: studentNameLines, fontSize: studentNameSize } = splitSchoolName(doc, nameValue, conservativeWidth, 'Helvetica-Bold', 5.6, 4.2, 4));
+    nameFieldWidth = conservativeWidth;
+  }
   const studentNamePitch = studentNameSize + 1.2;
 
   doc.font('Helvetica').fontSize(5.6).fillColor(GREY)
