@@ -537,13 +537,18 @@ async function migrate() {
     console.log('  + schools.id_card_school_name_align ensured');
   });
 
+  await step(28, 'schools — ID card "Student ID Card" photo-title band background color', async () => {
+    await client.query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS id_card_photo_title_color VARCHAR(20)`);
+    console.log('  + schools.id_card_photo_title_color ensured');
+  });
+
   await client.end();
 
   if (failures > 0) {
     console.error(`\nPostgreSQL catch-up migration finished with ${failures} failed section(s) — see ✗ lines above. Every other section still applied.`);
     process.exitCode = 1;
   } else {
-    console.log('\nPostgreSQL catch-up migration completed successfully — all 27 sections applied.');
+    console.log('\nPostgreSQL catch-up migration completed successfully — all 28 sections applied.');
   }
 }
 

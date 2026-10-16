@@ -177,20 +177,35 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   // (so nothing to show here) gets no footer band at all.
   const schoolAddressRowH = buildSchoolAddress(school) ? 11 : 0;
   const FTR_H = schoolAddressRowH;
-  const CARD_TOP = 12;
+  // Print-safe margin: a plain card printer (not dedicated card-stock
+  // hardware) commonly can't print all the way to the paper edge, clipping
+  // a few mm on every side — the footer used to sit flush against H with
+  // zero margin, so it was the first thing lost. Nothing renders within
+  // PRINT_MARGIN of the top or bottom edge now.
+  const PRINT_MARGIN = 20;
+  const CARD_TOP = PRINT_MARGIN;
   const RIGHT_X = 188;
   // No separate Student UID strip — that band was removed (it duplicated the
   // GR No. field and left no room for a real signature/address), so the
   // panel and content area now run all the way down to the feature strip.
-  const CONTENT_BOTTOM = H - FTR_H;
+  const CONTENT_BOTTOM = H - PRINT_MARGIN - FTR_H;
 
   doc.rect(0, 0, W, H).fillColor(WHITE).fill();
 
   if (watermarkBuf && watermarkOpacity > 0) {
     try {
+      // Constrained to the fields column (right of the photo, left of the
+      // panel) instead of centered over the whole card — it used to be
+      // centered across the full content area, which put most of its
+      // footprint directly behind the opaque photo box, hiding it almost
+      // entirely. The field text has real gaps, so it stays visible there.
+      // FX/ROWS_TOP are duplicated as literals here (declared properly
+      // further down, once the fields layout is computed) since this draws
+      // before that point.
+      const wmX0 = 68, wmX1 = RIGHT_X - 3, wmY0 = 63, wmY1 = CONTENT_BOTTOM;
       doc.save().opacity(watermarkOpacity);
-      const wmSize = Math.min(W, CONTENT_BOTTOM - CARD_TOP) * 0.9;
-      doc.image(watermarkBuf, (W - wmSize) / 2, CARD_TOP + (CONTENT_BOTTOM - CARD_TOP - wmSize) / 2, { width: wmSize, height: wmSize, fit: [wmSize, wmSize] });
+      const wmSize = Math.min(wmX1 - wmX0, wmY1 - wmY0) * 0.95;
+      doc.image(watermarkBuf, wmX0 + (wmX1 - wmX0 - wmSize) / 2, wmY0 + (wmY1 - wmY0 - wmSize) / 2, { width: wmSize, height: wmSize, fit: [wmSize, wmSize] });
       doc.restore();
     } catch (e) {}
   }
@@ -246,13 +261,14 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   // School logo — large and prominent (per the school's reference design),
   // deliberately bigger than the QR code rather than matched to it, as a
   // plain circular-clipped image with no added ring/border.
-  const logoX = 13, logoY = 8, logoSize = 40;
+  const logoX = 13, logoY = CARD_TOP, logoSize = 40;
   drawCircularLogo(doc, logoPath, logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2);
   // Sanstha name (optional, School Settings > Certificate Header) is a tiny
   // line above the school name — shifts everything below it down by a fixed
   // amount only when set, so a school that never uses it sees no layout
   // change at all.
   const nameX = logoX + logoSize + 8, nameW = RIGHT_X - 5 - nameX;
+  const nameStartY = CARD_TOP + 2;
   // Shared by the Sanstha line, school name, and subtitle below, so the
   // whole header block reads as one consistently-aligned unit.
   const nameAlign = parseNameAlign(school.id_card_school_name_align);
@@ -260,7 +276,7 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   if (school.sanstha_name) {
     const sanstha = fitSingleLine(doc, safe(school.sanstha_name).toUpperCase(), nameW, 'Helvetica-Bold', 5);
     doc.font('Helvetica-Bold').fontSize(5).fillColor(GREY)
-      .text(sanstha, nameX, 10, { width: nameW, align: nameAlign, lineBreak: false });
+      .text(sanstha, nameX, nameStartY, { width: nameW, align: nameAlign, lineBreak: false });
   }
   const schoolName = safe(school.id_card_school_name || school.name, 'School name');
   // School Admin can pin a starting font size (School Settings > ID Card
@@ -280,14 +296,14 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
     : splitSchoolName(doc, schoolName.toUpperCase(), nameW, 'Helvetica-Bold', startNameSize, 4.6);
   schoolNameLines.forEach((line, index) => {
     doc.font('Helvetica-Bold').fontSize(schoolNameSize).fillColor(headerColor)
-      .text(line, nameX, 10 + idSanshaOffset + index * schoolNameSize, { width: nameW, align: nameAlign, lineBreak: false });
+      .text(line, nameX, nameStartY + idSanshaOffset + index * schoolNameSize, { width: nameW, align: nameAlign, lineBreak: false });
   });
 
   // Subtitle and the new school-address line are positioned relative to
   // where the (possibly 1- or 2-line) name actually ended, not a hardcoded
   // offset — a long 2-line name used to risk running into a subtitle fixed
   // at y=39, which is exactly the "name looks cut off" symptom being fixed.
-  let afterNameY = 10 + idSanshaOffset + schoolNameLines.length * schoolNameSize + 2;
+  let afterNameY = nameStartY + idSanshaOffset + schoolNameLines.length * schoolNameSize + 2;
   const defaultSubtitle = school.recog_no ? `CBSE Affiliation No.: ${school.recog_no}` : '';
   const configuredSubtitle = safe(school.id_card_subtitle);
   const subtitleValue = !configuredSubtitle || configuredSubtitle === 'Student ID Card'
@@ -331,11 +347,13 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   // no other visual boundary between them. Moved up from the photo's edge
   // (was 1.5pt below it, reading as glued-on) so there's real padding on
   // both sides of the line instead of nearly all of it stacked above it.
-  doc.save().moveTo(13, 53).lineTo(160, 53).lineWidth(0.6).strokeColor('#d0d5dd').stroke().restore();
+  const dividerY = CARD_TOP + 45;
+  doc.save().moveTo(13, dividerY).lineTo(160, dividerY).lineWidth(0.6).strokeColor('#d0d5dd').stroke().restore();
 
   // Student photo — slightly smaller than the original reference to make
   // room for a real Principal Signature image lower on the card.
-  const PH_X = 16, PH_Y = 62, PH_W = 44, PH_H = 54;
+  const PH_X = 16, PH_Y = CARD_TOP + 56, PH_W = 44, PH_H = 54;
+  drawPhotoTitleBand(doc, PH_X, dividerY + 2, PH_W, PH_Y - dividerY - 3, parseColor(school.id_card_photo_title_color, headerColor));
   doc.save().roundedRect(PH_X, PH_Y, PH_W, PH_H, 2)
     .lineWidth(0.8).strokeColor(headerColor).stroke().restore();
   if (canDraw(photoPath)) {
@@ -357,7 +375,7 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   // same "..." truncation. Every other value shrinks to fit one line
   // before ever truncating (fitValueShrink).
   const FX = 68, LABEL_GAP = 3;
-  const ROWS_TOP = 65;
+  const ROWS_TOP = CARD_TOP + 59;
 
   // Row height used to be a fixed 9pt regardless of how many fields were
   // shown, which let 7 rows (GR No./DOB/Mobile/Roll No./Standard plus an
@@ -388,7 +406,7 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
 
   const FIELD_MIN = Math.max(4.0, FIELD_FONT - 1.4);
 
-  doc.font('Helvetica').fontSize(FIELD_FONT);
+  doc.font('Helvetica-Bold').fontSize(FIELD_FONT);
   const studentNameLabel = 'Student Name:';
   const studentNameValueX = FX + doc.widthOfString(studentNameLabel) + LABEL_GAP;
   // A short 2-3 word name (e.g. "Sample Student Name") was wrapping to an
@@ -418,7 +436,7 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   }
   const studentNamePitch = studentNameSize + 1.2;
 
-  doc.font('Helvetica').fontSize(FIELD_FONT).fillColor(GREY)
+  doc.font('Helvetica-Bold').fontSize(FIELD_FONT).fillColor(GREY)
     .text(studentNameLabel, FX, ROWS_TOP, { lineBreak: false });
   studentNameLines.forEach((line, i) => {
     doc.font('Helvetica-Bold').fontSize(studentNameSize).fillColor(TEXT)
@@ -441,7 +459,8 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   let cursorY = ROWS_TOP + Math.max(ROW_H, studentNameLines.length * studentNamePitch);
   restFields.forEach(([label, value, wrap]) => {
     const labelText = `${label}:`;
-    doc.font('Helvetica').fontSize(FIELD_FONT);
+    const labelFont = (label === 'GR No.' || label === 'Roll No.') ? 'Helvetica-Bold' : 'Helvetica';
+    doc.font(labelFont).fontSize(FIELD_FONT);
     const valueX = FX + doc.widthOfString(labelText) + LABEL_GAP;
     const availWidth = RIGHT_X - valueX - 3;
     doc.fillColor(GREY).text(labelText, FX, cursorY, { lineBreak: false });
@@ -514,7 +533,7 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   // physical top edge (not CARD_TOP) — the logo and school name both start
   // above CARD_TOP now that the logo is bigger, and a border starting at
   // CARD_TOP cut straight through the top of both.
-  doc.save().rect(1, 2, W - 2, H - 3).lineWidth(1.2).strokeColor(borderColor || '#d1d5db').stroke().restore();
+  doc.save().rect(1, PRINT_MARGIN, W - 2, H - PRINT_MARGIN * 2 - 1).lineWidth(1.2).strokeColor(borderColor || '#d1d5db').stroke().restore();
 }
 
 // ── FRONT — VERTICAL (portrait) ─────────────────────────────────────────────
@@ -527,17 +546,29 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   // was dropped entirely, see the matching comment in drawFront.
   const schoolAddressRowH = buildSchoolAddress(school) ? 11 : 0;
   const FTR_H = schoolAddressRowH;
-  const CONTENT_BOTTOM = H - FTR_H;
-  const CARD_TOP = 8;
+  // Print-safe margin — see the matching comment in drawFront. Nothing
+  // renders within PRINT_MARGIN of the top or bottom edge, so a plain
+  // printer's unprintable edge border never clips the header or footer.
+  const PRINT_MARGIN = 20;
+  const CONTENT_BOTTOM = H - PRINT_MARGIN - FTR_H;
+  const CARD_TOP = PRINT_MARGIN;
   const HDR_H = 50;
 
   doc.rect(0, 0, W, H).fillColor(WHITE).fill();
 
   if (watermarkBuf && watermarkOpacity > 0) {
     try {
+      // Constrained to the area below the photo (where the field rows sit)
+      // instead of centered over the whole body — it used to be centered
+      // across the full post-header area, which put most of its footprint
+      // directly behind the opaque photo box, hiding it almost entirely.
+      // The photo bottom (CARD_TOP + 118, matching CARD_TOP+HDR_H+10+PH_H
+      // below) is duplicated here since PH_Y/PH_H aren't computed until
+      // further down.
+      const wmY0 = CARD_TOP + 125, wmY1 = CONTENT_BOTTOM, wmX0 = 8, wmX1 = W - 8;
       doc.save().opacity(watermarkOpacity);
-      const wmSize = Math.min(W, CONTENT_BOTTOM - CARD_TOP - HDR_H) * 0.9;
-      doc.image(watermarkBuf, (W - wmSize) / 2, CARD_TOP + HDR_H + (CONTENT_BOTTOM - CARD_TOP - HDR_H - wmSize) / 2, { width: wmSize, height: wmSize, fit: [wmSize, wmSize] });
+      const wmSize = Math.min(wmX1 - wmX0, wmY1 - wmY0) * 0.95;
+      doc.image(watermarkBuf, wmX0 + (wmX1 - wmX0 - wmSize) / 2, wmY0 + (wmY1 - wmY0 - wmSize) / 2, { width: wmSize, height: wmSize, fit: [wmSize, wmSize] });
       doc.restore();
     } catch (e) {}
   }
@@ -613,12 +644,14 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   // Separator between the school-identity header band and the student
   // information below it — the header already has its own fill color, but
   // a thin line in the white gap makes the boundary explicit too.
-  doc.save().moveTo(10, CARD_TOP + HDR_H + 5).lineTo(W - 10, CARD_TOP + HDR_H + 5).lineWidth(0.6).strokeColor('#d0d5dd').stroke().restore();
+  const dividerYV = CARD_TOP + HDR_H + 5;
+  doc.save().moveTo(10, dividerYV).lineTo(W - 10, dividerYV).lineWidth(0.6).strokeColor('#d0d5dd').stroke().restore();
 
   // ── Student photo, centered ───────────────────────────────────────────────
   // Slightly smaller than the original reference to make room for a real
   // Principal Signature image lower on the card.
-  const PH_W = 54, PH_H = 58, PH_X = (W - PH_W) / 2, PH_Y = CARD_TOP + HDR_H + 10;
+  const PH_W = 54, PH_H = 58, PH_X = (W - PH_W) / 2, PH_Y = CARD_TOP + HDR_H + 17;
+  drawPhotoTitleBand(doc, PH_X, dividerYV + 2, PH_W, PH_Y - dividerYV - 3, parseColor(school.id_card_photo_title_color, headerColor));
   doc.save().roundedRect(PH_X, PH_Y, PH_W, PH_H, 2).lineWidth(0.8).strokeColor(headerColor).stroke().restore();
   if (canDraw(photoPath)) {
     try { doc.image(photoPath, PH_X + 1, PH_Y + 1, { width: PH_W - 2, height: PH_H - 2 }); }
@@ -652,7 +685,7 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   const FIELD_FONT_V = Math.max(5.2, Math.min(6.4, ROW_H - 2.2));
   const FIELD_MIN_V = Math.max(4.4, FIELD_FONT_V - 1.6);
 
-  doc.font('Helvetica').fontSize(FIELD_FONT_V);
+  doc.font('Helvetica-Bold').fontSize(FIELD_FONT_V);
   const studentNameLabelV = 'Student Name:';
   const studentNameValueXV = FX + doc.widthOfString(studentNameLabelV) + 3;
 
@@ -660,7 +693,7 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   const { lines: studentNameLinesV, fontSize: studentNameSizeV } = splitSchoolName(doc, nameValueV, W - studentNameValueXV - 10, 'Helvetica-Bold', FIELD_FONT_V, FIELD_MIN_V, 2);
   const studentNamePitchV = studentNameSizeV + 1.2;
 
-  doc.font('Helvetica').fontSize(FIELD_FONT_V).fillColor(GREY)
+  doc.font('Helvetica-Bold').fontSize(FIELD_FONT_V).fillColor(GREY)
     .text(studentNameLabelV, FX, rowY0, { lineBreak: false });
   studentNameLinesV.forEach((line, i) => {
     doc.font('Helvetica-Bold').fontSize(studentNameSizeV).fillColor(TEXT)
@@ -680,7 +713,8 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   let cursorYV = rowY0 + Math.max(ROW_H, studentNameLinesV.length * studentNamePitchV);
   restFieldsV.forEach(([label, value, wrap]) => {
     const labelTextV = `${label}:`;
-    doc.font('Helvetica').fontSize(FIELD_FONT_V);
+    const labelFontV = (label === 'GR No.' || label === 'Roll No.') ? 'Helvetica-Bold' : 'Helvetica';
+    doc.font(labelFontV).fontSize(FIELD_FONT_V);
     const valueXV = FX + doc.widthOfString(labelTextV) + 3;
     const availWidthV = W - valueXV - 10;
     doc.fillColor(GREY).text(labelTextV, FX, cursorYV, { lineBreak: false });
@@ -746,7 +780,21 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   doc.font('Helvetica-Bold').fontSize(4.8).fillColor(GREY)
     .text(safe(school.idcard_signature_label, 'Principal'), sigX, sigLineY + 1, { width: sigW, align: 'center', lineBreak: false });
 
-  doc.save().rect(1, CARD_TOP, W - 2, H - CARD_TOP - 1).lineWidth(1.2).strokeColor(borderColor || '#d1d5db').stroke().restore();
+  doc.save().rect(1, CARD_TOP, W - 2, H - PRINT_MARGIN * 2 - 1).lineWidth(1.2).strokeColor(borderColor || '#d1d5db').stroke().restore();
+}
+
+// Small colored ribbon reading "STUDENT ID CARD" directly above the photo
+// box — the background color is School Admin configurable (defaults to the
+// card's own header color) so it reads as a deliberate label rather than
+// a stray line of text.
+function drawPhotoTitleBand(doc, x, y, w, h, color) {
+  doc.save().roundedRect(x, y, w, h, 1.5).fillColor(color).fill().restore();
+  // Shrinks the font to fit the band's actual width before ever truncating
+  // — a fixed starting size based only on the band's height let "STUDENT ID
+  // CARD" overflow a narrow photo column and get cut to "STUDENT ID C...".
+  const { text, fontSize } = fitValueShrink(doc, 'STUDENT ID CARD', w - 2, 'Helvetica-Bold', Math.min(h - 2.5, 5.5), 3.2);
+  doc.font('Helvetica-Bold').fontSize(fontSize).fillColor(WHITE)
+    .text(text, x, y + (h - fontSize) / 2 - 0.2, { width: w, align: 'center', lineBreak: false });
 }
 
 function drawPhotoPlaceholder(doc, x, y, width, height, color) {

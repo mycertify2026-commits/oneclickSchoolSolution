@@ -283,13 +283,13 @@ const ID_CARD_DESIGN_FIELDS = [
   'id_card_show_register_number', 'id_card_show_aadhaar', 'id_card_show_dob', 'id_card_show_address', 'id_card_show_emergency_contact',
   'id_card_border_color', 'id_card_bg_opacity',
   'id_card_orientation', 'idcard_signature_label', 'id_card_watermark_enabled', 'id_card_watermark_opacity',
-  'id_card_school_name_font_size', 'id_card_school_name_align'
+  'id_card_school_name_font_size', 'id_card_school_name_align', 'id_card_photo_title_color'
 ];
 // Clamped to a legible-but-flexible range for a CR80-sized card — the PDF
 // renderer's own shrink-to-fit still applies on top of this as a safety net
 // (see idCardPdf.js splitSchoolName), so a value that's too big for a
 // particular long name still degrades gracefully instead of overflowing.
-const MIN_ID_CARD_NAME_FONT = 6, MAX_ID_CARD_NAME_FONT = 14;
+const MIN_ID_CARD_NAME_FONT = 6, MAX_ID_CARD_NAME_FONT = 18;
 const VALID_ID_CARD_ORIENTATIONS = ['horizontal', 'vertical'];
 const VALID_ID_CARD_NAME_ALIGNS = ['left', 'center', 'right'];
 

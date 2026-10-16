@@ -27,7 +27,8 @@ const ID_CARD_BLANK = {
   id_card_show_address: false, id_card_show_emergency_contact: true,
   id_card_border_color: '', id_card_bg_opacity: 0.15,
   id_card_orientation: 'horizontal', idcard_signature_label: '',
-  id_card_watermark_enabled: false, id_card_watermark_opacity: 0.1
+  id_card_watermark_enabled: false, id_card_watermark_opacity: 0.1,
+  id_card_photo_title_color: ''
 };
 
 export default function SchoolSettings() {
@@ -65,6 +66,7 @@ export default function SchoolSettings() {
       id_card_school_name: res.data.school.id_card_school_name || res.data.school.name || '',
       id_card_school_name_font_size: res.data.school.id_card_school_name_font_size ?? '',
       id_card_school_name_align: res.data.school.id_card_school_name_align || 'left',
+      id_card_photo_title_color: normaliseColor(res.data.school.id_card_photo_title_color) || '',
       id_card_subtitle: res.data.school.id_card_subtitle || ID_CARD_BLANK.id_card_subtitle,
       id_card_footer_text: res.data.school.id_card_footer_text || ID_CARD_BLANK.id_card_footer_text,
       id_card_show_register_number: Boolean(res.data.school.id_card_show_register_number ?? true),
@@ -490,13 +492,13 @@ export default function SchoolSettings() {
                   <div className="form-group">
                     <label className="form-label">School Name Font Size (optional)</label>
                     <input
-                      type="number" min="6" max="14" step="0.5" className="form-control"
+                      type="number" min="6" max="18" step="0.5" className="form-control"
                       placeholder="Auto-fit"
                       value={idCardForm.id_card_school_name_font_size}
                       onChange={e => setIdCardForm(p => ({ ...p, id_card_school_name_font_size: e.target.value }))}
                     />
                     <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
-                      Leave blank to auto-fit the name to the card. If a long name still doesn't fit at your chosen size, it shrinks further automatically. Range: 6–14pt.
+                      Leave blank to auto-fit the name to the card. If a long name still doesn't fit at your chosen size, it shrinks further automatically. Range: 6–18pt.
                     </p>
                   </div>
                   <div className="form-group">
@@ -516,6 +518,19 @@ export default function SchoolSettings() {
                     {idCardForm.id_card_border_color && (
                       <button className="btn btn-sm btn-outline" style={{ marginTop: 6 }} onClick={() => setIdCardForm(p => ({ ...p, id_card_border_color: '' }))}>Reset to default</button>
                     )}
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">"Student ID Card" Title Band Color</label>
+                    <ColorPicker
+                      value={idCardForm.id_card_photo_title_color || idCardForm.id_card_primary_color}
+                      onChange={c => setIdCardForm(p => ({ ...p, id_card_photo_title_color: c }))}
+                    />
+                    {idCardForm.id_card_photo_title_color && (
+                      <button className="btn btn-sm btn-outline" style={{ marginTop: 6 }} onClick={() => setIdCardForm(p => ({ ...p, id_card_photo_title_color: '' }))}>Reset to default</button>
+                    )}
+                    <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
+                      Background color of the "STUDENT ID CARD" label above the photo. Defaults to the Primary Color.
+                    </p>
                   </div>
                   <div className="form-group">
                     <label className="form-label">Information to Display</label>
