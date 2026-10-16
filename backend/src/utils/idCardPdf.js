@@ -331,15 +331,13 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   // to 4 lines, shrinking font before ever truncating), since a long
   // student name is as common as a long school name and was hitting the
   // same "..." truncation. Every other value shrinks to fit one line
-  // before ever truncating (fitValueShrink); Father's Name gets the same
-  // 2-line wrap as Student Name since a compound name can outrun even the
-  // minimum single-line font size.
+  // before ever truncating (fitValueShrink).
   const FX = 68, LABEL_GAP = 3;
   const ROWS_TOP = 65;
 
   // Row height used to be a fixed 9pt regardless of how many fields were
-  // shown, which let 7 rows (GR No./DOB/Mobile/Father's Name/Standard plus
-  // an opt-in Address row) run past the space actually available before the
+  // shown, which let 7 rows (GR No./DOB/Mobile/Roll No./Standard plus an
+  // opt-in Address row) run past the space actually available before the
   // signature block and footer — the footer is drawn last, so it silently
   // painted over the Principal signature (and, on the vertical layout, the
   // QR) instead of making room for them. Row height now shrinks to fit the
@@ -349,7 +347,7 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   const restFieldsCountH = (() => {
     let n = 1; // Student Name
     if (school.id_card_show_address && student.address) n += 1;
-    return n + 5; // GR No., DOB, Father's Mobile, Father's Name, Standard
+    return n + 5; // GR No., DOB, Father's Mobile, Roll No., Standard
   })();
   const SIG_RESERVE = 23;
   const availableForRows = CONTENT_BOTTOM - ROWS_TOP - SIG_RESERVE;
@@ -407,7 +405,7 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
     ['GR No.', safe(student.gr_number || student.register_number), false],
     ['Date of Birth', fmtDate(student.dob), false],
     ["Father's Mobile", safe(student.parent_mobile), false],
-    ["Father's Name", safe(student.father_name), true],
+    ['Roll No.', safe(student.roll_number), false],
     ['Standard', formatStandardLabel(student.current_standard || student.admission_standard), false],
   ];
   // Student's own address (opt-in per school) renders as just another
@@ -606,7 +604,7 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
   const restFieldsCountV = (() => {
     let n = 1; // Student Name
     if (school.id_card_show_address && student.address) n += 1;
-    return n + 5; // GR No., DOB, Father's Mobile, Father's Name, Standard
+    return n + 5; // GR No., DOB, Father's Mobile, Roll No., Standard
   })();
   const SIG_RESERVE_V = 26;
   const availableForRowsV = CONTENT_BOTTOM - rowY0 - SIG_RESERVE_V;
@@ -629,13 +627,11 @@ function drawFrontVertical(doc, { W, H, MARGIN, headerColor, accentColor, school
       .text(line, studentNameValueXV, rowY0 + i * studentNamePitchV, { width: W - studentNameValueXV - 10, lineBreak: false });
   });
 
-  // Father's Name gets the same 2-line wrap treatment as Student Name — see
-  // the matching comment in drawFront for why.
   const restFieldsV = [
     ['GR No.', safe(student.gr_number || student.register_number), false],
     ['Date of Birth', fmtDate(student.dob), false],
     ["Father's Mobile", safe(student.parent_mobile), false],
-    ["Father's Name", safe(student.father_name), true],
+    ['Roll No.', safe(student.roll_number), false],
     ['Standard', formatStandardLabel(student.current_standard || student.admission_standard), false],
   ];
   if (school.id_card_show_address && student.address) {
