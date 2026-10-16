@@ -202,10 +202,12 @@ function drawFront(doc, { W, H, MARGIN, headerColor, accentColor, school, studen
   // Panel edge accent — gold by default, but honors the same Border Line
   // Color chosen in Settings so a school can eliminate the yellow/gold
   // entirely by picking their own color (or leave it for the original look).
+  // Only the top+right edge is traced now — the diagonal accent that used
+  // to trace the notch cut diagonally across the panel's middle, right
+  // through the Principal signature and QR code area, reading as an
+  // overlapping stray line rather than a border.
   doc.save().moveTo(RIGHT_X, CARD_TOP).lineTo(W, CARD_TOP).lineTo(W, CONTENT_BOTTOM)
     .lineWidth(1.2).strokeColor(borderColor || GOLD).stroke().restore();
-  doc.save().moveTo(RIGHT_X, CARD_TOP).lineTo(166, 88).lineTo(RIGHT_X, CONTENT_BOTTOM)
-    .lineWidth(0.8).strokeColor(borderColor || GOLD).stroke().restore();
 
   // Subtle school-building watermark in the panel — only when no uploaded
   // background image is taking its place.
